@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
 export interface DiscoveredCompany {
@@ -6,42 +7,23 @@ export interface DiscoveredCompany {
   description: string | null;
 }
 
-const SYSTEM_PROMPT = `Du bist ein Datenextraktions-Assistent. Du analysierst Webseiten, die Unternehmensverzeichnisse oder -listen enthalten, und extrahierst alle aufgelisteten Unternehmen.
-
-Antworte ausschließlich mit validem JSON im folgenden Format:
-{
-  "companies": [
-    {
-      "name": "Firmenname",
-      "website": "https://firmendomain.de oder null",
-      "description": "Kurzbeschreibung falls vorhanden oder null"
-    }
-  ]
-}
-
-Regeln:
-- Extrahiere ALLE Unternehmen, die auf der Seite aufgelistet sind.
-- Erfinde KEINE Daten. Nur Informationen, die tatsächlich auf der Seite stehen.
-- Wenn eine URL auf eine Unternehmens-Detailseite zeigt (z.B. LinkedIn-Profil), extrahiere die eigentliche Firmen-Website wenn verfügbar.
-- Ignoriere Werbe-Einblendungen, Navigations-Elemente und Footer-Links.
-- Antworte NUR mit dem JSON, kein anderer Text.`;
+const SYSTEM_PROMPT = `Extrahiere alle Unternehmen von dieser Verzeichnis-Seite. Antwort: NUR valides JSON.
+Format: {"companies":[{"name":"","website":"https://... oder null","description":"kurz oder null"}]}
+Nur echte Daten. Ignoriere Werbung, Navigation, Footer.`;
 
 const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 5_000;
 
 async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (e: unknown) {
-      const isOverloaded =
-        (e instanceof Error && e.message.includes("529")) ||
-        (e instanceof Error && e.message.toLowerCase().includes("overloaded")) ||
-        (typeof e === "object" && e !== null && "status" in e && (e as { status: number }).status === 529);
-
-      if (isOverloaded && attempt < MAX_RETRIES - 1) {
-        const delay = RETRY_BASE_DELAY_MS * (attempt + 1);
-        await new Promise((r) => setTimeout(r, delay));
+      const isRetryable = e instanceof Error && (
+        e.message.includes("529") || e.message.includes("overloaded") ||
+        e.message.includes("429") || e.message.includes("rate_limit")
+      );
+      if (isRetryable && attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
         continue;
       }
       throw e;
@@ -54,41 +36,47 @@ export async function extractCompaniesFromPage(
   pageContent: string,
   sourceUrl: string,
 ): Promise<DiscoveredCompany[]> {
-  const client = new Anthropic();
+  const userMessage = `Quelle: ${sourceUrl}\n\n${pageContent.slice(0, 50_000)}\n\nExtrahiere alle Unternehmen.`;
 
-  const response = await callWithRetry(() =>
-    client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 4096,
-      temperature: 0,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Quelle: ${sourceUrl}\n\nSeiten-Inhalt:\n\n${pageContent.slice(0, 80_000)}\n\nBitte extrahiere alle Unternehmen von dieser Seite.`,
-        },
-      ],
-    }),
-  );
+  let jsonText: string;
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("Keine Text-Antwort von Claude erhalten");
+  if (process.env.OPENAI_API_KEY) {
+    jsonText = await callWithRetry(async () => {
+      const openai = new OpenAI();
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        max_tokens: 3000,
+        temperature: 0,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+      });
+      return response.choices[0]?.message?.content ?? "";
+    });
+  } else {
+    jsonText = await callWithRetry(async () => {
+      const client = new Anthropic();
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 3000,
+        temperature: 0,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userMessage }],
+      });
+      const block = response.content.find((b) => b.type === "text");
+      return block?.type === "text" ? block.text : "";
+    });
   }
 
   try {
-    let jsonText = textBlock.text.trim();
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    let cleaned = jsonText.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }
-
-    const result = JSON.parse(jsonText);
-    if (!Array.isArray(result.companies)) return [];
-
-    return result.companies as DiscoveredCompany[];
+    const result = JSON.parse(cleaned);
+    return Array.isArray(result.companies) ? result.companies : [];
   } catch (e) {
-    throw new Error(
-      `Claude-Antwort konnte nicht geparst werden: ${(e as Error).message}`,
-    );
+    throw new Error(`Antwort konnte nicht geparst werden: ${(e as Error).message}`);
   }
 }

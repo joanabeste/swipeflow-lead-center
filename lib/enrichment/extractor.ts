@@ -1,7 +1,9 @@
+import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { FetchedPage } from "./web-fetcher";
 import type { EnrichmentConfig } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
+import { preExtract, compressPageContent } from "./pre-extractor";
 
 export interface EnrichmentResult {
   contacts: {
@@ -25,79 +27,66 @@ export interface EnrichmentResult {
   };
 }
 
-function buildSystemPrompt(config: EnrichmentConfig): string {
-  // Kompakter Prompt — nur das Nötigste, kein Fülltext
+function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phones: string[] }): string {
   const parts: string[] = [
     "Extrahiere Geschäftsdaten aus deutschen Unternehmens-Webseiten. Antwort: NUR valides JSON.",
   ];
 
-  // Schema — nur angeforderte Felder
+  // Schema
   const fields: string[] = [];
-
   if (config.contacts_management || config.contacts_all) {
     fields.push('"contacts":[{"name":"","role":"","email":"","phone":"","source_url":""}]');
   }
-  if (config.career_page) {
-    fields.push('"career_page_url":""');
-  }
-  if (config.job_postings) {
-    fields.push('"job_postings":[{"title":"","url":"","location":"","posted_date":""}]');
-  }
-  if (config.company_details) {
-    fields.push('"additional_info":{"company_size_estimate":"","founding_year":"","specializations":[]}');
-  }
-
+  if (config.career_page) fields.push('"career_page_url":""');
+  if (config.job_postings) fields.push('"job_postings":[{"title":"","url":"","location":"","posted_date":""}]');
+  if (config.company_details) fields.push('"additional_info":{"company_size_estimate":"","founding_year":"","specializations":[]}');
   parts.push(`Format: {${fields.join(",")}}`);
 
-  // Regeln — kompakt
+  // Regeln
   const rules: string[] = ["Nur echte Daten, null wenn nicht vorhanden."];
-
   if (config.contacts_management && !config.contacts_all) {
     rules.push("Kontakte: NUR Geschäftsführer/Inhaber/Management.");
   } else if (config.contacts_all) {
     rules.push("Kontakte: Alle Personen. Prio: HR > GF > Vertrieb.");
   }
-
   if (config.contacts_management || config.contacts_all) {
-    rules.push(
-      "Telefon: +49-Format. Impressum IMMER auf Tel/Fon/+49/(0 prüfen — Hauptnummer dem GF zuordnen wenn keine Durchwahl.",
-      "E-Mails: persönliche UND info@/kontakt@ extrahieren.",
-    );
+    rules.push("Telefon: +49-Format. Impressum auf Tel/Fon/+49/(0 prüfen.");
+    if (preData.emails.length > 0) {
+      rules.push(`Bereits gefundene E-Mails: ${preData.emails.join(", ")}. Ordne sie den passenden Personen zu.`);
+    }
+    if (preData.phones.length > 0) {
+      rules.push(`Bereits gefundene Telefonnummern: ${preData.phones.join(", ")}. Ordne sie zu.`);
+    }
   }
-
   parts.push(rules.join(" "));
 
   return parts.join("\n");
 }
 
-// Token-Budget: 40K chars ≈ 10K Tokens Input (statt 80K/20K)
-const MAX_TOTAL_CHARS = 40_000;
-// Pro Seiten-Kategorie: angepasste Limits
+// Token-Limits
+const MAX_TOTAL_CHARS = 25_000; // Weiter reduziert dank Pre-Extraktion
 const CATEGORY_LIMITS: Record<string, number> = {
-  impressum: 6_000,  // Kompakt, enthält die wichtigsten Daten
-  kontakt: 4_000,
-  karriere: 10_000,  // Kann viele Stellen enthalten
-  team: 6_000,
-  homepage: 4_000,   // Reduziert — meist nur Marketing
-  other: 3_000,
+  impressum: 5_000,
+  kontakt: 3_000,
+  karriere: 8_000,
+  team: 4_000,
+  homepage: 2_000,
+  other: 2_000,
 };
 
 const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 5_000;
+const RETRY_BASE_DELAY_MS = 3_000;
 
 async function callWithRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       return await fn();
     } catch (e: unknown) {
-      const isOverloaded =
-        (e instanceof Error && e.message.includes("529")) ||
-        (e instanceof Error && e.message.toLowerCase().includes("overloaded")) ||
-        (typeof e === "object" && e !== null && "status" in e && (e as { status: number }).status === 529);
+      const isRetryable =
+        (e instanceof Error && (e.message.includes("529") || e.message.includes("overloaded") || e.message.includes("rate_limit") || e.message.includes("429")));
 
-      if (isOverloaded && attempt < MAX_RETRIES - 1) {
-        const delay = RETRY_BASE_DELAY_MS * (attempt + 1);
-        await new Promise((r) => setTimeout(r, delay));
+      if (isRetryable && attempt < MAX_RETRIES - 1) {
+        await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * (attempt + 1)));
         continue;
       }
       throw e;
@@ -111,84 +100,90 @@ export async function extractFromPages(
   pages: FetchedPage[],
   config: EnrichmentConfig = DEFAULT_ENRICHMENT_CONFIG,
 ): Promise<EnrichmentResult> {
-  const client = new Anthropic();
+  const priorityOrder: FetchedPage["category"][] = ["impressum", "karriere", "kontakt", "team", "homepage", "other"];
 
-  // Seiten nach Relevanz sortieren und mit kategorie-spezifischen Limits trimmen
-  const priorityOrder: FetchedPage["category"][] = [
-    "impressum",
-    "karriere",
-    "kontakt",
-    "team",
-    "homepage",
-    "other",
-  ];
-
-  // Seiten filtern nach Config — irrelevante gar nicht erst senden
   const relevantPages = [...pages]
     .filter((p) => p.content && !p.error)
     .filter((p) => {
-      // Homepage nur senden wenn andere Seiten fehlen oder wenige Daten da
-      if (p.category === "homepage" && pages.filter((pp) => !pp.error && pp.category !== "homepage").length >= 2) {
-        return false;
-      }
-      // Karriere nur wenn Jobs/Career gewünscht
+      if (p.category === "homepage" && pages.filter((pp) => !pp.error && pp.category !== "homepage").length >= 2) return false;
       if (p.category === "karriere" && !config.job_postings && !config.career_page) return false;
-      // Team nur wenn Kontakte gewünscht
       if (p.category === "team" && !config.contacts_management && !config.contacts_all) return false;
       return true;
     })
-    .sort(
-      (a, b) =>
-        priorityOrder.indexOf(a.category) - priorityOrder.indexOf(b.category),
-    );
+    .sort((a, b) => priorityOrder.indexOf(a.category) - priorityOrder.indexOf(b.category));
 
+  // Pre-Extraktion: E-Mails, Telefonnummern per Regex finden
+  const allText = relevantPages.map((p) => p.content).join("\n");
+  const preData = preExtract(allText);
+
+  // Seiten komprimieren — nur relevante Abschnitte senden
   let totalChars = 0;
   const pageTexts: string[] = [];
 
   for (const page of relevantPages) {
     const remaining = MAX_TOTAL_CHARS - totalChars;
     if (remaining <= 0) break;
-
-    const categoryLimit = CATEGORY_LIMITS[page.category] ?? 4_000;
-    const limit = Math.min(remaining, categoryLimit);
-    const content = page.content.slice(0, limit);
-
-    pageTexts.push(`[${page.category}|${page.url}]\n${content}`);
-    totalChars += content.length;
+    const limit = Math.min(remaining, CATEGORY_LIMITS[page.category] ?? 2_000);
+    const compressed = compressPageContent(page.content, limit);
+    pageTexts.push(`[${page.category}|${page.url}]\n${compressed}`);
+    totalChars += compressed.length;
   }
 
+  const systemPrompt = buildPrompt(config, preData);
   const userMessage = `${companyName}\n\n${pageTexts.join("\n\n")}`;
 
-  // max_tokens dynamisch: weniger wenn nur wenige Daten erwartet
-  const expectedOutput = (config.contacts_management || config.contacts_all ? 800 : 0)
-    + (config.job_postings ? 1200 : 0)
-    + (config.career_page ? 100 : 0)
-    + (config.company_details ? 200 : 0)
-    + 100; // Overhead
-  const maxTokens = Math.min(Math.max(expectedOutput, 512), 3000);
+  // Dynamische max_tokens
+  const expectedOutput = (config.contacts_management || config.contacts_all ? 600 : 0)
+    + (config.job_postings ? 1000 : 0)
+    + (config.career_page ? 80 : 0)
+    + (config.company_details ? 150 : 0)
+    + 80;
+  const maxTokens = Math.min(Math.max(expectedOutput, 400), 2500);
 
-  const response = await callWithRetry(() =>
-    client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: maxTokens,
-      temperature: 0,
-      system: buildSystemPrompt(config),
-      messages: [{ role: "user", content: userMessage }],
-    }),
-  );
+  // GPT-4.1-mini als primäres Modell (30x günstiger), Fallback auf Claude
+  let jsonText: string;
 
-  const textBlock = response.content.find((b) => b.type === "text");
-  if (!textBlock || textBlock.type !== "text") {
-    throw new Error("Keine Text-Antwort von Claude erhalten");
+  if (process.env.OPENAI_API_KEY) {
+    jsonText = await callWithRetry(async () => {
+      const openai = new OpenAI();
+      const response = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        max_tokens: maxTokens,
+        temperature: 0,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+      });
+      const text = response.choices[0]?.message?.content;
+      if (!text) throw new Error("Keine Antwort von GPT erhalten");
+      return text;
+    });
+  } else {
+    // Fallback: Claude
+    jsonText = await callWithRetry(async () => {
+      const client = new Anthropic();
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: maxTokens,
+        temperature: 0,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      });
+      const block = response.content.find((b) => b.type === "text");
+      if (!block || block.type !== "text") throw new Error("Keine Antwort von Claude erhalten");
+      return block.text;
+    });
   }
 
+  // JSON parsen
   try {
-    let jsonText = textBlock.text.trim();
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    let cleaned = jsonText.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
     }
 
-    const raw = JSON.parse(jsonText);
+    const raw = JSON.parse(cleaned);
 
     return {
       contacts: Array.isArray(raw.contacts) ? raw.contacts : [],
@@ -201,8 +196,6 @@ export async function extractFromPages(
       },
     };
   } catch (e) {
-    throw new Error(
-      `Claude-Antwort konnte nicht als JSON geparst werden: ${(e as Error).message}`,
-    );
+    throw new Error(`Antwort konnte nicht als JSON geparst werden: ${(e as Error).message}`);
   }
 }

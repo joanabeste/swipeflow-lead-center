@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { fetchCompanyPages } from "./web-fetcher";
 import { extractFromPages } from "./extractor";
+import { findCompanyWebsite } from "./website-finder";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import type { EnrichmentConfig, CancelRule } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
@@ -35,18 +36,26 @@ export async function enrichLead(
 
   if (!lead) return { success: false, error: "Lead nicht gefunden." };
 
-  const websiteOrDomain = lead.website ?? lead.domain;
-  if (!websiteOrDomain) {
-    // Vermerk setzen, dass Anreicherung nicht möglich war
-    await db
-      .from("leads")
-      .update({
-        enrichment_source: "nicht_moeglich:keine_website",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", leadId);
+  let websiteOrDomain = lead.website ?? lead.domain;
 
-    return { success: false, error: "Keine Website oder Domain vorhanden." };
+  // Wenn keine Website hinterlegt: automatisch suchen
+  if (!websiteOrDomain) {
+    const foundDomain = await findCompanyWebsite(lead.company_name, lead.city);
+    if (foundDomain) {
+      websiteOrDomain = foundDomain;
+      // Domain im Lead speichern
+      await db.from("leads").update({
+        domain: foundDomain,
+        website: `https://${foundDomain}`,
+        updated_at: new Date().toISOString(),
+      }).eq("id", leadId);
+    } else {
+      await db.from("leads").update({
+        enrichment_source: "nicht_moeglich:keine_website_gefunden",
+        updated_at: new Date().toISOString(),
+      }).eq("id", leadId);
+      return { success: false, error: "Keine Website gefunden." };
+    }
   }
 
   // Enrichment-Log erstellen
