@@ -9,33 +9,49 @@ export default async function DashboardPage() {
     { count: totalLeads },
     { count: importedLeads },
     { count: enrichedLeads },
+    { count: enrichmentPending },
     { count: qualifiedLeads },
     { count: exportedLeads },
     { count: cancelledLeads },
     { count: filteredLeads },
+    { count: enrichmentCompleted },
+    { count: enrichmentFailed },
     { data: recentLeads },
     { data: recentLogs },
   ] = await Promise.all([
     supabase.from("leads").select("*", { count: "exact", head: true }),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "imported"),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "enriched"),
+    supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "enrichment_pending"),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "qualified"),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "exported"),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("status", "cancelled"),
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("blacklist_hit", true),
+    supabase.from("lead_enrichments").select("*", { count: "exact", head: true }).eq("status", "completed"),
+    supabase.from("lead_enrichments").select("*", { count: "exact", head: true }).eq("status", "failed"),
     supabase.from("leads").select("id, company_name, status, updated_at").order("updated_at", { ascending: false }).limit(8),
     supabase.from("audit_logs").select("*, profiles(name)").order("created_at", { ascending: false }).limit(6),
   ]);
 
+  const total = totalLeads ?? 0;
+  const excluded = (cancelledLeads ?? 0) + (filteredLeads ?? 0);
   const pipeline = [
     { label: "Importiert", value: importedLeads ?? 0, color: "bg-gray-400" },
+    { label: "Anreicherung", value: enrichmentPending ?? 0, color: "bg-yellow-500" },
     { label: "Angereichert", value: enrichedLeads ?? 0, color: "bg-blue-500" },
     { label: "Qualifiziert", value: qualifiedLeads ?? 0, color: "bg-green-500" },
     { label: "Exportiert", value: exportedLeads ?? 0, color: "bg-purple-500" },
-    { label: "Ausgeschlossen", value: (cancelledLeads ?? 0) + (filteredLeads ?? 0), color: "bg-orange-500" },
+    { label: "Ausgeschlossen", value: excluded, color: "bg-orange-500" },
   ];
 
-  const total = totalLeads ?? 1;
+  // Conversion-Rates berechnen
+  const enrichTotal = (enrichmentCompleted ?? 0) + (enrichmentFailed ?? 0);
+  const enrichRate = enrichTotal > 0 ? Math.round(((enrichmentCompleted ?? 0) / enrichTotal) * 100) : 0;
+  const qualifyRate = total > 0 ? Math.round(((qualifiedLeads ?? 0) + (exportedLeads ?? 0)) / total * 100) : 0;
+  const exportRate = (qualifiedLeads ?? 0) + (exportedLeads ?? 0) > 0
+    ? Math.round((exportedLeads ?? 0) / ((qualifiedLeads ?? 0) + (exportedLeads ?? 0)) * 100)
+    : 0;
+
   const statusLabels: Record<string, { label: string; color: string }> = {
     imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
     enriched: { label: "Angereichert", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
@@ -48,9 +64,12 @@ export default async function DashboardPage() {
 
   const actionLabels: Record<string, string> = {
     "lead.enriched": "Lead angereichert",
-    "lead.enriched_and_cancelled": "Lead angereichert & ausgeschlossen",
+    "lead.enriched_and_cancelled": "Angereichert & ausgeschlossen",
     "lead.updated": "Lead aktualisiert",
     "lead.bulk_status_update": "Status geändert",
+    "lead.bulk_delete": "Leads gelöscht",
+    "lead.bulk_blacklist": "Auf Blacklist gesetzt",
+    "lead.merged": "Leads zusammengeführt",
     "lead.deleted": "Lead gelöscht",
     "export.success": "Export erfolgreich",
     "import.completed": "Import abgeschlossen",
@@ -65,11 +84,11 @@ export default async function DashboardPage() {
         Lead-Pipeline auf einen Blick
       </p>
 
-      {/* Pipeline */}
+      {/* Pipeline-Balken */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800/50 dark:bg-[#111827]">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pipeline</p>
-          <p className="text-sm font-bold">{totalLeads ?? 0} Leads</p>
+          <p className="text-sm font-bold">{total} Leads</p>
         </div>
         <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
           {pipeline.map((s) => (
@@ -77,7 +96,7 @@ export default async function DashboardPage() {
               <div
                 key={s.label}
                 className={`${s.color} transition-all`}
-                style={{ width: `${(s.value / total) * 100}%` }}
+                style={{ width: `${(s.value / (total || 1)) * 100}%` }}
                 title={`${s.label}: ${s.value}`}
               />
             )
@@ -94,10 +113,34 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* Conversion-Raten + Quick Actions */}
+      <div className="mt-4 grid grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Enrichment-Erfolg</p>
+          <p className="mt-1 text-2xl font-bold">{enrichRate}%</p>
+          <p className="text-xs text-gray-400">{enrichmentCompleted ?? 0} / {enrichTotal} Versuche</p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
+          <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
+          <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Export-Rate</p>
+          <p className="mt-1 text-2xl font-bold">{exportRate}%</p>
+          <p className="text-xs text-gray-400">{exportedLeads ?? 0} exportiert</p>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Ausgeschlossen</p>
+          <p className="mt-1 text-2xl font-bold">{excluded}</p>
+          <p className="text-xs text-gray-400">{Math.round((excluded / (total || 1)) * 100)}% aller Leads</p>
+        </div>
+      </div>
+
       {/* Quick Actions */}
       <div className="mt-4 grid grid-cols-4 gap-3">
         {[
-          { href: "/leads", icon: FileSpreadsheet, label: "Leads", sub: `${totalLeads ?? 0} gesamt`, accent: "text-primary" },
+          { href: "/leads", icon: FileSpreadsheet, label: "Leads", sub: `${total} gesamt`, accent: "text-primary" },
           { href: "/import", icon: Upload, label: "Import", sub: "CSV, URL, Verzeichnis", accent: "text-primary" },
           { href: "/leads?status=imported", icon: Sparkles, label: "Anreichern", sub: `${importedLeads ?? 0} wartend`, accent: "text-amber-500" },
           { href: "/export", icon: Send, label: "Export", sub: `${qualifiedLeads ?? 0} bereit`, accent: "text-green-500" },

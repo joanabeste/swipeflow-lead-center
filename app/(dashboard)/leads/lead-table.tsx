@@ -2,9 +2,9 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, ShieldBan, Send } from "lucide-react";
 import type { Lead } from "@/lib/types";
-import { bulkUpdateStatus, saveColumnPreferences } from "./actions";
+import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, saveColumnPreferences } from "./actions";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -246,8 +246,9 @@ export function LeadTable({
 
       {/* Bulk-Aktionen */}
       {selected.size > 0 && (
-        <div className="flex items-center gap-3 rounded-md bg-blue-50 p-3 dark:bg-blue-900/20">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-blue-50 p-3 dark:bg-blue-900/20">
           <span className="text-sm font-medium">{selected.size} ausgewählt</span>
+          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
           <select
             value={bulkStatus}
             onChange={(e) => setBulkStatus(e.target.value)}
@@ -273,6 +274,50 @@ export function LeadTable({
               Anreichern
             </button>
           )}
+          <button
+            onClick={() => router.push("/export")}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            <Send className="h-3.5 w-3.5" />
+            Exportieren
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(`${selected.size} Lead(s) auf die Blacklist setzen?`)) {
+                startBulkTransition(async () => {
+                  await bulkAddToBlacklist(Array.from(selected));
+                  setBulkResult(`${selected.size} Lead(s) auf Blacklist gesetzt.`);
+                  setSelected(new Set());
+                });
+              }
+            }}
+            disabled={bulkPending}
+            className="inline-flex items-center gap-1 rounded-md border border-orange-300 px-3 py-1 text-sm text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
+          >
+            <ShieldBan className="h-3.5 w-3.5" />
+            Blacklist
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(`${selected.size} Lead(s) endgültig löschen?`)) {
+                startBulkTransition(async () => {
+                  const res = await bulkDeleteLeads(Array.from(selected));
+                  if (res.error) {
+                    setBulkResult(`Fehler: ${res.error}`);
+                  } else {
+                    setBulkResult(`${selected.size} Lead(s) gelöscht.`);
+                    setSelected(new Set());
+                  }
+                });
+              }
+            }}
+            disabled={bulkPending}
+            className="inline-flex items-center gap-1 rounded-md border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Löschen
+          </button>
+          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
           <button
             onClick={() => setSelected(new Set())}
             className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"

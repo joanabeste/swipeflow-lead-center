@@ -16,9 +16,10 @@ import {
   ExternalLink,
   Briefcase,
   MapPin,
+  Merge,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
-import { updateLead } from "./actions";
+import { updateLead, findSimilarLeads, mergeLeads } from "./actions";
 import { enrichLeadAction } from "./enrichment-actions";
 
 const statusOptions: { value: string; label: string; color: string }[] = [
@@ -65,6 +66,9 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
   const [enrichPending, startEnrichTransition] = useTransition();
   const [enrichError, setEnrichError] = useState<string | null>(null);
   const [enrichSuccess, setEnrichSuccess] = useState(false);
+  const [similarLeads, setSimilarLeads] = useState<{ id: string; company_name: string; domain: string | null; city: string | null; status: string }[]>([]);
+  const [similarLoaded, setSimilarLoaded] = useState(false);
+  const [mergePending, startMergeTransition] = useTransition();
 
   const hasWebsite = !!(lead.website || lead.domain);
 
@@ -337,8 +341,60 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
           </div>
         </div>
 
-        {/* Rechte Spalte: Änderungshistorie */}
-        <div>
+        {/* Rechte Spalte */}
+        <div className="space-y-4">
+          {/* Duplikate / Merge */}
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+                <Merge className="h-3.5 w-3.5" />
+                Duplikate
+              </h2>
+              {!similarLoaded && (
+                <button
+                  onClick={async () => {
+                    const results = await findSimilarLeads(lead.id);
+                    setSimilarLeads(results);
+                    setSimilarLoaded(true);
+                  }}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Prüfen
+                </button>
+              )}
+            </div>
+            {similarLoaded && similarLeads.length === 0 && (
+              <p className="mt-2 text-sm text-gray-400">Keine Duplikate gefunden.</p>
+            )}
+            {similarLeads.length > 0 && (
+              <div className="mt-2 space-y-2">
+                {similarLeads.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-gray-800">
+                    <div>
+                      <p className="text-sm font-medium">{s.company_name}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{s.domain ?? s.city ?? "–"}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm(`"${s.company_name}" in diesen Lead zusammenführen? Der andere Lead wird gelöscht.`)) {
+                          startMergeTransition(async () => {
+                            await mergeLeads(lead.id, s.id);
+                            setSimilarLeads((prev) => prev.filter((p) => p.id !== s.id));
+                          });
+                        }
+                      }}
+                      disabled={mergePending}
+                      className="rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
+                    >
+                      Zusammenführen
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Änderungshistorie */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Änderungshistorie</h2>
             {changes.length === 0 ? (
