@@ -5,6 +5,7 @@ import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX 
 import type { Lead, EnrichmentConfig } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
+import { useToastContext } from "../toast-provider";
 
 interface Props {
   leadIds: string[];
@@ -35,6 +36,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);
   const [qualifying, setQualifying] = useState(false);
+  const { addToast } = useToastContext();
 
   const total = leadIds.length;
 
@@ -129,6 +131,8 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
     setQualifying(true);
     await bulkUpdateStatus(ids, "qualified");
     setQualifying(false);
+    addToast(`${ids.length} Lead(s) als qualifiziert markiert`, "success");
+    onClose();
   }
 
   return (

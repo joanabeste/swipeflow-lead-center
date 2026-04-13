@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, ShieldBan, Send, Download } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, saveColumnPreferences } from "./actions";
+import { useToastContext } from "../toast-provider";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -61,11 +62,11 @@ export function LeadTable({
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { addToast } = useToastContext();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState("qualified");
   const [bulkPending, startBulkTransition] = useTransition();
-  const [bulkResult, setBulkResult] = useState<string | null>(null);
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(savedColumns ?? DEFAULT_VISIBLE);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
@@ -131,9 +132,9 @@ export function LeadTable({
     startBulkTransition(async () => {
       const res = await bulkUpdateStatus(ids, bulkStatus);
       if (res.error) {
-        setBulkResult(`Fehler: ${res.error}`);
+        addToast(`Fehler: ${res.error}`, "error");
       } else {
-        setBulkResult(`${ids.length} Lead(s) auf "${statusLabels[bulkStatus]?.label ?? bulkStatus}" gesetzt.`);
+        addToast(`${ids.length} Lead(s) auf "${statusLabels[bulkStatus]?.label ?? bulkStatus}" gesetzt`);
         setSelected(new Set());
       }
     });
@@ -319,9 +320,10 @@ export function LeadTable({
           <button
             onClick={() => {
               if (confirm(`${selected.size} Lead(s) auf die Blacklist setzen?`)) {
+                const count = selected.size;
                 startBulkTransition(async () => {
                   await bulkAddToBlacklist(Array.from(selected));
-                  setBulkResult(`${selected.size} Lead(s) auf Blacklist gesetzt.`);
+                  addToast(`${count} Lead(s) auf Blacklist gesetzt`);
                   setSelected(new Set());
                 });
               }
@@ -335,12 +337,13 @@ export function LeadTable({
           <button
             onClick={() => {
               if (confirm(`${selected.size} Lead(s) endgültig löschen?`)) {
+                const count = selected.size;
                 startBulkTransition(async () => {
                   const res = await bulkDeleteLeads(Array.from(selected));
                   if (res.error) {
-                    setBulkResult(`Fehler: ${res.error}`);
+                    addToast(`Fehler: ${res.error}`, "error");
                   } else {
-                    setBulkResult(`${selected.size} Lead(s) gelöscht.`);
+                    addToast(`${count} Lead(s) gelöscht`);
                     setSelected(new Set());
                   }
                 });
@@ -362,11 +365,6 @@ export function LeadTable({
         </div>
       )}
 
-      {bulkResult && (
-        <div className="rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-          {bulkResult}
-        </div>
-      )}
 
       {/* Tabelle */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">

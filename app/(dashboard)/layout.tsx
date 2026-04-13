@@ -5,6 +5,7 @@ import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { GlobalSearch } from "./global-search";
 import { SwipeflowLogo } from "./swipeflow-logo";
+import { ToastProvider } from "./toast-provider";
 
 export default function DashboardLayout({
   children,
@@ -12,6 +13,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
+    <ToastProvider>
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="flex w-60 flex-col border-r border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#0d1321]">
@@ -46,5 +48,6 @@ export default function DashboardLayout({
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
       </div>
     </div>
+    </ToastProvider>
   );
 }
