@@ -124,7 +124,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
           <button
             onClick={handleEnrich}
             disabled={enrichPending || !hasWebsite}
-            className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             title={!hasWebsite ? "Keine Website/Domain vorhanden" : undefined}
           >
             {enrichPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}

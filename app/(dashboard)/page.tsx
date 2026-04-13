@@ -142,7 +142,7 @@ export default async function DashboardPage() {
         {[
           { href: "/leads", icon: FileSpreadsheet, label: "Leads", sub: `${total} gesamt`, accent: "text-primary" },
           { href: "/import", icon: Upload, label: "Import", sub: "CSV, URL, Verzeichnis", accent: "text-primary" },
-          { href: "/leads?status=imported", icon: Sparkles, label: "Anreichern", sub: `${importedLeads ?? 0} wartend`, accent: "text-amber-500" },
+          { href: "/leads?status=imported", icon: Sparkles, label: "Anreichern", sub: `${importedLeads ?? 0} wartend`, accent: "text-primary" },
           { href: "/export", icon: Send, label: "Export", sub: `${qualifiedLeads ?? 0} bereit`, accent: "text-green-500" },
         ].map((a) => (
           <Link

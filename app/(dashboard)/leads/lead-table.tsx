@@ -62,6 +62,7 @@ export function LeadTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState("qualified");
   const [bulkPending, startBulkTransition] = useTransition();
   const [bulkResult, setBulkResult] = useState<string | null>(null);
@@ -103,11 +104,26 @@ export function LeadTable({
     }
   }
 
-  function toggleOne(id: string) {
+  function toggleOne(id: string, index: number, e?: React.MouseEvent) {
     const next = new Set(selected);
+
+    // Shift+Klick: Bereich auswählen
+    if (e?.shiftKey && lastClickedIndex !== null) {
+      const start = Math.min(lastClickedIndex, index);
+      const end = Math.max(lastClickedIndex, index);
+      for (let i = start; i <= end; i++) {
+        next.add(leads[i].id);
+      }
+      setSelected(next);
+      setLastClickedIndex(index);
+      return;
+    }
+
+    // Cmd/Ctrl+Klick oder normaler Klick: Einzeln togglen
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setSelected(next);
+    setLastClickedIndex(index);
   }
 
   function handleBulkUpdate() {
@@ -255,7 +271,7 @@ export function LeadTable({
           {onOpenEnrichModal && (
             <button
               onClick={() => onOpenEnrichModal(Array.from(selected))}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             >
               <Sparkles className="h-3.5 w-3.5" />
               Anreichern
@@ -444,7 +460,7 @@ export function LeadTable({
                 </td>
               </tr>
             ) : (
-              leads.map((lead) => {
+              leads.map((lead, leadIndex) => {
                 const status = statusLabels[lead.status] ?? {
                   label: lead.status,
                   color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
@@ -452,13 +468,13 @@ export function LeadTable({
                 return (
                   <tr
                     key={lead.id}
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    className={`cursor-pointer transition ${selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
                   >
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3" onClick={(e) => { e.stopPropagation(); toggleOne(lead.id, leadIndex, e); }}>
                       <input
                         type="checkbox"
                         checked={selected.has(lead.id)}
-                        onChange={() => toggleOne(lead.id)}
+                        onChange={() => {}} // handled by td onClick
                         className="rounded border-gray-300 dark:border-gray-600"
                       />
                     </td>

@@ -137,7 +137,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
           <h2 className="flex items-center gap-2 text-lg font-bold">
-            <Sparkles className="h-5 w-5 text-amber-500" />
+            <Sparkles className="h-5 w-5 text-primary" />
             Lead-Anreicherung
           </h2>
           {phase !== "running" && (
@@ -178,7 +178,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
               </div>
               <button
                 onClick={startEnrichment}
-                className="w-full rounded-md bg-amber-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-600"
+                className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 Anreicherung starten ({total} Lead{total > 1 ? "s" : ""})
               </button>
@@ -195,7 +195,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                 </div>
                 <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
                   <div
-                    className="h-full rounded-full bg-amber-500 transition-all"
+                    className="h-full rounded-full bg-primary transition-all"
                     style={{ width: `${(completed / total) * 100}%` }}
                   />
                 </div>

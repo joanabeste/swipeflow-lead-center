@@ -52,13 +52,13 @@ export function EnrichmentPanel({
     <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 font-bold">
-          <Sparkles className="h-4 w-4 text-amber-500" />
+          <Sparkles className="h-4 w-4 text-primary" />
           Anreicherung
         </h3>
         <button
           onClick={handleEnrich}
           disabled={isPending || !hasWebsite}
-          className="inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
           title={!hasWebsite ? "Keine Website/Domain vorhanden" : undefined}
         >
           {isPending ? (
