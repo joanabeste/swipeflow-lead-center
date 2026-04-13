@@ -37,7 +37,7 @@ const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
   stellenangebote: "karriere",
 };
 
-const MAX_CHARS_PER_PAGE = 15_000;
+const MAX_CHARS_PER_PAGE = 8_000; // Reduziert von 15.000 — weniger Rauschen
 const FETCH_TIMEOUT_MS = 10_000;
 
 /** Hauptfunktion: Holt relevante Seiten einer Firmenwebsite */
@@ -138,7 +138,7 @@ async function fetchPage(
     }
 
     const html = await res.text();
-    const content = cleanHtml(html).slice(0, MAX_CHARS_PER_PAGE);
+    const content = cleanHtml(html, category).slice(0, MAX_CHARS_PER_PAGE);
 
     return { url, content, category };
   } catch (e) {
@@ -147,20 +147,29 @@ async function fetchPage(
   }
 }
 
-/** Entfernt HTML-Tags und extrahiert sichtbaren Text */
-function cleanHtml(html: string): string {
+/** Entfernt HTML-Tags und extrahiert sichtbaren Text, mit kategorie-spezifischer Filterung */
+function cleanHtml(html: string, category: FetchedPage["category"]): string {
   let text = html;
 
-  // Script, Style, Nav, Footer entfernen
+  // Script, Style, Nav, Footer, Sidebar, Cookie-Banner entfernen
   text = text.replace(/<script[\s\S]*?<\/script>/gi, "");
   text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
-  text = text.replace(/<nav[\s\S]*?<\/nav>/gi, "");
-  text = text.replace(/<footer[\s\S]*?<\/footer>/gi, "");
   text = text.replace(/<noscript[\s\S]*?<\/noscript>/gi, "");
   text = text.replace(/<svg[\s\S]*?<\/svg>/gi, "");
+  text = text.replace(/<iframe[\s\S]*?<\/iframe>/gi, "");
+
+  // Navigation und Footer nur bei Homepage/Other entfernen (Impressum braucht sie evtl.)
+  if (category === "homepage" || category === "other") {
+    text = text.replace(/<nav[\s\S]*?<\/nav>/gi, "");
+    text = text.replace(/<footer[\s\S]*?<\/footer>/gi, "");
+    text = text.replace(/<header[\s\S]*?<\/header>/gi, "");
+  }
+
+  // Cookie-Banner, Popups, Sidebars
+  text = text.replace(/<div[^>]*(?:cookie|consent|banner|popup|modal|overlay|sidebar|widget)[^>]*>[\s\S]*?<\/div>/gi, "");
 
   // Block-Elemente durch Newlines ersetzen
-  text = text.replace(/<\/(div|p|h[1-6]|li|tr|td|th|br|hr)[^>]*>/gi, "\n");
+  text = text.replace(/<\/(div|p|h[1-6]|li|tr|td|th|br|hr|section|article)[^>]*>/gi, "\n");
   text = text.replace(/<(br|hr)\s*\/?>/gi, "\n");
 
   // Alle verbleibenden Tags entfernen
@@ -173,13 +182,24 @@ function cleanHtml(html: string): string {
   text = text.replace(/&quot;/g, '"');
   text = text.replace(/&#39;/g, "'");
   text = text.replace(/&nbsp;/g, " ");
+  text = text.replace(/&#\d+;/g, " ");
 
   // Whitespace bereinigen
   text = text.replace(/[ \t]+/g, " ");
   text = text.replace(/\n\s*\n/g, "\n");
-  text = text.trim();
 
-  return text;
+  // Wiederholte kurze Zeilen entfernen (Menü-Items, Breadcrumbs)
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const dedupedLines: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    // Kurze Zeilen (<20 chars) die sich wiederholen → überspringen
+    if (line.length < 20 && seen.has(line)) continue;
+    seen.add(line);
+    dedupedLines.push(line);
+  }
+
+  return dedupedLines.join("\n").trim();
 }
 
 /** Findet Links auf der Homepage die zu relevanten Unterseiten führen */
