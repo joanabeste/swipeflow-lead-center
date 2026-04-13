@@ -11,7 +11,7 @@ import {
 } from "@/lib/hubspot/client";
 import { logAudit } from "@/lib/audit-log";
 
-export async function exportLead(leadId: string, hsLeadStatus: string = "MANUELLE_UEBERPRUEFUNG") {
+export async function exportLead(leadId: string, hsLeadStatus: string = "NEW") {
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -202,7 +202,7 @@ export async function getExportPreview(leadId: string) {
   };
 }
 
-export async function batchExport(leadIds: string[], hsLeadStatus: string = "MANUELLE_UEBERPRUEFUNG") {
+export async function batchExport(leadIds: string[], hsLeadStatus: string = "NEW") {
   let successCount = 0;
   let errorCount = 0;
 

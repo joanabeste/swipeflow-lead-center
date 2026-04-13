@@ -29,12 +29,14 @@ interface Props {
 }
 
 const LEAD_STATUS_OPTIONS = [
-  { value: "MANUELLE_UEBERPRUEFUNG", label: "Manuelle Überprüfung" },
-  { value: "NEW", label: "New" },
-  { value: "OPEN", label: "Open" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "ATTEMPTED_TO_CONTACT", label: "Attempted to Contact" },
-  { value: "CONNECTED", label: "Connected" },
+  { value: "NEW", label: "Neu" },
+  { value: "OPEN", label: "Offen" },
+  { value: "IN_PROGRESS", label: "In Bearbeitung" },
+  { value: "ATTEMPTED_TO_CONTACT", label: "Kontaktversuch" },
+  { value: "CONNECTED", label: "Verbunden" },
+  { value: "OPEN_DEAL", label: "Offenes Angebot" },
+  { value: "UNQUALIFIED", label: "Nicht qualifiziert" },
+  { value: "BAD_TIMING", label: "Schlechter Zeitpunkt" },
 ];
 
 interface PreviewData {
@@ -51,7 +53,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
   const [previewLeadId, setPreviewLeadId] = useState<string | null>(null);
   const [previewPending, startPreview] = useTransition();
   const [exporting, setExporting] = useState(false);
-  const [leadStatus, setLeadStatus] = useState("MANUELLE_UEBERPRUEFUNG");
+  const [leadStatus, setLeadStatus] = useState("NEW");
   const [result, setResult] = useState<{ successCount: number; errorCount: number } | null>(null);
 
   function toggleAll() {
