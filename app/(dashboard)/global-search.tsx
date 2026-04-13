@@ -95,7 +95,7 @@ export function GlobalSearch() {
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder="Suche… (Taste /)"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-3 text-sm focus:border-primary focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-800 dark:bg-[#111827] dark:text-gray-100 dark:focus:bg-[#0d1321] dark:placeholder-gray-500"
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-10 pr-3 text-sm focus:border-primary focus:bg-white focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-800 dark:bg-[#1c1c1e] dark:text-gray-100 dark:focus:bg-[#161618] dark:placeholder-gray-500"
         />
         {isPending && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -105,7 +105,7 @@ export function GlobalSearch() {
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-[#111827]">
+        <div className="absolute top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-800 dark:bg-[#1c1c1e]">
           {results.map((r) => (
             <button
               key={r.id}
@@ -123,7 +123,7 @@ export function GlobalSearch() {
       )}
 
       {open && query.length >= 2 && results.length === 0 && !isPending && (
-        <div className="absolute top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-center text-sm text-gray-400 shadow-lg dark:border-gray-800 dark:bg-[#111827]">
+        <div className="absolute top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-center text-sm text-gray-400 shadow-lg dark:border-gray-800 dark:bg-[#1c1c1e]">
           Keine Ergebnisse
         </div>
       )}

@@ -276,7 +276,7 @@ export function LeadTable({
 
       {/* Bulk-Aktionen */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-[#111827]">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-[#1c1c1e]">
           <span className="text-sm font-bold text-primary">{selected.size}</span>
           <span className="text-sm text-gray-500 dark:text-gray-400">ausgewählt</span>
           <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />

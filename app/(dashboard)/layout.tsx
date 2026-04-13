@@ -34,11 +34,11 @@ export default async function DashboardLayout({
     <ToastProvider>
     <div className="flex h-full">
       {/* Sidebar */}
-      <aside className="flex w-60 flex-col border-r border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#0d1321]">
-        <div className="px-5 py-6">
+      <aside className="flex w-64 flex-col border-r border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
+        <div className="px-5 py-7">
           <Link href="/" className="block">
-            <SwipeflowLogo className="h-7 w-auto text-gray-900 dark:text-white" />
-            <span className="mt-1.5 block text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Lead Center</span>
+            <SwipeflowLogo className="h-9 w-auto text-gray-900 dark:text-white" />
+            <span className="mt-2 block text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Lead Center</span>
           </Link>
         </div>
 
@@ -60,7 +60,7 @@ export default async function DashboardLayout({
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b border-gray-200 px-8 py-3 dark:border-gray-800/50">
+        <header className="flex items-center justify-between border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
           <ServiceModeSwitch />
           <GlobalSearch />
         </header>

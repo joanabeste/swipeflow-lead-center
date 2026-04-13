@@ -28,7 +28,7 @@ export default function RootLayout({
       lang="de"
       className={`${geistSans.variable} ${geistMono.variable} h-full dark`}
     >
-      <body className="h-full bg-gray-50 font-sans text-gray-900 antialiased dark:bg-[#0a0f1a] dark:text-gray-100" suppressHydrationWarning>
+      <body className="h-full bg-gray-50 font-sans text-gray-900 antialiased dark:bg-[#111113] dark:text-gray-100" suppressHydrationWarning>
         <ThemeProvider>
           {children}
         </ThemeProvider>

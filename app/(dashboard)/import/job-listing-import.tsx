@@ -85,7 +85,7 @@ export function JobListingImport() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-[#111827]">
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-[#1c1c1e]">
       <h3 className="flex items-center gap-2 font-medium">
         <FileSpreadsheet className="h-4 w-4 text-primary" />
         Stellenanzeigen importieren (BA-Format)
