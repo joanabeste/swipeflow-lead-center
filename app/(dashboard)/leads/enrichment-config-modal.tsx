@@ -147,10 +147,19 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
       <div className="w-full max-w-3xl rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-900">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
-          <h2 className="flex items-center gap-2 text-lg font-bold">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Lead-Anreicherung
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <Sparkles className="h-5 w-5 text-primary" />
+              Lead-Anreicherung
+            </h2>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+              serviceMode === "webdev"
+                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            }`}>
+              {serviceMode === "webdev" ? "Webentwicklung" : "Recruiting"}
+            </span>
+          </div>
           {phase !== "running" && (
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
               <X className="h-5 w-5" />
@@ -163,7 +172,10 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
           {phase === "configure" && (
             <div className="space-y-4">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {total} Lead(s) ausgewählt. Welche Daten sollen gesucht werden?
+                {total} Lead(s) ausgewählt.
+                {serviceMode === "webdev"
+                  ? " Im Webentwicklung-Modus werden Geschäftsführer und Website-Qualität analysiert."
+                  : " Im Recruiting-Modus werden Kontakte, Stellen und Karriereseiten gesucht."}
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {[
