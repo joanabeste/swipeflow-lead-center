@@ -1,15 +1,13 @@
 /** Erkennt den Delimiter anhand der ersten Zeilen */
 export function detectDelimiter(text: string): string {
-  const firstLines = text.split("\n").slice(0, 5);
+  // Nur erste Zeile verwenden (sicher außerhalb von Multiline-Feldern)
+  const firstLine = text.split("\n")[0] ?? "";
   const candidates = [",", ";", "\t"];
   let bestDelimiter = ",";
   let bestScore = 0;
 
   for (const d of candidates) {
-    const counts = firstLines.map((line) => line.split(d).length - 1);
-    // Konsistente Anzahl und möglichst viele Spalten
-    const allSame = counts.every((c) => c === counts[0]);
-    const score = allSame ? counts[0] : 0;
+    const score = firstLine.split(d).length - 1;
     if (score > bestScore) {
       bestScore = score;
       bestDelimiter = d;
@@ -19,56 +17,77 @@ export function detectDelimiter(text: string): string {
   return bestDelimiter;
 }
 
-/** Parst einen CSV-Text in Header + Zeilen */
+/** Parst einen CSV-Text in Header + Zeilen.
+ * Unterstützt Multiline-Felder (Zeilenumbrüche innerhalb von Anführungszeichen). */
 export function parseCSV(
   text: string,
   delimiter?: string,
 ): { headers: string[]; rows: string[][] } {
   const d = delimiter ?? detectDelimiter(text);
-  const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+  const records = parseRecords(text, d);
 
-  if (lines.length === 0) return { headers: [], rows: [] };
+  if (records.length === 0) return { headers: [], rows: [] };
 
-  const headers = parseLine(lines[0], d);
-  const rows = lines.slice(1).map((line) => parseLine(line, d));
+  const headers = records[0];
+  const rows = records.slice(1);
 
   return { headers, rows };
 }
 
-/** Parst eine einzelne CSV-Zeile mit einfachem Quote-Handling */
-function parseLine(line: string, delimiter: string): string[] {
-  const result: string[] = [];
-  let current = "";
+/** Parst den gesamten CSV-Text in Records (Zeichen-für-Zeichen, Multiline-safe) */
+function parseRecords(text: string, delimiter: string): string[][] {
+  const records: string[][] = [];
+  let currentField = "";
+  let currentRecord: string[] = [];
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = i + 1 < text.length ? text[i + 1] : "";
 
     if (inQuotes) {
       if (char === '"') {
-        if (i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
+        if (nextChar === '"') {
+          // Escaped quote ""
+          currentField += '"';
           i++;
         } else {
+          // End of quoted field
           inQuotes = false;
         }
       } else {
-        current += char;
+        // Any char inside quotes (including newlines)
+        currentField += char;
       }
     } else {
       if (char === '"') {
         inQuotes = true;
       } else if (char === delimiter) {
-        result.push(current.trim());
-        current = "";
+        currentRecord.push(currentField.trim());
+        currentField = "";
+      } else if (char === "\r") {
+        // Skip \r, handle \n
+        continue;
+      } else if (char === "\n") {
+        currentRecord.push(currentField.trim());
+        if (currentRecord.some((f) => f !== "")) {
+          records.push(currentRecord);
+        }
+        currentRecord = [];
+        currentField = "";
       } else {
-        current += char;
+        currentField += char;
       }
     }
   }
 
-  result.push(current.trim());
-  return result;
+  // Letztes Feld/Record
+  currentRecord.push(currentField.trim());
+  if (currentRecord.some((f) => f !== "")) {
+    records.push(currentRecord);
+  }
+
+  return records;
 }
 
 /** Versucht einen Text-Buffer als UTF-8 zu dekodieren.

@@ -44,16 +44,23 @@ export function JobListingImport() {
     const phoneIdx = headers.findIndex((h) => h.toLowerCase().trim() === "telefon");
     const jobIdx = headers.findIndex((h) => h.toLowerCase().trim() === "stelle");
 
-    const previewRows: PreviewRow[] = rows.slice(0, 20).map((row) => ({
-      company: row[companyIdx] ?? "–",
-      contact: row[contactIdx] ?? "–",
-      email: row[emailIdx] ?? "–",
-      phone: row[phoneIdx] ?? "–",
-      job: row[jobIdx] ?? "–",
+    function truncate(s: string | undefined, max: number): string {
+      if (!s) return "–";
+      const clean = s.replace(/\n/g, " ").trim();
+      return clean.length > max ? clean.slice(0, max - 1) + "…" : clean || "–";
+    }
+
+    const validRows = rows.filter((r) => r[companyIdx]?.trim());
+    const previewRows: PreviewRow[] = validRows.slice(0, 20).map((row) => ({
+      company: truncate(row[companyIdx], 40),
+      contact: truncate(row[contactIdx], 30),
+      email: truncate(row[emailIdx], 35),
+      phone: truncate(row[phoneIdx], 20),
+      job: truncate(row[jobIdx], 35),
     }));
 
     setPreview(previewRows);
-    setTotalRows(rows.filter((r) => r[companyIdx]?.trim()).length);
+    setTotalRows(validRows.length);
     setPhase("preview");
   }
 
