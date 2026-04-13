@@ -3,8 +3,9 @@ import { logAudit } from "@/lib/audit-log";
 import { fetchCompanyPages } from "./web-fetcher";
 import { extractFromPages } from "./extractor";
 import { findCompanyWebsite } from "./website-finder";
+import { analyzeWebsite } from "./website-analyzer";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import type { EnrichmentConfig, CancelRule } from "@/lib/types";
+import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
 export interface EnrichLeadResult {
@@ -16,6 +17,7 @@ export interface EnrichLeadResult {
   firstContactName?: string;
   hasEmail?: boolean;
   hasPhone?: boolean;
+  websiteIssues?: number;
   cancelled?: boolean;
   cancelReason?: string;
 }
@@ -24,6 +26,7 @@ export async function enrichLead(
   leadId: string,
   userId: string | null,
   config: EnrichmentConfig = DEFAULT_ENRICHMENT_CONFIG,
+  serviceMode: ServiceMode = "recruiting",
 ): Promise<EnrichLeadResult> {
   const db = createServiceClient();
 
@@ -81,16 +84,36 @@ export async function enrichLead(
     .eq("id", leadId);
 
   try {
+    // Webdev-Modus: Website-Analyse durchführen
+    let websiteAnalysis: Awaited<ReturnType<typeof analyzeWebsite>> | null = null;
+    if (serviceMode === "webdev") {
+      websiteAnalysis = await analyzeWebsite(websiteOrDomain);
+      // Ergebnisse im Lead speichern
+      await db.from("leads").update({
+        has_ssl: websiteAnalysis.hasSsl,
+        is_mobile_friendly: websiteAnalysis.isMobileFriendly,
+        page_speed_score: Math.min(100, Math.round((1 - websiteAnalysis.loadTimeMs / 10000) * 100)),
+        website_tech: websiteAnalysis.technology,
+        website_age_estimate: websiteAnalysis.designEstimate,
+        website_issues: websiteAnalysis.issues,
+      }).eq("id", leadId);
+    }
+
+    // Webdev-Modus: Enrichment-Config anpassen (nur GF, keine Stellen)
+    const effectiveConfig = serviceMode === "webdev"
+      ? { contacts_management: true, contacts_all: false, job_postings: false, career_page: false, company_details: true }
+      : config;
+
     // 1. Website-Seiten abrufen
-    const { pages } = await fetchCompanyPages(websiteOrDomain, config);
+    const { pages } = await fetchCompanyPages(websiteOrDomain, effectiveConfig);
 
     const successfulPages = pages.filter((p) => !p.error);
     if (successfulPages.length === 0) {
       throw new Error("Keine Seiten konnten abgerufen werden.");
     }
 
-    // 2. Claude-Extraktion
-    const result = await extractFromPages(lead.company_name, pages, config);
+    // 2. LLM-Extraktion (Kontakte + Firmendaten)
+    const result = await extractFromPages(lead.company_name, pages, effectiveConfig);
 
     // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur angeforderte Kategorien
     if (config.contacts_management || config.contacts_all) {
@@ -140,26 +163,36 @@ export async function enrichLead(
       leadUpdates.company_size = result.additional_info.company_size_estimate;
     }
 
-    // Auto-Qualifizierung: Pflichtfeld-Profil prüfen
-    const hasContactWithEmail = result.contacts.some((c) => !!c.email);
-    if (hasContactWithEmail) {
-      const { data: defaultProfile } = await db
-        .from("required_field_profiles")
-        .select("required_fields")
-        .eq("is_default", true)
-        .limit(1)
-        .single();
-
-      const updatedLead = { ...lead, ...leadUpdates };
-      const requiredFields = (defaultProfile?.required_fields as string[]) ?? ["company_name"];
-
-      const allFieldsFilled = requiredFields.every((field) => {
-        const val = updatedLead[field];
-        return val != null && String(val).trim() !== "";
-      });
-
-      if (allFieldsFilled) {
+    // Auto-Qualifizierung je nach Service-Modus
+    if (serviceMode === "webdev") {
+      // Webdev: Qualifiziert wenn Kontakt da + Website hat Issues
+      const hasContact = result.contacts.some((c) => !!c.email || !!c.phone);
+      const hasIssues = websiteAnalysis && websiteAnalysis.issues.length > 0;
+      if (hasContact && hasIssues) {
         leadUpdates.status = "qualified";
+      }
+    } else {
+      // Recruiting: Qualifiziert wenn Kontakt mit E-Mail + Pflichtfelder
+      const hasContactWithEmail = result.contacts.some((c) => !!c.email);
+      if (hasContactWithEmail) {
+        const { data: defaultProfile } = await db
+          .from("required_field_profiles")
+          .select("required_fields")
+          .eq("is_default", true)
+          .limit(1)
+          .single();
+
+        const updatedLead = { ...lead, ...leadUpdates };
+        const requiredFields = (defaultProfile?.required_fields as string[]) ?? ["company_name"];
+
+        const allFieldsFilled = requiredFields.every((field) => {
+          const val = updatedLead[field];
+          return val != null && String(val).trim() !== "";
+        });
+
+        if (allFieldsFilled) {
+          leadUpdates.status = "qualified";
+        }
       }
     }
 
@@ -244,6 +277,7 @@ export async function enrichLead(
       firstContactName: firstContact?.name,
       hasEmail: result.contacts.some((c) => !!c.email),
       hasPhone: result.contacts.some((c) => !!c.phone),
+      websiteIssues: websiteAnalysis?.issues.length ?? 0,
       cancelled,
       cancelReason,
     };

@@ -1,12 +1,15 @@
 export type UserRole = "admin" | "sales" | "viewer";
 export type UserStatus = "active" | "inactive";
 
+export type ServiceMode = "recruiting" | "webdev";
+
 export interface Profile {
   id: string;
   email: string;
   name: string;
   role: UserRole;
   status: UserStatus;
+  service_mode: ServiceMode;
   lead_table_columns: string[] | null;
   created_at: string;
   updated_at: string;
@@ -49,6 +52,12 @@ export interface Lead {
   blacklist_reason: string | null;
   cancel_reason: string | null;
   cancel_rule_id: string | null;
+  has_ssl: boolean | null;
+  is_mobile_friendly: boolean | null;
+  page_speed_score: number | null;
+  website_tech: string | null;
+  website_age_estimate: string | null;
+  website_issues: string[];
   enriched_at: string | null;
   enrichment_source: string | null;
   created_by: string | null;

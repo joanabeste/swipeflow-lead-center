@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
 import { evaluateCancelRules, formatCancelReason, formatError } from "@/lib/cancel-rules/evaluator";
-import type { EnrichmentConfig, CancelRule } from "@/lib/types";
+import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const leadIds: string[] = body.leadIds ?? [];
   const config: EnrichmentConfig = body.config ?? DEFAULT_ENRICHMENT_CONFIG;
+  const serviceMode: ServiceMode = body.serviceMode ?? "recruiting";
 
   if (leadIds.length === 0) {
     return new Response("No lead IDs", { status: 400 });
@@ -105,7 +106,7 @@ export async function POST(request: Request) {
 
         // === Enrichment durchführen ===
         try {
-          const result = await enrichLead(leadId, user.id, config);
+          const result = await enrichLead(leadId, user.id, config, serviceMode);
 
           send({
             type: "complete",

@@ -1,18 +1,36 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
 import { logout } from "@/app/login/actions";
+import { createClient } from "@/lib/supabase/server";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { GlobalSearch } from "./global-search";
 import { SwipeflowLogo } from "./swipeflow-logo";
 import { ToastProvider } from "./toast-provider";
+import { ServiceModeProvider } from "@/lib/service-mode";
+import { ServiceModeSwitch } from "./service-mode-switch";
+import type { ServiceMode } from "@/lib/types";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Service-Mode des aktuellen Users laden
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  let serviceMode: ServiceMode = "recruiting";
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("service_mode")
+      .eq("id", user.id)
+      .single();
+    if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
+  }
+
   return (
+    <ServiceModeProvider initialMode={serviceMode}>
     <ToastProvider>
     <div className="flex h-full">
       {/* Sidebar */}
@@ -42,12 +60,14 @@ export default function DashboardLayout({
 
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-end border-b border-gray-200 px-8 py-3 dark:border-gray-800/50">
+        <header className="flex items-center justify-between border-b border-gray-200 px-8 py-3 dark:border-gray-800/50">
+          <ServiceModeSwitch />
           <GlobalSearch />
         </header>
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
       </div>
     </div>
     </ToastProvider>
+    </ServiceModeProvider>
   );
 }

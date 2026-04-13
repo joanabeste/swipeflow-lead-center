@@ -6,6 +6,7 @@ import type { Lead, EnrichmentConfig } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
+import { useServiceMode } from "@/lib/service-mode";
 
 interface Props {
   leadIds: string[];
@@ -30,13 +31,19 @@ interface EnrichResult {
 type Phase = "configure" | "running" | "complete";
 
 export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
+  const { addToast } = useToastContext();
+  const { mode: serviceMode } = useServiceMode();
+
   const [phase, setPhase] = useState<Phase>("configure");
-  const [config, setConfig] = useState<EnrichmentConfig>({ ...DEFAULT_ENRICHMENT_CONFIG });
+  const [config, setConfig] = useState<EnrichmentConfig>(
+    serviceMode === "webdev"
+      ? { contacts_management: true, contacts_all: false, job_postings: false, career_page: false, company_details: true }
+      : { ...DEFAULT_ENRICHMENT_CONFIG },
+  );
   const [results, setResults] = useState<EnrichResult[]>([]);
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);
   const [qualifying, setQualifying] = useState(false);
-  const { addToast } = useToastContext();
 
   const total = leadIds.length;
 
@@ -49,7 +56,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
       const res = await fetch("/api/enrich-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds, config }),
+        body: JSON.stringify({ leadIds, config, serviceMode }),
       });
 
       if (!res.ok || !res.body) {

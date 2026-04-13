@@ -6,6 +6,7 @@ import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, 
 import type { Lead } from "@/lib/types";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, saveColumnPreferences } from "./actions";
 import { useToastContext } from "../toast-provider";
+import { useServiceMode } from "@/lib/service-mode";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -18,22 +19,24 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 };
 
 const ALL_COLUMNS = [
-  { key: "company_name", label: "Firma", defaultVisible: true },
-  { key: "domain", label: "Domain", defaultVisible: false },
-  { key: "city", label: "Ort", defaultVisible: true },
-  { key: "zip", label: "PLZ", defaultVisible: false },
-  { key: "industry", label: "Branche", defaultVisible: true },
-  { key: "company_size", label: "Größe", defaultVisible: false },
-  { key: "legal_form", label: "Rechtsform", defaultVisible: false },
-  { key: "phone", label: "Telefon", defaultVisible: false },
-  { key: "email", label: "E-Mail", defaultVisible: false },
-  { key: "source_type", label: "Quelle", defaultVisible: false },
-  { key: "status", label: "Status", defaultVisible: true },
-  { key: "updated_at", label: "Bearbeitet", defaultVisible: true },
-  { key: "created_at", label: "Erstellt", defaultVisible: false },
+  { key: "company_name", label: "Firma", defaultVisible: true, modes: ["recruiting", "webdev"] },
+  { key: "domain", label: "Domain", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "city", label: "Ort", defaultVisible: true, modes: ["recruiting", "webdev"] },
+  { key: "zip", label: "PLZ", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "industry", label: "Branche", defaultVisible: true, modes: ["recruiting"] },
+  { key: "company_size", label: "Größe", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "legal_form", label: "Rechtsform", defaultVisible: false, modes: ["recruiting"] },
+  { key: "phone", label: "Telefon", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "email", label: "E-Mail", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "has_ssl", label: "SSL", defaultVisible: true, modes: ["webdev"] },
+  { key: "is_mobile_friendly", label: "Mobil", defaultVisible: true, modes: ["webdev"] },
+  { key: "website_tech", label: "Technik", defaultVisible: true, modes: ["webdev"] },
+  { key: "website_age_estimate", label: "Design", defaultVisible: true, modes: ["webdev"] },
+  { key: "source_type", label: "Quelle", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "status", label: "Status", defaultVisible: true, modes: ["recruiting", "webdev"] },
+  { key: "updated_at", label: "Bearbeitet", defaultVisible: true, modes: ["recruiting", "webdev"] },
+  { key: "created_at", label: "Erstellt", defaultVisible: false, modes: ["recruiting", "webdev"] },
 ];
-
-const DEFAULT_VISIBLE = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key);
 
 interface Props {
   leads: Lead[];
@@ -63,12 +66,16 @@ export function LeadTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
+  const { mode: serviceMode } = useServiceMode();
+
+  const modeColumns = ALL_COLUMNS.filter((c) => c.modes.includes(serviceMode));
+  const defaultVisible = modeColumns.filter((c) => c.defaultVisible).map((c) => c.key);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState("qualified");
   const [bulkPending, startBulkTransition] = useTransition();
   const [showColumnPicker, setShowColumnPicker] = useState(false);
-  const [visibleCols, setVisibleCols] = useState<string[]>(savedColumns ?? DEFAULT_VISIBLE);
+  const [visibleCols, setVisibleCols] = useState<string[]>(savedColumns ?? defaultVisible);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const columnPickerRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -87,7 +94,7 @@ export function LeadTable({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const columns = ALL_COLUMNS.filter((c) => visibleCols.includes(c.key));
+  const columns = modeColumns.filter((c) => visibleCols.includes(c.key));
 
   function toggleColumn(key: string) {
     const next = visibleCols.includes(key)
@@ -178,6 +185,12 @@ export function LeadTable({
       const labels: Record<string, string> = { csv: "CSV", url: "URL", directory: "Verzeichnis" };
       return labels[lead.source_type] ?? lead.source_type;
     }
+    if (key === "has_ssl") return lead.has_ssl == null ? "–" : lead.has_ssl ? "Ja" : "Nein";
+    if (key === "is_mobile_friendly") return lead.is_mobile_friendly == null ? "–" : lead.is_mobile_friendly ? "Ja" : "Nein";
+    if (key === "website_age_estimate") {
+      const labels: Record<string, string> = { veraltet: "Veraltet", durchschnittlich: "OK", modern: "Modern" };
+      return labels[lead.website_age_estimate ?? ""] ?? lead.website_age_estimate ?? "–";
+    }
     const val = lead[key as keyof Lead];
     if (val == null) return "–";
     return String(val);
@@ -222,7 +235,7 @@ export function LeadTable({
           </button>
           {showColumnPicker && (
             <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              {ALL_COLUMNS.map((col) => (
+              {modeColumns.map((col) => (
                 <label key={col.key} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
                   <input
                     type="checkbox"

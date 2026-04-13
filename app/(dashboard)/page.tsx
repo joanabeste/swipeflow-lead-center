@@ -2,8 +2,18 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { FileSpreadsheet, Upload, Send, Sparkles } from "lucide-react";
 
+import type { ServiceMode } from "@/lib/types";
+
 export default async function DashboardPage() {
   const supabase = await createClient();
+
+  // Service-Mode laden
+  const { data: { user } } = await supabase.auth.getUser();
+  let serviceMode: ServiceMode = "recruiting";
+  if (user) {
+    const { data: profile } = await supabase.from("profiles").select("service_mode").eq("id", user.id).single();
+    if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
+  }
 
   const [
     { count: totalLeads },
@@ -32,6 +42,21 @@ export default async function DashboardPage() {
     supabase.from("leads").select("id, company_name, status, updated_at").order("updated_at", { ascending: false }).limit(8),
     supabase.from("audit_logs").select("*, profiles(name)").order("created_at", { ascending: false }).limit(6),
   ]);
+
+  // Webdev-spezifische Stats
+  let noSslCount = 0;
+  let notMobileCount = 0;
+  let outdatedDesignCount = 0;
+  if (serviceMode === "webdev") {
+    const [{ count: noSsl }, { count: notMobile }, { count: outdated }] = await Promise.all([
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("has_ssl", false),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("is_mobile_friendly", false),
+      supabase.from("leads").select("*", { count: "exact", head: true }).eq("website_age_estimate", "veraltet"),
+    ]);
+    noSslCount = noSsl ?? 0;
+    notMobileCount = notMobile ?? 0;
+    outdatedDesignCount = outdated ?? 0;
+  }
 
   const total = totalLeads ?? 0;
   const excluded = (cancelledLeads ?? 0) + (filteredLeads ?? 0);
@@ -113,28 +138,55 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Conversion-Raten + Quick Actions */}
+      {/* Modus-spezifische Stats */}
       <div className="mt-4 grid grid-cols-4 gap-3">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Enrichment-Erfolg</p>
-          <p className="mt-1 text-2xl font-bold">{enrichRate}%</p>
-          <p className="text-xs text-gray-400">{enrichmentCompleted ?? 0} / {enrichTotal} Versuche</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
-          <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
-          <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Export-Rate</p>
-          <p className="mt-1 text-2xl font-bold">{exportRate}%</p>
-          <p className="text-xs text-gray-400">{exportedLeads ?? 0} exportiert</p>
-        </div>
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Ausgeschlossen</p>
-          <p className="mt-1 text-2xl font-bold">{excluded}</p>
-          <p className="text-xs text-gray-400">{Math.round((excluded / (total || 1)) * 100)}% aller Leads</p>
-        </div>
+        {serviceMode === "webdev" ? (
+          <>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Kein SSL</p>
+              <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">{noSslCount}</p>
+              <p className="text-xs text-gray-400">Ohne Zertifikat</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Nicht mobil</p>
+              <p className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{notMobileCount}</p>
+              <p className="text-xs text-gray-400">Nicht mobilfreundlich</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Veraltetes Design</p>
+              <p className="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{outdatedDesignCount}</p>
+              <p className="text-xs text-gray-400">Redesign-Potenzial</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
+              <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
+              <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Enrichment-Erfolg</p>
+              <p className="mt-1 text-2xl font-bold">{enrichRate}%</p>
+              <p className="text-xs text-gray-400">{enrichmentCompleted ?? 0} / {enrichTotal} Versuche</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
+              <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
+              <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Export-Rate</p>
+              <p className="mt-1 text-2xl font-bold">{exportRate}%</p>
+              <p className="text-xs text-gray-400">{exportedLeads ?? 0} exportiert</p>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#111827]">
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Ausgeschlossen</p>
+              <p className="mt-1 text-2xl font-bold">{excluded}</p>
+              <p className="text-xs text-gray-400">{Math.round((excluded / (total || 1)) * 100)}% aller Leads</p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Quick Actions */}
