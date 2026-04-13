@@ -4,6 +4,7 @@ import { logout } from "@/app/login/actions";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
 import { GlobalSearch } from "./global-search";
+import { SwipeflowLogo } from "./swipeflow-logo";
 
 export default function DashboardLayout({
   children,
@@ -15,11 +16,12 @@ export default function DashboardLayout({
       {/* Sidebar */}
       <aside className="flex w-60 flex-col border-r border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#0d1321]">
         <div className="px-5 py-5">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-              LC
+          <Link href="/" className="flex items-center gap-3">
+            <SwipeflowLogo className="h-7 w-auto text-gray-900 dark:text-white" />
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">swipeflow</span>
+              <span className="text-sm font-bold leading-tight tracking-tight">Lead Center</span>
             </div>
-            <span className="text-lg font-bold tracking-tight">Lead Center</span>
           </Link>
         </div>
 
