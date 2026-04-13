@@ -78,7 +78,8 @@ export async function POST(request: Request) {
         }
 
         // 3. Cancel-Rules Pre-Check (Import-Phase Regeln — ohne Enrichment nötig)
-        if (cancelRules && cancelRules.length > 0) {
+        // Im Webdev-Modus: Nur Rechtsform/Größe prüfen, keine Stellen-bezogenen Regeln
+        if (cancelRules && cancelRules.length > 0 && serviceMode === "recruiting") {
           const preCheck = evaluateCancelRules(
             lead as unknown as Record<string, unknown>,
             cancelRules as CancelRule[],

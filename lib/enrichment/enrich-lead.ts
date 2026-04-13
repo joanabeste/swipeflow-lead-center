@@ -210,10 +210,13 @@ export async function enrichLead(
       })
       .eq("id", enrichmentId);
 
-    // 8. Post-Enrichment Cancel-Rules prüfen
+    // 8. Post-Enrichment Cancel-Rules prüfen (nur im passenden Modus)
     let cancelled = false;
     let cancelReason: string | undefined;
 
+    // Im Webdev-Modus: Keine Recruiting-spezifischen Cancel-Rules anwenden
+    // (z.B. "Keine offenen Stellen" ist irrelevant für Webentwicklung)
+    if (serviceMode === "recruiting") {
     const { data: cancelRules } = await db
       .from("cancel_rules")
       .select("*")
@@ -249,6 +252,7 @@ export async function enrichLead(
           .eq("id", leadId);
       }
     }
+    } // Ende: serviceMode === "recruiting" Cancel-Rules Block
 
     // 9. Audit-Log
     await logAudit({
