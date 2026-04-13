@@ -47,22 +47,24 @@ export async function GET(request: NextRequest) {
 
   if (!user) return NextResponse.redirect(`${origin}/login`);
 
-  // Profil automatisch erstellen falls noch nicht vorhanden
+  // Prüfen ob ein Profil existiert — KEIN automatisches Erstellen mehr
   const serviceClient = createServiceClient();
   const { data: existingProfile } = await serviceClient
     .from("profiles")
-    .select("id")
+    .select("id, status")
     .eq("id", user.id)
     .single();
 
   if (!existingProfile) {
-    await serviceClient.from("profiles").insert({
-      id: user.id,
-      email: user.email!,
-      name: user.email!.split("@")[0],
-      role: "admin",
-      status: "active",
-    });
+    // User hat kein Profil → ist nicht autorisiert
+    // Auth-Session wieder löschen
+    await supabase.auth.signOut();
+    return NextResponse.redirect(`${origin}/login`);
+  }
+
+  if (existingProfile.status !== "active") {
+    await supabase.auth.signOut();
+    return NextResponse.redirect(`${origin}/login`);
   }
 
   return response;
