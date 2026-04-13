@@ -1,91 +1,167 @@
 /**
  * Findet die Website eines Unternehmens anhand des Firmennamens.
- * Nutzt eine einfache Google-Suche über den HTML-Scraping-Ansatz.
+ * Versucht mehrere Suchmaschinen: Google → DuckDuckGo → Bing
  */
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** Sucht die Website eines Unternehmens via DuckDuckGo (kein API-Key nötig) */
+const SKIP_DOMAINS = [
+  "facebook.com", "linkedin.com", "xing.com", "twitter.com", "instagram.com",
+  "youtube.com", "wikipedia.org", "yelp.de", "gelbeseiten.de", "11880.com",
+  "golocal.de", "kununu.com", "glassdoor.de", "indeed.de", "stepstone.de",
+  "google.com", "google.de", "bing.com", "duckduckgo.com",
+  "amazon.de", "ebay.de", "ebay-kleinanzeigen.de",
+  "northdata.de", "firmenwissen.de", "unternehmensregister.de",
+];
+
+/** Sucht die Website eines Unternehmens — probiert mehrere Quellen */
 export async function findCompanyWebsite(companyName: string, city?: string | null): Promise<string | null> {
   const query = city
-    ? `${companyName} ${city} website`
-    : `${companyName} website impressum`;
+    ? `${companyName} ${city}`
+    : companyName;
 
+  // 1. Google
+  const googleResult = await searchGoogle(query);
+  if (googleResult) return googleResult;
+
+  // 2. DuckDuckGo als Fallback
+  const ddgResult = await searchDuckDuckGo(query);
+  if (ddgResult) return ddgResult;
+
+  // 3. Bing als letzter Fallback
+  const bingResult = await searchBing(query);
+  if (bingResult) return bingResult;
+
+  return null;
+}
+
+async function searchGoogle(query: string): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8_000);
 
-    // DuckDuckGo HTML-Suche
-    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const url = `https://www.google.de/search?q=${encodeURIComponent(query)}&hl=de&num=5`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept-Language": "de-DE,de;q=0.9",
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    return extractFirstRelevantDomain(html, query);
+  } catch {
+    return null;
+  }
+}
+
+async function searchDuckDuckGo(query: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query + " website")}`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
     });
 
     clearTimeout(timeout);
-
     if (!res.ok) return null;
 
     const html = await res.text();
 
-    // Ergebnis-URLs extrahieren — DuckDuckGo HTML hat Links in class="result__url"
-    const urlMatches = html.match(/class="result__url"[^>]*>([^<]+)</g);
-    if (!urlMatches || urlMatches.length === 0) {
-      // Fallback: URLs aus href-Attributen
-      const hrefMatches = html.match(/href="\/\/duckduckgo\.com\/l\/\?uddg=([^&"]+)/g);
-      if (hrefMatches && hrefMatches.length > 0) {
-        const encoded = hrefMatches[0].match(/uddg=([^&"]+)/)?.[1];
-        if (encoded) {
-          const decoded = decodeURIComponent(encoded);
-          return extractDomain(decoded);
-        }
-      }
-      return null;
-    }
-
-    // Erste relevante URL finden (keine Social Media, keine Verzeichnisse)
-    const skipDomains = [
-      "facebook.com", "linkedin.com", "xing.com", "twitter.com", "instagram.com",
-      "youtube.com", "wikipedia.org", "yelp.de", "gelbeseiten.de", "11880.com",
-      "golocal.de", "kununu.com", "glassdoor.de", "indeed.de",
-    ];
-
-    for (const match of urlMatches) {
-      const urlText = match.replace(/class="result__url"[^>]*>/, "").trim();
-      const cleanUrl = urlText.startsWith("http") ? urlText : `https://${urlText}`;
-
-      try {
-        const parsedUrl = new URL(cleanUrl);
-        const domain = parsedUrl.hostname.replace(/^www\./, "");
-
-        if (skipDomains.some((skip) => domain.includes(skip))) continue;
-
-        // Prüfen ob die Domain dem Firmennamen ähnelt
-        const normalizedName = companyName.toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-          .replace(/(gmbh|ag|ug|kg|ohg|se|mbh|co)/g, "");
-
-        const normalizedDomain = domain.split(".")[0]
-          .replace(/[^a-z0-9]/g, "");
-
-        // Wenn Domain den Firmennamen enthält oder umgekehrt → gut
-        if (normalizedDomain.includes(normalizedName.slice(0, 5)) ||
-            normalizedName.includes(normalizedDomain.slice(0, 5))) {
-          return domain;
-        }
-
-        // Erstes nicht-Social-Media Ergebnis als Fallback
-        return domain;
-      } catch {
-        continue;
+    // DuckDuckGo-spezifisch: uddg-Parameter
+    const uddgMatches = html.match(/uddg=([^&"]+)/g);
+    if (uddgMatches) {
+      for (const match of uddgMatches) {
+        const encoded = match.replace("uddg=", "");
+        const decoded = decodeURIComponent(encoded);
+        const domain = extractDomain(decoded);
+        if (domain && isRelevantDomain(domain, query)) return domain;
       }
     }
 
-    return null;
+    return extractFirstRelevantDomain(html, query);
   } catch {
     return null;
   }
+}
+
+async function searchBing(query: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+
+    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&cc=de`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    return extractFirstRelevantDomain(html, query);
+  } catch {
+    return null;
+  }
+}
+
+/** Extrahiert die erste relevante Domain aus HTML-Suchergebnissen */
+function extractFirstRelevantDomain(html: string, query: string): string | null {
+  // URLs aus href-Attributen extrahieren
+  const hrefRegex = /href="(https?:\/\/[^"]+)"/g;
+  let match;
+  const candidates: string[] = [];
+
+  while ((match = hrefRegex.exec(html)) !== null) {
+    const domain = extractDomain(match[1]);
+    if (domain && !SKIP_DOMAINS.some((skip) => domain.includes(skip))) {
+      candidates.push(domain);
+    }
+  }
+
+  // Deduplizieren
+  const unique = [...new Set(candidates)];
+
+  // Erst nach Namens-Ähnlichkeit sortieren
+  const normalizedQuery = normalizeForComparison(query);
+
+  for (const domain of unique) {
+    if (isRelevantDomain(domain, query)) return domain;
+  }
+
+  // Fallback: erstes nicht-skip Ergebnis
+  return unique[0] ?? null;
+}
+
+/** Prüft ob eine Domain zum Suchbegriff passt */
+function isRelevantDomain(domain: string, query: string): boolean {
+  if (SKIP_DOMAINS.some((skip) => domain.includes(skip))) return false;
+
+  const normalizedDomain = domain.split(".")[0].replace(/[^a-z0-9]/g, "");
+  const normalizedQuery = normalizeForComparison(query);
+
+  // Domain enthält Teil des Namens oder umgekehrt
+  if (normalizedQuery.length >= 4 && normalizedDomain.includes(normalizedQuery.slice(0, Math.min(8, normalizedQuery.length)))) return true;
+  if (normalizedDomain.length >= 4 && normalizedQuery.includes(normalizedDomain.slice(0, Math.min(8, normalizedDomain.length)))) return true;
+
+  return false;
+}
+
+function normalizeForComparison(name: string): string {
+  return name.toLowerCase()
+    .replace(/[äÄ]/g, "ae").replace(/[öÖ]/g, "oe").replace(/[üÜ]/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/(gmbh|ag|ug|kg|ohg|se|mbh|co|cokg|haftungsbeschraenkt)/g, "");
 }
 
 function extractDomain(url: string): string | null {

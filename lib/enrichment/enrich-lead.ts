@@ -54,7 +54,7 @@ export async function enrichLead(
         enrichment_source: "nicht_moeglich:keine_website_gefunden",
         updated_at: new Date().toISOString(),
       }).eq("id", leadId);
-      return { success: false, error: "Keine Website gefunden." };
+      return { success: false, error: `Keine Website für "${lead.company_name}" gefunden.` };
     }
   }
 
