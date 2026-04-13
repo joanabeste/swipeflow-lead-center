@@ -43,7 +43,7 @@ export async function exportLead(leadId: string, hsLeadStatus: string = "NEW") {
   }
 
   try {
-    // 1. Company erstellen
+    // 1. Company erstellen (Lead-Status kommt auf die Kontakte, nicht die Company)
     const result = await createHubSpotCompany(token, {
       name: lead.company_name,
       domain: lead.domain ?? "",
@@ -56,7 +56,6 @@ export async function exportLead(leadId: string, hsLeadStatus: string = "NEW") {
       industry: lead.industry ?? "",
       website: lead.website ?? "",
       description: lead.description ?? "",
-      hs_lead_status: hsLeadStatus,
       numberofemployees: lead.company_size ?? "",
     });
 
@@ -78,8 +77,24 @@ export async function exportLead(leadId: string, hsLeadStatus: string = "NEW") {
           email: contact.email ?? undefined,
           phone: contact.phone ?? undefined,
           jobtitle: contact.role ?? undefined,
+          hs_lead_status: hsLeadStatus,
+          company: lead.company_name,
         });
         if (created) contactsExported++;
+      }
+    } else {
+      // Kein Kontakt vorhanden — Fallback: Firma-Telefon als "Allgemeiner Kontakt" anlegen
+      if (lead.phone || lead.email) {
+        await createHubSpotContact(token, hubspotId, {
+          firstname: lead.company_name,
+          lastname: "",
+          email: lead.email ?? undefined,
+          phone: lead.phone ?? undefined,
+          jobtitle: "Allgemeiner Kontakt",
+          hs_lead_status: hsLeadStatus,
+          company: lead.company_name,
+        });
+        contactsExported = 1;
       }
     }
 

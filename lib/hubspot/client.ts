@@ -60,6 +60,8 @@ export async function createHubSpotContact(
     email?: string;
     phone?: string;
     jobtitle?: string;
+    hs_lead_status?: string;
+    company?: string;
   },
 ): Promise<{ id: string } | null> {
   // Kontakt erstellen
@@ -70,6 +72,8 @@ export async function createHubSpotContact(
   if (contact.email) properties.email = contact.email;
   if (contact.phone) properties.phone = contact.phone;
   if (contact.jobtitle) properties.jobtitle = contact.jobtitle;
+  if (contact.hs_lead_status) properties.hs_lead_status = contact.hs_lead_status;
+  if (contact.company) properties.company = contact.company;
 
   const res = await fetch(`${HUBSPOT_API_BASE}/crm/v3/objects/contacts`, {
     method: "POST",

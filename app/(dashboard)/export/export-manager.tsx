@@ -29,14 +29,14 @@ interface Props {
 }
 
 const LEAD_STATUS_OPTIONS = [
-  { value: "NEW", label: "Neu" },
-  { value: "OPEN", label: "Offen" },
-  { value: "IN_PROGRESS", label: "In Bearbeitung" },
-  { value: "ATTEMPTED_TO_CONTACT", label: "Kontaktversuch" },
-  { value: "CONNECTED", label: "Verbunden" },
-  { value: "OPEN_DEAL", label: "Offenes Angebot" },
-  { value: "UNQUALIFIED", label: "Nicht qualifiziert" },
-  { value: "BAD_TIMING", label: "Schlechter Zeitpunkt" },
+  { value: "Manuelle Überprüfung", label: "Manuelle Überprüfung" },
+  { value: "Todo", label: "Todo" },
+  { value: "Recruiting Lead", label: "Recruiting Lead" },
+  { value: "Recruiting Todo", label: "Recruiting Todo" },
+  { value: "Webdesign Lead", label: "Webdesign Lead" },
+  { value: "Webdesign - Manuelle Überprüfung", label: "Webdesign — Manuelle Überprüfung" },
+  { value: "NEW", label: "New" },
+  { value: "Pipeline", label: "Pipeline" },
 ];
 
 interface PreviewData {
@@ -53,7 +53,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
   const [previewLeadId, setPreviewLeadId] = useState<string | null>(null);
   const [previewPending, startPreview] = useTransition();
   const [exporting, setExporting] = useState(false);
-  const [leadStatus, setLeadStatus] = useState("NEW");
+  const [leadStatus, setLeadStatus] = useState("Manuelle Überprüfung");
   const [result, setResult] = useState<{ successCount: number; errorCount: number } | null>(null);
 
   function toggleAll() {
@@ -214,8 +214,8 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 </tr>
               ) : (
                 exportLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td className="px-4 py-3 text-sm">{log.leads?.company_name ?? "–"}</td>
+                  <tr key={log.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td className="px-4 py-3 text-sm font-medium text-primary hover:underline" onClick={() => router.push(`/leads/${log.lead_id}`)}>{log.leads?.company_name ?? "–"}</td>
                     <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">{log.hubspot_company_id ?? "–"}</td>
                     <td className="px-4 py-3 text-sm">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
