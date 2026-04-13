@@ -11,13 +11,10 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-full items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-3">
-          <SwipeflowLogo className="h-10 w-auto text-gray-900 dark:text-white" />
+        <div className="flex flex-col items-center gap-4">
+          <SwipeflowLogo className="h-12 w-auto text-gray-900 dark:text-white" />
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight">Lead Center</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              swipeflow GmbH
-            </p>
+            <h1 className="text-xl font-bold tracking-tight">Lead Center</h1>
           </div>
         </div>
 

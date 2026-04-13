@@ -17,10 +17,10 @@ export default function DashboardLayout({
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="flex w-60 flex-col border-r border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#0d1321]">
-        <div className="px-5 py-5">
+        <div className="px-5 py-6">
           <Link href="/" className="block">
-            <SwipeflowLogo className="h-5 w-auto text-gray-900 dark:text-white" />
-            <span className="mt-1 block text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Lead Center</span>
+            <SwipeflowLogo className="h-7 w-auto text-gray-900 dark:text-white" />
+            <span className="mt-1.5 block text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Lead Center</span>
           </Link>
         </div>
 
