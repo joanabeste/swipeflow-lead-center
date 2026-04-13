@@ -208,10 +208,15 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                 <div className="space-y-1">
                   {results.map((r) => (
                     <div key={r.leadId} className="flex items-center gap-2 text-sm">
-                      {r.success ? <Check className="h-3.5 w-3.5 text-green-500" /> : <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
+                      {r.success && !r.cancelled && <Check className="h-3.5 w-3.5 text-green-500" />}
+                      {r.cancelled && <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />}
+                      {!r.success && !r.cancelled && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
                       <span className="font-medium">{r.name}</span>
-                      {r.success && <span className="text-gray-400">{r.contactsCount} Kontakte, {r.jobsCount} Stellen</span>}
-                      {!r.success && <span className="text-red-400">{r.error}</span>}
+                      {r.success && !r.cancelled && (
+                        <span className="text-gray-400">{r.contactsCount} Kontakte, {r.jobsCount} Stellen</span>
+                      )}
+                      {r.cancelled && <span className="text-orange-400">{r.cancelReason}</span>}
+                      {!r.success && !r.cancelled && <span className="text-red-400">{r.error}</span>}
                     </div>
                   ))}
                 </div>
@@ -289,11 +294,18 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                               </td>
                             </>
                           ) : (
-                            <td colSpan={5} className="px-3 py-2 text-center text-gray-500 dark:text-gray-400">
-                              {r.cancelled
-                                ? <span className="text-orange-500">{r.cancelReason ?? "Ausgeschlossen"}</span>
-                                : <span className="text-red-400">{r.error}</span>}
-                            </td>
+                            <>
+                              <td colSpan={4} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                {r.cancelled ? (r.cancelReason ?? "Ausgeschlossen") : (r.error ?? "Fehler")}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {r.cancelled ? (
+                                  <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">Ausgeschlossen</span>
+                                ) : (
+                                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">Fehler</span>
+                                )}
+                              </td>
+                            </>
                           )}
                         </tr>
                       ))}

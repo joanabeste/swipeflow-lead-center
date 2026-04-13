@@ -93,6 +93,42 @@ function evaluateRule(
   }
 }
 
+/** Macht einen technischen Cancel-Grund menschenlesbar */
+export function formatCancelReason(reason: string): string {
+  // Versuche den Regelnamen zu extrahieren: 'Regel "Name": ...'
+  const nameMatch = reason.match(/Regel "([^"]+)"/);
+  if (nameMatch) return nameMatch[1];
+
+  // Fallback: bekannte Patterns
+  if (reason.includes("job_postings_count")) return "Keine offenen Stellen";
+  if (reason.includes("legal_form")) return "Konzern-Rechtsform";
+  if (reason.includes("company_size")) return "Zu viele Mitarbeiter";
+  if (reason.includes("Blacklist")) {
+    const valMatch = reason.match(/"([^"]+)"/);
+    return valMatch ? `Blacklist: ${valMatch[1]}` : "Auf Blacklist";
+  }
+
+  // Letzter Fallback: auf 60 Zeichen kürzen
+  return reason.length > 60 ? reason.slice(0, 57) + "…" : reason;
+}
+
+/** Macht API-Fehlermeldungen benutzerfreundlich */
+export function formatError(error: string): string {
+  if (error.includes("529") || error.toLowerCase().includes("overloaded")) {
+    return "API überlastet — später erneut versuchen";
+  }
+  if (error.includes("Keine Seiten")) return "Website nicht erreichbar";
+  if (error.includes("Keine Website") || error.includes("Keine Domain")) return "Keine Website hinterlegt";
+  if (error.includes("Kein HTML")) return "Website nicht lesbar";
+  if (error.includes("nicht gefunden")) return "Lead nicht gefunden";
+  if (error.includes("JSON")) return "Datenextraktion fehlgeschlagen";
+  if (error.includes("timeout") || error.includes("aborted")) return "Zeitüberschreitung";
+
+  // Kürzen und JSON-Fragmente entfernen
+  const clean = error.replace(/\{[\s\S]*\}/, "").trim();
+  return clean.length > 60 ? clean.slice(0, 57) + "…" : clean || "Unbekannter Fehler";
+}
+
 function operatorLabel(op: string): string {
   const labels: Record<string, string> = {
     equals: "gleich",

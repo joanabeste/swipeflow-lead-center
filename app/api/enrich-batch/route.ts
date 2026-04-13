@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
-import type { EnrichmentConfig } from "@/lib/types";
+import { evaluateCancelRules, formatCancelReason, formatError } from "@/lib/cancel-rules/evaluator";
+import type { EnrichmentConfig, CancelRule } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
 export const maxDuration = 300;
@@ -22,14 +23,15 @@ export async function POST(request: Request) {
     return new Response("No lead IDs", { status: 400 });
   }
 
-  // Lead-Namen laden
   const db = createServiceClient();
-  const { data: leads } = await db
-    .from("leads")
-    .select("id, company_name")
-    .in("id", leadIds);
 
-  const leadMap = new Map((leads ?? []).map((l) => [l.id, l.company_name]));
+  // Leads + Cancel-Rules vorladen
+  const [{ data: leads }, { data: cancelRules }] = await Promise.all([
+    db.from("leads").select("id, company_name, status, blacklist_hit, cancel_reason, legal_form, company_size, domain, website").in("id", leadIds),
+    db.from("cancel_rules").select("*").eq("is_active", true),
+  ]);
+
+  const leadMap = new Map((leads ?? []).map((l) => [l.id, l]));
 
   const encoder = new TextEncoder();
 
@@ -40,10 +42,68 @@ export async function POST(request: Request) {
       }
 
       for (const leadId of leadIds) {
-        const name = leadMap.get(leadId) ?? "Unbekannt";
+        const lead = leadMap.get(leadId);
+        const name = lead?.company_name ?? "Unbekannt";
 
         send({ type: "start", leadId, name });
 
+        // === Pre-Check: Kann der Lead übersprungen werden? ===
+
+        // 1. Bereits gefiltert/ausgeschlossen
+        if (lead?.blacklist_hit || lead?.status === "filtered" || lead?.status === "cancelled") {
+          const reason = lead.cancel_reason || "Bereits ausgeschlossen";
+          send({
+            type: "complete", leadId, name,
+            success: true, cancelled: true,
+            cancelReason: formatCancelReason(reason),
+            contactsCount: 0, jobsCount: 0, hasEmail: false, hasPhone: false,
+          });
+          continue;
+        }
+
+        // 2. Keine Website
+        if (!lead?.website && !lead?.domain) {
+          send({
+            type: "complete", leadId, name,
+            success: false,
+            error: "Keine Website hinterlegt",
+          });
+          // Vermerk setzen
+          await db.from("leads").update({
+            enrichment_source: "nicht_moeglich:keine_website",
+            updated_at: new Date().toISOString(),
+          }).eq("id", leadId);
+          continue;
+        }
+
+        // 3. Cancel-Rules Pre-Check (Import-Phase Regeln — ohne Enrichment nötig)
+        if (cancelRules && cancelRules.length > 0) {
+          const preCheck = evaluateCancelRules(
+            lead as unknown as Record<string, unknown>,
+            cancelRules as CancelRule[],
+            "import",
+          );
+          if (preCheck.cancelled) {
+            const reason = preCheck.reasons.map((r) => r.reason).join("; ");
+            // Lead als cancelled markieren
+            await db.from("leads").update({
+              status: "cancelled",
+              cancel_reason: reason,
+              cancel_rule_id: preCheck.reasons[0].ruleId,
+              updated_at: new Date().toISOString(),
+            }).eq("id", leadId);
+
+            send({
+              type: "complete", leadId, name,
+              success: true, cancelled: true,
+              cancelReason: formatCancelReason(reason),
+              contactsCount: 0, jobsCount: 0, hasEmail: false, hasPhone: false,
+            });
+            continue;
+          }
+        }
+
+        // === Enrichment durchführen ===
         try {
           const result = await enrichLead(leadId, user.id, config);
 
@@ -58,8 +118,8 @@ export async function POST(request: Request) {
             hasEmail: result.hasEmail ?? false,
             hasPhone: result.hasPhone ?? false,
             cancelled: result.cancelled ?? false,
-            cancelReason: result.cancelReason,
-            error: result.error,
+            cancelReason: result.cancelReason ? formatCancelReason(result.cancelReason) : undefined,
+            error: result.error ? formatError(result.error) : undefined,
           });
         } catch (e) {
           send({
@@ -67,11 +127,11 @@ export async function POST(request: Request) {
             leadId,
             name,
             success: false,
-            error: e instanceof Error ? e.message : "Unbekannter Fehler",
+            error: formatError(e instanceof Error ? e.message : "Unbekannter Fehler"),
           });
         }
 
-        // Pause zwischen Leads (Rate-Limiting / Overload-Schutz)
+        // Pause zwischen Leads
         await new Promise((r) => setTimeout(r, 3000));
       }
 
