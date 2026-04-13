@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { FileSpreadsheet, Globe, List } from "lucide-react";
+import { FileSpreadsheet, Globe, List, Briefcase } from "lucide-react";
 import type { MappingTemplate } from "@/lib/types";
 import { ImportWizard } from "./import-wizard";
 import { UrlImport } from "./url-import";
 import { DirectoryImport } from "./directory-import";
+import { JobListingImport } from "./job-listing-import";
 
 interface Props {
   templates: MappingTemplate[];
@@ -13,6 +14,7 @@ interface Props {
 
 const tabs = [
   { key: "csv", label: "CSV-Datei", icon: FileSpreadsheet },
+  { key: "jobs", label: "Stellenanzeigen", icon: Briefcase },
   { key: "url", label: "Firmen-URL", icon: Globe },
   { key: "directory", label: "Verzeichnis-URL", icon: List },
 ];
@@ -40,6 +42,7 @@ export function ImportTabs({ templates }: Props) {
       </div>
       <div className="mt-6">
         {activeTab === "csv" && <ImportWizard templates={templates} />}
+        {activeTab === "jobs" && <JobListingImport />}
         {activeTab === "url" && <UrlImport />}
         {activeTab === "directory" && <DirectoryImport />}
       </div>
