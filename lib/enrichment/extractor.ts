@@ -96,6 +96,7 @@ function buildSystemPrompt(config: EnrichmentConfig): string {
       "Bei E-Mail-Adressen: Extrahiere persönliche E-Mails UND allgemeine Adressen (info@, kontakt@).",
       "Gib die source_url an, von welcher Seite jeder Kontakt stammt.",
       "Bei Telefonnummern: Normalisiere auf deutsches Format mit +49.",
+      "WICHTIG: Prüfe das Impressum BESONDERS auf Telefonnummern. Deutsche Impressum-Seiten enthalten fast immer eine Telefonnummer. Suche nach Patterns wie 'Tel:', 'Telefon:', 'Fon:', 'Fax:', '+49', '0800', '(0'. Wenn ein Geschäftsführer keine direkte Durchwahl hat, ordne ihm die Hauptnummer aus dem Impressum zu.",
     );
   }
 

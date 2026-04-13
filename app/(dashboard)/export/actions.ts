@@ -160,6 +160,48 @@ export async function exportLead(leadId: string, hsLeadStatus: string = "MANUELL
   }
 }
 
+export async function getExportPreview(leadId: string) {
+  const db = createServiceClient();
+
+  const [{ data: lead }, { data: contacts }, { data: jobs }, { data: enrichment }] = await Promise.all([
+    db.from("leads").select("*").eq("id", leadId).single(),
+    db.from("lead_contacts").select("*").eq("lead_id", leadId).order("created_at"),
+    db.from("lead_job_postings").select("*").eq("lead_id", leadId).order("created_at"),
+    db.from("lead_enrichments").select("career_page_url").eq("lead_id", leadId).eq("status", "completed").order("created_at", { ascending: false }).limit(1).single(),
+  ]);
+
+  if (!lead) return null;
+
+  return {
+    company: {
+      name: lead.company_name,
+      domain: lead.domain,
+      phone: lead.phone,
+      city: lead.city,
+      zip: lead.zip,
+      address: lead.street,
+      state: lead.state,
+      country: lead.country,
+      industry: lead.industry,
+      website: lead.website,
+      description: lead.description,
+      numberofemployees: lead.company_size,
+    },
+    contacts: (contacts ?? []).map((c: { name: string; role: string | null; email: string | null; phone: string | null }) => ({
+      name: c.name,
+      role: c.role,
+      email: c.email,
+      phone: c.phone,
+    })),
+    jobPostings: (jobs ?? []).map((j: { title: string; location: string | null; url: string | null }) => ({
+      title: j.title,
+      location: j.location,
+      url: j.url,
+    })),
+    careerPageUrl: enrichment?.career_page_url ?? null,
+  };
+}
+
 export async function batchExport(leadIds: string[], hsLeadStatus: string = "MANUELLE_UEBERPRUEFUNG") {
   let successCount = 0;
   let errorCount = 0;

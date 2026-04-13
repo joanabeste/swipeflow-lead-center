@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, ShieldBan, Send } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, ShieldBan, Send, Download } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, saveColumnPreferences } from "./actions";
 
@@ -275,11 +275,21 @@ export function LeadTable({
             </button>
           )}
           <button
+            onClick={() => {
+              const ids = Array.from(selected).join(",");
+              window.open(`/api/export-csv?ids=${ids}`, "_blank");
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            <Download className="h-3.5 w-3.5" />
+            CSV
+          </button>
+          <button
             onClick={() => router.push("/export")}
             className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             <Send className="h-3.5 w-3.5" />
-            Exportieren
+            HubSpot
           </button>
           <button
             onClick={() => {

@@ -118,7 +118,7 @@ export async function enrichLead(
       );
     }
 
-    // 6. Lead aktualisieren
+    // 6. Lead aktualisieren + Auto-Qualifizierung prüfen
     const leadUpdates: Record<string, unknown> = {
       status: "enriched",
       enriched_at: new Date().toISOString(),
@@ -129,6 +129,29 @@ export async function enrichLead(
     // Zusätzliche Infos in Lead-Felder übernehmen falls leer
     if (!lead.company_size && result.additional_info.company_size_estimate) {
       leadUpdates.company_size = result.additional_info.company_size_estimate;
+    }
+
+    // Auto-Qualifizierung: Pflichtfeld-Profil prüfen
+    const hasContactWithEmail = result.contacts.some((c) => !!c.email);
+    if (hasContactWithEmail) {
+      const { data: defaultProfile } = await db
+        .from("required_field_profiles")
+        .select("required_fields")
+        .eq("is_default", true)
+        .limit(1)
+        .single();
+
+      const updatedLead = { ...lead, ...leadUpdates };
+      const requiredFields = (defaultProfile?.required_fields as string[]) ?? ["company_name"];
+
+      const allFieldsFilled = requiredFields.every((field) => {
+        const val = updatedLead[field];
+        return val != null && String(val).trim() !== "";
+      });
+
+      if (allFieldsFilled) {
+        leadUpdates.status = "qualified";
+      }
     }
 
     await db.from("leads").update(leadUpdates).eq("id", leadId);

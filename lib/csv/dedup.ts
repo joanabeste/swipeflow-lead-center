@@ -138,66 +138,49 @@ export function findInternalDuplicates(
   return duplicates;
 }
 
-/** Prüft Duplikate gegen die bestehende Datenbank (mit Fuzzy-Matching) */
+/** Prüft Duplikate gegen die bestehende Datenbank (mit Fuzzy-Matching).
+ * Gibt eine Map zurück: CSV-Zeilen-Index → bestehende Lead-ID */
 export async function findDbDuplicates(
   supabase: SupabaseClient,
   rows: Record<string, string | null>[],
-): Promise<Set<number>> {
-  const duplicates = new Set<number>();
+): Promise<Map<number, string>> {
+  const duplicates = new Map<number, string>();
 
-  // Alle Domains und Firmennamen sammeln
-  const domains = rows
-    .map((r) => r.domain ? normalizeDomain(r.domain) : null)
-    .filter(Boolean) as string[];
+  // Alle existierenden Leads laden (ID, Domain, Name, Stadt)
+  const { data: existingLeads } = await supabase
+    .from("leads")
+    .select("id, domain, company_name, city");
 
-  // Domain-basierter Check (exakt + normalisiert)
-  if (domains.length > 0) {
-    const { data: existingByDomain } = await supabase
-      .from("leads")
-      .select("domain")
-      .not("domain", "is", null);
+  if (!existingLeads || existingLeads.length === 0) return duplicates;
 
-    const existingDomains = (existingByDomain ?? [])
-      .map((r) => r.domain ? normalizeDomain(r.domain) : null)
-      .filter(Boolean) as string[];
+  const existingWithDomain = existingLeads
+    .filter((l) => l.domain)
+    .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.domain!) }));
 
-    rows.forEach((row, index) => {
-      if (row.domain) {
-        const d = normalizeDomain(row.domain);
-        if (existingDomains.some((ed) => isDomainMatch(d, ed))) {
-          duplicates.add(index);
-        }
-      }
-    });
-  }
-
-  // Firmenname-basierter Fuzzy-Check (nur für Zeilen ohne Domain-Match)
-  const rowsWithoutDomainMatch = rows
-    .map((r, i) => ({ row: r, index: i }))
-    .filter(({ index }) => !duplicates.has(index))
-    .filter(({ row }) => row.company_name);
-
-  if (rowsWithoutDomainMatch.length > 0) {
-    const { data: existingLeads } = await supabase
-      .from("leads")
-      .select("company_name, city")
-      .not("company_name", "is", null);
-
-    if (existingLeads && existingLeads.length > 0) {
-      for (const { row, index } of rowsWithoutDomainMatch) {
-        if (!row.company_name) continue;
-
-        const match = existingLeads.some((existing) => {
-          if (!existing.company_name) return false;
-          const sameCity = !row.city || !existing.city ||
-            row.city.toLowerCase() === existing.city.toLowerCase();
-          return sameCity && isFuzzyMatch(row.company_name!, existing.company_name);
-        });
-
-        if (match) duplicates.add(index);
+  rows.forEach((row, index) => {
+    // Domain-Match
+    if (row.domain) {
+      const d = normalizeDomain(row.domain);
+      const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
+      if (match) {
+        duplicates.set(index, match.id);
+        return;
       }
     }
-  }
+
+    // Fuzzy Name-Match
+    if (row.company_name) {
+      const match = existingLeads.find((existing) => {
+        if (!existing.company_name) return false;
+        const sameCity = !row.city || !existing.city ||
+          row.city.toLowerCase() === existing.city.toLowerCase();
+        return sameCity && isFuzzyMatch(row.company_name!, existing.company_name);
+      });
+      if (match) {
+        duplicates.set(index, match.id);
+      }
+    }
+  });
 
   return duplicates;
 }

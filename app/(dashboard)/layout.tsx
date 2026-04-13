@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { SidebarNav } from "./sidebar-nav";
 import { ThemeToggle } from "./theme-toggle";
+import { GlobalSearch } from "./global-search";
 
 export default function DashboardLayout({
   children,
@@ -39,7 +40,12 @@ export default function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-8">{children}</main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <header className="flex items-center justify-end border-b border-gray-200 px-8 py-3 dark:border-gray-800/50">
+          <GlobalSearch />
+        </header>
+        <main className="flex-1 overflow-y-auto p-8">{children}</main>
+      </div>
     </div>
   );
 }

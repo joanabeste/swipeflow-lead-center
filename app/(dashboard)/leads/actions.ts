@@ -159,6 +159,21 @@ export async function findSimilarLeads(leadId: string) {
   }).slice(0, 10);
 }
 
+export async function searchLeads(query: string) {
+  if (!query || query.length < 2) return [];
+
+  const db = createServiceClient();
+  const q = `%${query}%`;
+
+  const { data } = await db
+    .from("leads")
+    .select("id, company_name, domain, city, status")
+    .or(`company_name.ilike.${q},domain.ilike.${q},city.ilike.${q},email.ilike.${q},phone.ilike.${q}`)
+    .limit(8);
+
+  return data ?? [];
+}
+
 export async function saveColumnPreferences(columns: string[]) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

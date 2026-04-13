@@ -118,6 +118,7 @@ export interface ImportLog {
   mapping_template_id: string | null;
   import_type: ImportType;
   source_url: string | null;
+  updated_count: number;
   status: ImportStatus;
   errors: { row: number; field: string; message: string }[];
   created_by: string | null;

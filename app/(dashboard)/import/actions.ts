@@ -70,12 +70,19 @@ export async function processImport(
   let importedCount = 0;
   let skippedCount = 0;
   let duplicateCount = 0;
+  let updatedCount = 0;
   let errorCount = 0;
   const errors: { row: number; field: string; message: string }[] = [];
 
   // Batch-Insert: 500er Chunks
   const BATCH_SIZE = 500;
   const leadsToInsert: Record<string, unknown>[] = [];
+
+  const updateFields = [
+    "domain", "phone", "email", "street", "city", "zip", "state",
+    "country", "industry", "company_size", "legal_form", "register_id",
+    "website", "description",
+  ];
 
   for (let i = 0; i < mappedRows.length; i++) {
     const row = mappedRows[i];
@@ -87,10 +94,45 @@ export async function processImport(
       continue;
     }
 
-    // Duplikat-Check
-    if (internalDups.has(i) || dbDups.has(i)) {
+    // Internes Duplikat
+    if (internalDups.has(i)) {
       duplicateCount++;
       skippedCount++;
+      continue;
+    }
+
+    // DB-Duplikat → Bestehenden Lead aktualisieren statt überspringen
+    const existingLeadId = dbDups.get(i);
+    if (existingLeadId) {
+      const { data: existingLead } = await db.from("leads").select("*").eq("id", existingLeadId).single();
+      if (existingLead) {
+        const updates: Record<string, string | null> = {};
+        for (const field of updateFields) {
+          const newVal = row[field];
+          const oldVal = existingLead[field as keyof typeof existingLead] as string | null;
+          if (newVal && !oldVal) {
+            updates[field] = newVal;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          updates.updated_at = new Date().toISOString();
+          await db.from("leads").update(updates).eq("id", existingLeadId);
+          // Change-Tracking
+          const changes = Object.entries(updates)
+            .filter(([k]) => k !== "updated_at")
+            .map(([k, v]) => ({
+              lead_id: existingLeadId,
+              user_id: user?.id ?? null,
+              field_name: k,
+              old_value: null,
+              new_value: v,
+            }));
+          if (changes.length > 0) await db.from("lead_changes").insert(changes);
+          updatedCount++;
+        } else {
+          duplicateCount++;
+        }
+      }
       continue;
     }
 
@@ -167,6 +209,7 @@ export async function processImport(
       imported_count: importedCount,
       skipped_count: skippedCount,
       duplicate_count: duplicateCount,
+      updated_count: updatedCount,
       error_count: errorCount,
       errors,
     })
@@ -208,6 +251,7 @@ export async function processImport(
     imported: importedCount,
     skipped: skippedCount,
     duplicates: duplicateCount,
+    updated: updatedCount,
     errors: errorCount,
   };
 }

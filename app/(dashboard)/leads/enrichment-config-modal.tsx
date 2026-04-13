@@ -103,8 +103,22 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
+    // Browser-Notification Permission anfragen
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
     return () => { document.body.style.overflow = ""; };
   }, []);
+
+  // Notification senden wenn fertig und Tab nicht sichtbar
+  useEffect(() => {
+    if (phase === "complete" && document.hidden && "Notification" in window && Notification.permission === "granted") {
+      const ready = results.filter((r) => r.success && !r.cancelled).length;
+      new Notification("Anreicherung abgeschlossen", {
+        body: `${ready} Lead(s) bereit, ${results.filter((r) => !r.success).length} Fehler`,
+      });
+    }
+  }, [phase, results]);
 
   const successResults = results.filter((r) => r.success && !r.cancelled);
   const readyResults = successResults.filter((r) => r.hasEmail && r.contactsCount && r.contactsCount > 0);
