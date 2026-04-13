@@ -246,13 +246,27 @@ export function LeadTable({
 
       {/* Bulk-Aktionen */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-blue-50 p-3 dark:bg-blue-900/20">
-          <span className="text-sm font-medium">{selected.size} ausgewählt</span>
-          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-[#111827]">
+          <span className="text-sm font-bold text-primary">{selected.size}</span>
+          <span className="text-sm text-gray-500 dark:text-gray-400">ausgewählt</span>
+          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+
+          {/* Primäre Aktionen */}
+          {onOpenEnrichModal && (
+            <button
+              onClick={() => onOpenEnrichModal(Array.from(selected))}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Anreichern
+            </button>
+          )}
+
+          {/* Status */}
           <select
             value={bulkStatus}
             onChange={(e) => setBulkStatus(e.target.value)}
-            className="rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+            className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
             {Object.entries(statusLabels).map(([key, { label }]) => (
               <option key={key} value={key}>{label}</option>
@@ -261,32 +275,27 @@ export function LeadTable({
           <button
             onClick={handleBulkUpdate}
             disabled={bulkPending}
-            className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
           >
-            {bulkPending ? "Wird geändert…" : "Status ändern"}
+            {bulkPending ? "…" : "Setzen"}
           </button>
-          {onOpenEnrichModal && (
-            <button
-              onClick={() => onOpenEnrichModal(Array.from(selected))}
-              className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-3 py-1 text-sm font-medium text-white hover:bg-amber-600"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Anreichern
-            </button>
-          )}
+
+          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+
+          {/* Sekundäre Aktionen — einheitliches Styling */}
           <button
             onClick={() => {
               const ids = Array.from(selected).join(",");
               window.open(`/api/export-csv?ids=${ids}`, "_blank");
             }}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <Download className="h-3.5 w-3.5" />
             CSV
           </button>
           <button
             onClick={() => router.push("/export")}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <Send className="h-3.5 w-3.5" />
             HubSpot
@@ -302,7 +311,7 @@ export function LeadTable({
               }
             }}
             disabled={bulkPending}
-            className="inline-flex items-center gap-1 rounded-md border border-orange-300 px-3 py-1 text-sm text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <ShieldBan className="h-3.5 w-3.5" />
             Blacklist
@@ -322,7 +331,7 @@ export function LeadTable({
               }
             }}
             disabled={bulkPending}
-            className="inline-flex items-center gap-1 rounded-md border border-red-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 dark:border-gray-700 dark:hover:bg-red-900/10"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Löschen
