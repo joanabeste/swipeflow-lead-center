@@ -1,20 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { FileSpreadsheet, Globe, List, Briefcase } from "lucide-react";
+import { Upload, Globe, List } from "lucide-react";
 import type { MappingTemplate } from "@/lib/types";
-import { ImportWizard } from "./import-wizard";
+import { SmartImport } from "./smart-import";
 import { UrlImport } from "./url-import";
 import { DirectoryImport } from "./directory-import";
-import { JobListingImport } from "./job-listing-import";
 
 interface Props {
   templates: MappingTemplate[];
 }
 
 const tabs = [
-  { key: "csv", label: "CSV-Datei", icon: FileSpreadsheet },
-  { key: "jobs", label: "Stellenanzeigen", icon: Briefcase },
+  { key: "csv", label: "CSV / Daten", icon: Upload },
   { key: "url", label: "Firmen-URL", icon: Globe },
   { key: "directory", label: "Verzeichnis-URL", icon: List },
 ];
@@ -24,7 +22,7 @@ export function ImportTabs({ templates }: Props) {
 
   return (
     <div>
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-[#2c2c2e]">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -41,8 +39,7 @@ export function ImportTabs({ templates }: Props) {
         ))}
       </div>
       <div className="mt-6">
-        {activeTab === "csv" && <ImportWizard templates={templates} />}
-        {activeTab === "jobs" && <JobListingImport />}
+        {activeTab === "csv" && <SmartImport templates={templates} />}
         {activeTab === "url" && <UrlImport />}
         {activeTab === "directory" && <DirectoryImport />}
       </div>
