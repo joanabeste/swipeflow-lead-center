@@ -92,7 +92,7 @@ export function JobListingImport() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-[#1c1c1e]">
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <h3 className="flex items-center gap-2 font-medium">
         <FileSpreadsheet className="h-4 w-4 text-primary" />
         Stellenanzeigen importieren (BA-Format)
@@ -143,9 +143,9 @@ export function JobListingImport() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
-            <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-[#2c2c2e]">
+            <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-[#2c2c2e]">
+              <thead className="bg-gray-50 dark:bg-[#232325]">
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Kontakt</th>
@@ -154,7 +154,7 @@ export function JobListingImport() {
                   <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Stelle</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
                 {preview.map((row, i) => (
                   <tr key={i}>
                     <td className="px-3 py-2 font-medium">{row.company}</td>
@@ -185,23 +185,23 @@ export function JobListingImport() {
                 Import abgeschlossen
               </div>
               <div className="grid grid-cols-5 gap-3">
-                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-800">
+                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.imported}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Neue Leads</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-800">
+                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.updated}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Aktualisiert</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-800">
+                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.contacts}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Kontakte</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-800">
+                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.jobs}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Stellen</p>
                 </div>
-                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-gray-800">
+                <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.skipped}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Übersprungen</p>
                 </div>

@@ -144,9 +144,9 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-3xl rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-900">
+      <div className="w-full max-w-3xl rounded-lg border border-gray-200 bg-white shadow-xl dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-[#2c2c2e]">
           <div className="flex items-center gap-3">
             <h2 className="flex items-center gap-2 text-lg font-bold">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -185,7 +185,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                   { key: "career_page" as const, label: "Karriereseite", desc: "Link zur Karriereseite" },
                   { key: "company_details" as const, label: "Firmendaten", desc: "Größe, Gründung, Fachgebiete" },
                 ].map((item) => (
-                  <label key={item.key} className="flex items-center gap-2.5 rounded-md border border-gray-200 px-3 py-2.5 text-sm dark:border-gray-800">
+                  <label key={item.key} className="flex items-center gap-2.5 rounded-md border border-gray-200 px-3 py-2.5 text-sm dark:border-[#2c2c2e]">
                     <input
                       type="checkbox"
                       checked={config[item.key]}
@@ -216,7 +216,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                   <span className="font-medium">{completed} / {total}</span>
                   <span className="text-gray-500 dark:text-gray-400">{currentLead}</span>
                 </div>
-                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
+                <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-[#232325]">
                   <div
                     className="h-full rounded-full bg-primary transition-all"
                     style={{ width: `${(completed / total) * 100}%` }}
@@ -252,19 +252,19 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
             <div className="space-y-4">
               {/* Zusammenfassung */}
               <div className="flex gap-3 text-center">
-                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-gray-800">
+                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-[#2c2c2e]">
                   <p className="text-xl font-bold text-green-600 dark:text-green-400">{readyResults.length}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Export-bereit</p>
                 </div>
-                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-gray-800">
+                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-[#2c2c2e]">
                   <p className="text-xl font-bold">{successResults.length - readyResults.length}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Unvollständig</p>
                 </div>
-                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-gray-800">
+                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-[#2c2c2e]">
                   <p className="text-xl font-bold text-orange-600 dark:text-orange-400">{cancelledCount}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Ausgeschlossen</p>
                 </div>
-                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-gray-800">
+                <div className="flex-1 rounded-md border border-gray-200 py-2 dark:border-[#2c2c2e]">
                   <p className="text-xl font-bold text-red-600 dark:text-red-400">{errorCount}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Fehler</p>
                 </div>
@@ -272,9 +272,9 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
 
               {/* Vollständigkeits-Tabelle */}
               {results.length > 0 && (
-                <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-gray-800">
-                  <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
-                    <thead className="bg-gray-50 dark:bg-gray-800/50">
+                <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-[#2c2c2e]">
+                  <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-[#2c2c2e]">
+                    <thead className="bg-gray-50 dark:bg-[#232325]">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
                         <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Kontakt</th>
@@ -284,7 +284,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                         <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
                       {results.map((r) => (
                         <tr key={r.leadId}>
                           <td className="px-3 py-2 font-medium">{r.name}</td>

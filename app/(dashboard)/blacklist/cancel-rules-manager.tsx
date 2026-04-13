@@ -46,7 +46,7 @@ export function CancelRulesManager({ rules, filterCategory }: Props) {
   return (
     <div className="space-y-4">
       {/* Neue Regel */}
-      <form action={formAction} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+      <form action={formAction} className="space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
         <h4 className="text-sm font-medium">Neue Ausschlussregel erstellen</h4>
 
         <div className="grid grid-cols-2 gap-3">
@@ -128,9 +128,9 @@ export function CancelRulesManager({ rules, filterCategory }: Props) {
       </form>
 
       {/* Regelliste */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-          <thead className="bg-gray-50 dark:bg-gray-800/50">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+          <thead className="bg-gray-50 dark:bg-[#232325]">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Zeitpunkt</th>
@@ -139,7 +139,7 @@ export function CancelRulesManager({ rules, filterCategory }: Props) {
               <th className="px-4 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
             {filteredRules.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">

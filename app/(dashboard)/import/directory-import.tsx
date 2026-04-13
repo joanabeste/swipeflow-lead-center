@@ -82,7 +82,7 @@ export function DirectoryImport() {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <h3 className="flex items-center gap-2 font-medium">
         <List className="h-4 w-4 text-primary" />
         Verzeichnis-URL importieren
@@ -167,9 +167,9 @@ export function DirectoryImport() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-[#2c2c2e]">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+              <thead className="bg-gray-50 dark:bg-[#232325]">
                 <tr>
                   <th className="px-4 py-3">
                     <input
@@ -190,7 +190,7 @@ export function DirectoryImport() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+              <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
                 {companies.map((company, i) => (
                   <tr key={i}>
                     <td className="px-4 py-3">

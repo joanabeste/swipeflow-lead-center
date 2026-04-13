@@ -22,7 +22,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
   return (
     <div className="mt-6 space-y-6">
       {/* Neuen Nutzer anlegen */}
-      <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+      <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
         <h3 className="font-medium">Neuen Nutzer anlegen</h3>
 
         {state?.error && (
@@ -82,9 +82,9 @@ export function UserManager({ profiles, currentUserId }: Props) {
       </div>
 
       {/* Nutzerliste */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-          <thead className="bg-gray-50 dark:bg-gray-800/50">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+          <thead className="bg-gray-50 dark:bg-[#232325]">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
@@ -94,7 +94,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
               <th className="px-4 py-3" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
             {profiles.map((profile) => (
               <tr key={profile.id}>
                 <td className="px-4 py-3 text-sm font-medium">{profile.name}</td>

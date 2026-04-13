@@ -129,9 +129,9 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
           </div>
         </div>
 
-        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-            <thead className="bg-gray-50 dark:bg-gray-800/50">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+            <thead className="bg-gray-50 dark:bg-[#232325]">
               <tr>
                 <th className="px-4 py-3">
                   <input
@@ -147,7 +147,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+            <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
               {qualifiedLeads.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -194,9 +194,9 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
       {/* Export-Historie */}
       <div>
         <h2 className="text-lg font-bold">Export-Historie</h2>
-        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-            <thead className="bg-gray-50 dark:bg-gray-800/50">
+        <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+            <thead className="bg-gray-50 dark:bg-[#232325]">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">HubSpot-ID</th>
@@ -205,7 +205,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Datum</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+            <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
               {exportLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -243,8 +243,8 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
       {/* Vorschau-Modal */}
       {preview && previewLeadId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-800">
+          <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-[#2c2c2e]">
               <h2 className="flex items-center gap-2 text-lg font-bold">
                 <Eye className="h-5 w-5 text-primary" />
                 Export-Vorschau
@@ -276,7 +276,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 ) : (
                   <div className="mt-2 space-y-1">
                     {preview.contacts.map((c, i) => (
-                      <div key={i} className="rounded-md border border-gray-100 px-3 py-2 text-sm dark:border-gray-800">
+                      <div key={i} className="rounded-md border border-gray-100 px-3 py-2 text-sm dark:border-[#2c2c2e]">
                         <span className="font-medium">{c.name}</span>
                         {c.role && <span className="text-gray-400"> — {c.role}</span>}
                         <div className="flex gap-3 text-xs text-gray-500 dark:text-gray-400">
@@ -309,7 +309,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 )}
               </div>
             </div>
-            <div className="flex gap-2 border-t border-gray-200 px-6 py-4 dark:border-gray-800">
+            <div className="flex gap-2 border-t border-gray-200 px-6 py-4 dark:border-[#2c2c2e]">
               <button
                 onClick={async () => {
                   await exportLead(previewLeadId, leadStatus);

@@ -38,7 +38,7 @@ export default async function EinstellungenPage() {
 
       <SettingsManager fieldProfiles={fieldProfiles ?? []} />
 
-      <div className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-800">
+      <div className="mt-10 border-t border-gray-200 pt-8 dark:border-[#2c2c2e]">
         <h2 className="text-lg font-bold">Nutzer & Rollen</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Benutzer und Rollen verwalten

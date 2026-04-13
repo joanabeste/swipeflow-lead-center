@@ -27,7 +27,7 @@ export function UrlImport() {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <h3 className="flex items-center gap-2 font-medium">
         <Globe className="h-4 w-4 text-primary" />
         Einzelne Firmen-URL importieren

@@ -198,7 +198,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
         <div className="space-y-6 lg:col-span-2">
 
           {/* Stammdaten */}
-          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Stammdaten</h2>
             <form action={formAction} className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -241,7 +241,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
           </div>
 
           {/* Ansprechpartner */}
-          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
                 <User className="h-3.5 w-3.5" />
@@ -257,7 +257,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
                 {contacts.map((contact) => (
                   <div
                     key={contact.id}
-                    className="flex items-start justify-between rounded-md border border-gray-100 p-3 dark:border-gray-800"
+                    className="flex items-start justify-between rounded-md border border-gray-100 p-3 dark:border-[#2c2c2e]"
                   >
                     <div>
                       <p className="text-sm font-medium">{contact.name}</p>
@@ -286,7 +286,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
           </div>
 
           {/* Offene Stellen */}
-          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
                 <Briefcase className="h-3.5 w-3.5" />
@@ -313,7 +313,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
                 {jobPostings.map((job) => (
                   <div
                     key={job.id}
-                    className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2 dark:border-gray-800"
+                    className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2 dark:border-[#2c2c2e]"
                   >
                     <div>
                       <p className="text-sm font-medium">{job.title}</p>
@@ -344,7 +344,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
         {/* Rechte Spalte */}
         <div className="space-y-4">
           {/* Duplikate / Merge */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <div className="flex items-center justify-between">
               <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
                 <Merge className="h-3.5 w-3.5" />
@@ -369,7 +369,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
             {similarLeads.length > 0 && (
               <div className="mt-2 space-y-2">
                 {similarLeads.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-gray-800">
+                  <div key={s.id} className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
                     <div>
                       <p className="text-sm font-medium">{s.company_name}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">{s.domain ?? s.city ?? "–"}</p>
@@ -395,7 +395,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
           </div>
 
           {/* Änderungshistorie */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Änderungshistorie</h2>
             {changes.length === 0 ? (
               <p className="mt-2 text-sm text-gray-400">Noch keine Änderungen.</p>

@@ -87,7 +87,7 @@ export function LeadDetailPanel({ lead, changes }: Props) {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Formular */}
         <div className="lg:col-span-2">
-          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">{lead.company_name}</h2>
               <div className="flex items-center gap-2">
@@ -193,7 +193,7 @@ export function LeadDetailPanel({ lead, changes }: Props) {
 
         {/* Änderungshistorie */}
         <div>
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <h3 className="font-medium">Änderungshistorie</h3>
             {changes.length === 0 ? (
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">

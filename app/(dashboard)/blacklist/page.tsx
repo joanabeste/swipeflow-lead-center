@@ -24,7 +24,7 @@ export default async function BlacklistPage() {
         rules={(rules as BlacklistRule[]) ?? []}
       />
 
-      <div className="mt-10 border-t border-gray-200 pt-8 dark:border-gray-800">
+      <div className="mt-10 border-t border-gray-200 pt-8 dark:border-[#2c2c2e]">
         <h2 className="text-lg font-bold">Ausschlussregeln (automatisch)</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Leads werden automatisch ausgeschlossen, wenn diese Regeln zutreffen — beim Import und/oder nach der Anreicherung.

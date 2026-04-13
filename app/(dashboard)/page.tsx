@@ -110,7 +110,7 @@ export default async function DashboardPage() {
       </p>
 
       {/* Pipeline-Balken */}
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pipeline</p>
           <p className="text-sm font-bold">{total} Leads</p>
@@ -142,22 +142,22 @@ export default async function DashboardPage() {
       <div className="mt-4 grid grid-cols-4 gap-3">
         {serviceMode === "webdev" ? (
           <>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Kein SSL</p>
               <p className="mt-1 text-2xl font-bold text-red-600 dark:text-red-400">{noSslCount}</p>
               <p className="text-xs text-gray-400">Ohne Zertifikat</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Nicht mobil</p>
               <p className="mt-1 text-2xl font-bold text-orange-600 dark:text-orange-400">{notMobileCount}</p>
               <p className="text-xs text-gray-400">Nicht mobilfreundlich</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Veraltetes Design</p>
               <p className="mt-1 text-2xl font-bold text-yellow-600 dark:text-yellow-400">{outdatedDesignCount}</p>
               <p className="text-xs text-gray-400">Redesign-Potenzial</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
               <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
               <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
@@ -165,22 +165,22 @@ export default async function DashboardPage() {
           </>
         ) : (
           <>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Enrichment-Erfolg</p>
               <p className="mt-1 text-2xl font-bold">{enrichRate}%</p>
               <p className="text-xs text-gray-400">{enrichmentCompleted ?? 0} / {enrichTotal} Versuche</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Qualifizierungsrate</p>
               <p className="mt-1 text-2xl font-bold">{qualifyRate}%</p>
               <p className="text-xs text-gray-400">{(qualifiedLeads ?? 0) + (exportedLeads ?? 0)} von {total}</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Export-Rate</p>
               <p className="mt-1 text-2xl font-bold">{exportRate}%</p>
               <p className="text-xs text-gray-400">{exportedLeads ?? 0} exportiert</p>
             </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800/50 dark:bg-[#1c1c1e]">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Ausgeschlossen</p>
               <p className="mt-1 text-2xl font-bold">{excluded}</p>
               <p className="text-xs text-gray-400">{Math.round((excluded / (total || 1)) * 100)}% aller Leads</p>
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
           <Link
             key={a.href}
             href={a.href}
-            className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-primary/40 dark:border-gray-800/50 dark:bg-[#1c1c1e] dark:hover:border-primary/40"
+            className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-primary/40 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] dark:hover:border-primary/40"
           >
             <a.icon className={`h-5 w-5 ${a.accent}`} />
             <div>
@@ -213,12 +213,12 @@ export default async function DashboardPage() {
 
       {/* Zwei-Spalten */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#1c1c1e]">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-gray-800/50">
+        <div className="rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-[#2c2c2e]/50">
             <h2 className="text-sm font-medium">Zuletzt bearbeitet</h2>
             <Link href="/leads" className="text-xs text-primary hover:underline">Alle anzeigen</Link>
           </div>
-          <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+          <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">
             {(recentLeads ?? []).map((lead) => {
               const s = statusLabels[lead.status] ?? { label: lead.status, color: "bg-gray-100 text-gray-700" };
               return (
@@ -235,12 +235,12 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white dark:border-gray-800/50 dark:bg-[#1c1c1e]">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-gray-800/50">
+        <div className="rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-[#2c2c2e]/50">
             <h2 className="text-sm font-medium">Letzte Aktivitäten</h2>
             <Link href="/aktivitaet" className="text-xs text-primary hover:underline">Alle anzeigen</Link>
           </div>
-          <div className="divide-y divide-gray-50 dark:divide-gray-800/50">
+          <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">
             {(recentLogs ?? []).map((log) => (
               <div key={log.id} className="px-5 py-3">
                 <div className="flex items-center justify-between">

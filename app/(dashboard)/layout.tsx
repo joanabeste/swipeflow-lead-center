@@ -44,7 +44,7 @@ export default async function DashboardLayout({
 
         <SidebarNav />
 
-        <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-gray-800/50">
+        <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">
           <ThemeToggle />
           <form action={logout}>
             <button

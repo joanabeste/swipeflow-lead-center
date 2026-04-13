@@ -276,10 +276,10 @@ export function LeadTable({
 
       {/* Bulk-Aktionen */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-[#1c1c1e]">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <span className="text-sm font-bold text-primary">{selected.size}</span>
           <span className="text-sm text-gray-500 dark:text-gray-400">ausgewählt</span>
-          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
 
           {/* Primäre Aktionen */}
           {onOpenEnrichModal && (
@@ -310,7 +310,7 @@ export function LeadTable({
             {bulkPending ? "…" : "Setzen"}
           </button>
 
-          <div className="h-4 w-px bg-gray-200 dark:bg-gray-700" />
+          <div className="h-4 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
 
           {/* Sekundäre Aktionen — einheitliches Styling */}
           <button
@@ -368,7 +368,7 @@ export function LeadTable({
             <Trash2 className="h-3.5 w-3.5" />
             Löschen
           </button>
-          <div className="h-4 w-px bg-gray-300 dark:bg-gray-700" />
+          <div className="h-4 w-px bg-gray-300 dark:bg-[#2c2c2e]" />
           <button
             onClick={() => setSelected(new Set())}
             className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -380,9 +380,9 @@ export function LeadTable({
 
 
       {/* Tabelle */}
-      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-          <thead className="bg-gray-50 dark:bg-gray-800/50">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+          <thead className="bg-gray-50 dark:bg-[#232325]">
             <tr>
               <th className="px-4 py-3">
                 <input
@@ -433,7 +433,7 @@ export function LeadTable({
                                 defaultValue={currentFilters[col.key] ?? ""}
                                 placeholder={`${col.label} enthält…`}
                                 autoFocus
-                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-600 dark:bg-[#2c2c2e] dark:text-gray-100"
                               />
                               <div className="mt-1.5 flex gap-1">
                                 <button
@@ -460,7 +460,7 @@ export function LeadTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
             {leads.length === 0 ? (
               <tr>
                 <td

@@ -49,7 +49,7 @@ export function EnrichmentPanel({
   const isEnriched = contacts.length > 0 || jobPostings.length > 0 || latestEnrichment?.status === "completed";
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <div className="flex items-center justify-between">
         <h3 className="flex items-center gap-2 font-bold">
           <Sparkles className="h-4 w-4 text-primary" />
@@ -110,7 +110,7 @@ export function EnrichmentPanel({
             {contacts.map((contact) => (
               <div
                 key={contact.id}
-                className="rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-gray-800 dark:bg-gray-800/50"
+                className="rounded-md border border-gray-100 bg-gray-50 p-3 dark:border-[#2c2c2e] dark:bg-[#232325]"
               >
                 <p className="font-medium text-sm">{contact.name}</p>
                 {contact.role && (
@@ -172,7 +172,7 @@ export function EnrichmentPanel({
             {jobPostings.map((job) => (
               <div
                 key={job.id}
-                className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-800 dark:bg-gray-800/50"
+                className="flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 px-3 py-2 dark:border-[#2c2c2e] dark:bg-[#232325]"
               >
                 <div>
                   <p className="text-sm font-medium">{job.title}</p>

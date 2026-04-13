@@ -7,7 +7,7 @@ export function ServiceModeSwitch() {
   const { mode, setMode } = useServiceMode();
 
   return (
-    <div className="flex rounded-xl border border-gray-200 p-0.5 dark:border-gray-800">
+    <div className="flex rounded-xl border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
       <button
         onClick={() => mode !== "recruiting" && setMode("recruiting")}
         className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${

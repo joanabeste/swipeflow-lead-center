@@ -68,26 +68,26 @@ export function BlacklistManager({ entries, rules }: Props) {
     <div className="mt-6 space-y-6">
       {/* Statistik-Karten */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <p className="text-2xl font-bold">{entries.length}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Blacklist gesamt</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <p className="text-2xl font-bold">{typeCounts.name}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Firmennamen</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <p className="text-2xl font-bold">{typeCounts.domain}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Domains</p>
         </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <p className="text-2xl font-bold">{rules.filter((r) => r.is_active).length}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">Filterregeln aktiv</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-[#2c2c2e]">
         <button
           onClick={() => setTab("entries")}
           className={`px-4 py-2 text-sm font-medium ${
@@ -190,9 +190,9 @@ export function BlacklistManager({ entries, rules }: Props) {
           )}
 
           {/* Tabelle */}
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+              <thead className="bg-gray-50 dark:bg-[#232325]">
                 <tr>
                   <th className="w-24 px-4 py-2.5 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Typ</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Wert</th>
@@ -200,7 +200,7 @@ export function BlacklistManager({ entries, rules }: Props) {
                   <th className="w-10 px-4 py-2.5" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+              <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
                 {paginatedEntries.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -274,7 +274,7 @@ export function BlacklistManager({ entries, rules }: Props) {
       {/* === Filterregeln === */}
       {tab === "rules" && (
         <div className="space-y-3">
-          <form action={ruleAction} className="flex items-end gap-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+          <form action={ruleAction} className="flex items-end gap-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Name</label>
               <input
@@ -331,9 +331,9 @@ export function BlacklistManager({ entries, rules }: Props) {
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{ruleState.error}</div>
           )}
 
-          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
+          <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+              <thead className="bg-gray-50 dark:bg-[#232325]">
                 <tr>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
                   <th className="px-4 py-2.5 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Bedingung</th>
@@ -341,7 +341,7 @@ export function BlacklistManager({ entries, rules }: Props) {
                   <th className="w-10 px-4 py-2.5" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+              <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
                 {rules.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">

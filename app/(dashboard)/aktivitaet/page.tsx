@@ -68,9 +68,9 @@ export default async function AktivitaetPage() {
         Protokoll aller Aktionen im System
       </p>
 
-      <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-          <thead className="bg-gray-50 dark:bg-gray-800/50">
+      <div className="mt-6 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+          <thead className="bg-gray-50 dark:bg-[#232325]">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Zeitpunkt</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Nutzer</th>
@@ -78,7 +78,7 @@ export default async function AktivitaetPage() {
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Details</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+          <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
             {(!logs || logs.length === 0) ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">

@@ -104,7 +104,7 @@ export function ImportWizard({ templates }: Props) {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
+    <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       {/* Schritt-Anzeige */}
       <div className="mb-6 flex items-center gap-2 text-sm">
         {[
@@ -195,7 +195,7 @@ export function ImportWizard({ templates }: Props) {
             {headers.map((header) => (
               <div
                 key={header}
-                className="flex items-center gap-4 rounded-md border border-gray-100 px-3 py-2 dark:border-gray-800"
+                className="flex items-center gap-4 rounded-md border border-gray-100 px-3 py-2 dark:border-[#2c2c2e]"
               >
                 <span className="w-1/3 text-sm font-medium">{header}</span>
                 <ArrowRight className="h-4 w-4 text-gray-400" />
@@ -244,9 +244,9 @@ export function ImportWizard({ templates }: Props) {
       {step === 3 && (
         <div>
           <h3 className="font-medium">Vorschau (erste 10 Zeilen)</h3>
-          <div className="mt-3 overflow-x-auto rounded-md border border-gray-200 dark:border-gray-800">
-            <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/50">
+          <div className="mt-3 overflow-x-auto rounded-md border border-gray-200 dark:border-[#2c2c2e]">
+            <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-[#2c2c2e]">
+              <thead className="bg-gray-50 dark:bg-[#232325]">
                 <tr>
                   {Object.entries(mapping)
                     .filter(([, v]) => v)
@@ -257,7 +257,7 @@ export function ImportWizard({ templates }: Props) {
                     ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+              <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
                 {previewRows.map((row, i) => (
                   <tr key={i}>
                     {Object.entries(mapping)
@@ -337,7 +337,7 @@ export function ImportWizard({ templates }: Props) {
                   { label: "Duplikate", value: result.duplicates },
                   { label: "Fehler", value: result.errors },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-md border border-gray-200 p-3 text-center dark:border-gray-800">
+                  <div key={s.label} className="rounded-md border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                     <p className="text-2xl font-bold">{s.value}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{s.label}</p>
                   </div>
