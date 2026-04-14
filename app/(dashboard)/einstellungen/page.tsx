@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { SettingsManager } from "./settings-manager";
-import { UserManager } from "../nutzer/user-manager";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
 import { getRecruitingScoringConfig } from "@/lib/enrichment/recruiting-scoring";
@@ -39,10 +38,12 @@ export default async function EinstellungenPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight">Einstellungen</h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        HubSpot, Pflichtfelder und Nutzerverwaltung
-      </p>
+      <div className="border-b border-gray-200 pb-4 dark:border-[#2c2c2e]">
+        <h1 className="text-2xl font-bold tracking-tight">Einstellungen</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Standort, Anreicherung, Bewertung, Pflichtfelder und Nutzerverwaltung
+        </p>
+      </div>
 
       <SettingsManager
         fieldProfiles={fieldProfiles ?? []}
@@ -50,18 +51,9 @@ export default async function EinstellungenPage() {
         webdevScoring={webdevScoring}
         recruitingScoring={recruitingScoring}
         hq={hq}
+        profiles={(profiles as Profile[]) ?? []}
+        currentUserId={user!.id}
       />
-
-      <div className="mt-10 border-t border-gray-200 pt-8 dark:border-[#2c2c2e]">
-        <h2 className="text-lg font-bold">Nutzer & Rollen</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Benutzer und Rollen verwalten
-        </p>
-        <UserManager
-          profiles={(profiles as Profile[]) ?? []}
-          currentUserId={user!.id}
-        />
-      </div>
     </div>
   );
 }
