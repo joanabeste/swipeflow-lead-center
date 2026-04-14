@@ -10,6 +10,7 @@ import type { HqLocation } from "@/lib/app-settings";
 import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring, saveRecruitingScoring, saveHqLocation } from "./actions";
 import { UserManager } from "../nutzer/user-manager";
 import { CrmStatusManager } from "./crm-status-manager";
+import { PhonemondoManager } from "./phonemondo-manager";
 
 interface Props {
   fieldProfiles: RequiredFieldProfile[];
@@ -19,6 +20,8 @@ interface Props {
   hq: HqLocation;
   profiles: Profile[];
   crmStatuses: CustomLeadStatus[];
+  phonemondoStatus: { hasToken: boolean; hasSecret: boolean; baseUrl: string };
+  phonemondoWebhookUrl: string;
   currentUserId: string;
 }
 
@@ -518,6 +521,7 @@ const SECTIONS = [
   { id: "standort", label: "Unser Standort", icon: MapPin },
   { id: "anreicherung", label: "Anreicherung", icon: Sparkles },
   { id: "crm-status", label: "CRM-Status", icon: PhoneCall },
+  { id: "phonemondo", label: "PhoneMondo", icon: PhoneCall },
   { id: "recruiting-scoring", label: "Recruiting-Bewertung", icon: Briefcase },
   { id: "webdev-scoring", label: "Webdesign-Bewertung", icon: Globe },
   { id: "pflichtfelder", label: "Pflichtfelder", icon: ListChecks },
@@ -532,6 +536,8 @@ export function SettingsManager({
   hq,
   profiles,
   crmStatuses,
+  phonemondoStatus,
+  phonemondoWebhookUrl,
   currentUserId,
 }: Props) {
   return (
@@ -582,6 +588,19 @@ export function SettingsManager({
             subtitle="Frei konfigurierbare Status-Labels für den Sales-Workflow im CRM. Leads bekommen beim Qualifizieren automatisch den Status 'Todo'."
           />
           <CrmStatusManager statuses={crmStatuses} />
+        </section>
+
+        <section id="phonemondo" className="scroll-mt-4">
+          <SectionHeader
+            icon={PhoneCall}
+            title="PhoneMondo"
+            subtitle="Click-to-Call im CRM. Server-Integration + Durchwahlen pro Nutzer."
+          />
+          <PhonemondoManager
+            status={phonemondoStatus}
+            profiles={profiles}
+            webhookUrl={phonemondoWebhookUrl}
+          />
         </section>
 
         <section id="recruiting-scoring" className="scroll-mt-4">

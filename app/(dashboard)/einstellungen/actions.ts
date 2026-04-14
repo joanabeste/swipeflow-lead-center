@@ -375,3 +375,29 @@ export async function deleteCrmStatus(id: string) {
   revalidatePath("/crm");
   return { success: true };
 }
+
+// ─── PhoneMondo ──────────────────────────────────────────────
+
+export async function setUserPhonemondoExtension(userId: string, extension: string | null) {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  const value = extension?.trim() || null;
+  const { error } = await db
+    .from("profiles")
+    .update({ phonemondo_extension: value, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "phonemondo.extension_set",
+    entityType: "profile",
+    entityId: userId,
+    details: { extension: value },
+  });
+
+  revalidatePath("/einstellungen");
+  return { success: true };
+}
