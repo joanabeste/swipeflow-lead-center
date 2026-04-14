@@ -170,7 +170,16 @@ export async function startCall(input: {
   if (!user) return { error: "Nicht angemeldet." };
 
   if (!isPhoneMondoConfigured()) {
-    return { error: "PhoneMondo ist nicht konfiguriert (PHONEMONDO_API_TOKEN fehlt)." };
+    console.error("[startCall] PHONEMONDO_API_TOKEN fehlt im process.env.", {
+      hasToken: !!process.env.PHONEMONDO_API_TOKEN,
+      hasSecret: !!process.env.PHONEMONDO_WEBHOOK_SECRET,
+      hasBase: !!process.env.PHONEMONDO_API_BASE_URL,
+      nodeEnv: process.env.NODE_ENV,
+    });
+    return {
+      error:
+        "PhoneMondo ist nicht konfiguriert. Prüfe: Zeile 'PHONEMONDO_API_TOKEN=…' in .env.local vorhanden? Dev-Server nach Änderung neu gestartet (Ctrl+C + npm run dev)?",
+    };
   }
 
   const db = createServiceClient();
