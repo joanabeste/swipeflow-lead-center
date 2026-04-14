@@ -49,6 +49,22 @@ export default async function EinstellungenPage() {
     baseUrl: process.env.PHONEMONDO_API_BASE_URL ?? "https://www.phonemondo.com/api",
   };
 
+  // Recording-Status aus lead_calls aggregieren (letzte 24h)
+  const last24h = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const [{ count: fetchedLast24h }, { count: pendingCount }] = await Promise.all([
+    supabase.from("lead_calls").select("*", { count: "exact", head: true })
+      .gte("recording_fetched_at", last24h),
+    supabase.from("lead_calls").select("*", { count: "exact", head: true })
+      .is("recording_url", null)
+      .not("ended_at", "is", null)
+      .gte("started_at", last24h),
+  ]);
+  const recordingStatus = {
+    hasToken: !!process.env.WEBEX_CALLING_TOKEN,
+    fetchedLast24h: fetchedLast24h ?? 0,
+    pendingCount: pendingCount ?? 0,
+  };
+
   return (
     <div>
       <div className="border-b border-gray-200 pb-4 dark:border-[#2c2c2e]">
@@ -68,6 +84,7 @@ export default async function EinstellungenPage() {
         crmStatuses={(crmStatuses as CustomLeadStatus[]) ?? []}
         phonemondoStatus={phonemondoStatus}
         phonemondoWebhookUrl={webhookUrl}
+        webexRecordingStatus={recordingStatus}
         currentUserId={user!.id}
       />
     </div>

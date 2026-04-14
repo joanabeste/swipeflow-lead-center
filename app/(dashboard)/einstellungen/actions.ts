@@ -378,6 +378,35 @@ export async function deleteCrmStatus(id: string) {
 
 // ─── PhoneMondo ──────────────────────────────────────────────
 
+/** Triggert den Recording-Sync-Endpoint serverseitig (Admin-Aktion). */
+export async function triggerRecordingSync(): Promise<
+  { success: true; result: unknown } | { error: string }
+> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error as string };
+
+  const secret = process.env.WEBEX_CRON_SECRET ?? process.env.CRON_SECRET;
+  if (!secret) return { error: "WEBEX_CRON_SECRET fehlt in den Environment-Variablen." };
+
+  // Der Endpoint liegt in der gleichen App — ein interner fetch genügt.
+  // VERCEL_URL enthält die aktuelle Deployment-Domain.
+  const base = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  try {
+    const res = await fetch(`${base}/api/webex/sync-recordings`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: AbortSignal.timeout(60_000),
+    });
+    const data = await res.json().catch(() => ({ error: "Non-JSON-Response" }));
+    if (!res.ok) return { error: data.error ?? `HTTP ${res.status}` };
+    return { success: true, result: data };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Sync fehlgeschlagen" };
+  }
+}
+
 export async function setUserPhonemondoExtension(userId: string, extension: string | null) {
   const check = await ensureAdmin();
   if ("error" in check) return { error: check.error };

@@ -210,6 +210,12 @@ export interface LeadCall {
   mondo_call_id: string | null;
   started_at: string;
   ended_at: string | null;
+  /** Aufzeichnungs-Felder (Webex Calling, Migration 022) */
+  recording_url: string | null;
+  recording_id: string | null;
+  recording_fetched_at: string | null;
+  recording_fetch_attempted_at: string | null;
+  recording_fetch_error: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

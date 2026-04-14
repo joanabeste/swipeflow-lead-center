@@ -415,6 +415,8 @@ function CallItem({ call }: { call: CallRow }) {
     initiated: "initiiert", ringing: "klingelt", answered: "angenommen",
     missed: "nicht erreicht", failed: "fehlgeschlagen", ended: "beendet",
   };
+  const hasEnded = !!call.ended_at;
+  const hasRecording = !!call.recording_url;
   return (
     <div className="text-sm">
       <p className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
@@ -431,11 +433,16 @@ function CallItem({ call }: { call: CallRow }) {
       {call.notes && (
         <p className="mt-1 whitespace-pre-wrap text-gray-600 dark:text-gray-400">{call.notes}</p>
       )}
-      {call.mondo_call_id && (
-        <button className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+      {hasRecording && call.recording_url && (
+        <audio controls preload="none" src={call.recording_url} className="mt-2 h-8 w-full max-w-sm">
+          Dein Browser unterstützt kein HTML5-Audio.
+        </audio>
+      )}
+      {!hasRecording && hasEnded && (
+        <p className="mt-1 inline-flex items-center gap-1 text-xs text-gray-400">
           <Play className="h-3 w-3" />
-          Aufzeichnung
-        </button>
+          Aufzeichnung wird synchronisiert…
+        </p>
       )}
     </div>
   );

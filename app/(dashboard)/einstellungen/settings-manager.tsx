@@ -22,6 +22,7 @@ interface Props {
   crmStatuses: CustomLeadStatus[];
   phonemondoStatus: { hasToken: boolean; hasSecret: boolean; baseUrl: string };
   phonemondoWebhookUrl: string;
+  webexRecordingStatus: { hasToken: boolean; fetchedLast24h: number; pendingCount: number };
   currentUserId: string;
 }
 
@@ -538,6 +539,7 @@ export function SettingsManager({
   crmStatuses,
   phonemondoStatus,
   phonemondoWebhookUrl,
+  webexRecordingStatus,
   currentUserId,
 }: Props) {
   return (
@@ -600,6 +602,7 @@ export function SettingsManager({
             status={phonemondoStatus}
             profiles={profiles}
             webhookUrl={phonemondoWebhookUrl}
+            recordingStatus={webexRecordingStatus}
           />
         </section>
 
