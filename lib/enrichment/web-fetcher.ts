@@ -52,6 +52,37 @@ const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
 const MAX_CHARS_PER_PAGE = 8_000; // Reduziert von 15.000 — weniger Rauschen
 const FETCH_TIMEOUT_MS = 10_000;
 
+// In-Memory Fetch-Cache — vermeidet wiederholtes Laden derselben URLs bei
+// Re-Enrichment oder Batch-Runs. Pro Instanz (Fluid Compute skaliert horizontal,
+// das ist OK). Fehler werden NICHT gecached.
+type CacheEntry = { fetchedAt: number; page: FetchedPage };
+const pageCache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 30 * 60 * 1000;
+const CACHE_MAX = 500;
+
+function cacheGet(url: string): FetchedPage | null {
+  const hit = pageCache.get(url);
+  if (!hit) return null;
+  if (Date.now() - hit.fetchedAt > CACHE_TTL_MS) {
+    pageCache.delete(url);
+    return null;
+  }
+  return hit.page;
+}
+function cacheSet(url: string, page: FetchedPage) {
+  if (page.error) return; // nur Erfolgs-Seiten cachen
+  if (pageCache.size >= CACHE_MAX) {
+    // simplest eviction: älteste 100 Einträge raus (Insertion-Order der Map)
+    const victims: string[] = [];
+    for (const k of pageCache.keys()) {
+      victims.push(k);
+      if (victims.length >= 100) break;
+    }
+    for (const k of victims) pageCache.delete(k);
+  }
+  pageCache.set(url, { fetchedAt: Date.now(), page });
+}
+
 /** Hauptfunktion: Holt relevante Seiten einer Firmenwebsite */
 export async function fetchCompanyPages(
   websiteOrDomain: string,
@@ -194,6 +225,11 @@ async function fetchPage(
   url: string,
   category: FetchedPage["category"],
 ): Promise<FetchedPage> {
+  // Cache-Key ist die URL + Kategorie (verschiedene Kategorien → unterschiedliches cleanHtml).
+  const cacheKey = `${category}|${url}`;
+  const cached = cacheGet(cacheKey);
+  if (cached) return cached;
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -226,7 +262,9 @@ async function fetchPage(
 
     const content = cleanHtml(html, category).slice(0, MAX_CHARS_PER_PAGE);
 
-    return { url, content, category };
+    const page: FetchedPage = { url, content, category };
+    cacheSet(cacheKey, page);
+    return page;
   } catch (e) {
     const message = e instanceof Error ? e.message : "Fetch fehlgeschlagen";
     return { url, content: "", category, error: message };
@@ -282,6 +320,21 @@ function cleanHtml(html: string, category: FetchedPage["category"]): string {
   text = text.replace(/<noscript[\s\S]*?<\/noscript>/gi, "");
   text = text.replace(/<svg[\s\S]*?<\/svg>/gi, "");
   text = text.replace(/<iframe[\s\S]*?<\/iframe>/gi, "");
+
+  // Bei Karriere/Kontakt: Link-Ziele als "TEXT [URL]" erhalten, BEVOR alle Tags
+  // gestrippt werden. So bekommt das LLM Job-URLs zum Befüllen von `url`.
+  if (category === "karriere" || category === "kontakt") {
+    text = text.replace(
+      /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
+      (_match, href: string, inner: string) => {
+        const visible = inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+        if (!visible) return "";
+        // nur "echte" Links behalten — Mail/Tel/Anker passen nicht zu Jobs
+        if (/^(mailto:|tel:|#|javascript:)/i.test(href)) return visible;
+        return `${visible} [${href}]`;
+      },
+    );
+  }
 
   // Navigation und Footer nur bei Homepage/Other entfernen (Impressum braucht sie evtl.)
   if (category === "homepage" || category === "other") {

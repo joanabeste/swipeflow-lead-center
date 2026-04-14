@@ -14,6 +14,7 @@ export async function POST(request: Request) {
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
+  const userId = user.id;
 
   const body = await request.json();
   const leadIds: string[] = body.leadIds ?? [];
@@ -36,13 +37,18 @@ export async function POST(request: Request) {
 
   const encoder = new TextEncoder();
 
+  // Bis zu 3 Leads parallel anreichern. Node ist single-threaded, daher sind
+  // controller.enqueue-Aufrufe atomar — SSE-Events können aus der Reihenfolge
+  // kommen, die UI matched per leadId.
+  const CONCURRENCY = 3;
+
   const stream = new ReadableStream({
     async start(controller) {
       function send(data: Record<string, unknown>) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       }
 
-      for (const leadId of leadIds) {
+      async function processLead(leadId: string) {
         const lead = leadMap.get(leadId);
         const name = lead?.company_name ?? "Unbekannt";
 
@@ -59,21 +65,17 @@ export async function POST(request: Request) {
             cancelReason: formatCancelReason(reason),
             contactsCount: 0, jobsCount: 0, hasEmail: false, hasPhone: false,
           });
-          continue;
+          return;
         }
         // Hinweis: status='cancelled' wird BEWUSST nicht short-circuit'd —
         // Re-Enrich soll die Cancel-Rule neu auswerten (z.B. weil seitdem
         // BA-Stellen importiert wurden oder die Karriereseite Jobs hat).
-
         // Hinweis: Wenn Website/Domain fehlt, sucht enrichLead sie automatisch
-        // via findCompanyWebsite (Google/DuckDuckGo/Bing). Pre-Skip hier wäre
-        // zu früh — der Finder bekäme keine Chance.
+        // via findCompanyWebsite. Pre-Skip hier wäre zu früh.
 
-        // 3. Cancel-Rules Pre-Check (Import-Phase Regeln — ohne Enrichment nötig)
+        // 2. Cancel-Rules Pre-Check (Import-Phase Regeln — ohne Enrichment nötig)
         // Im Webdev-Modus: Nur Rechtsform/Größe prüfen, keine Stellen-bezogenen Regeln
         if (cancelRules && cancelRules.length > 0 && serviceMode === "recruiting") {
-          // Tatsächliche Counts aus DB — sonst matcht "job_postings_count = 0" gegen
-          // ein nicht existierendes Feld und schließt fälschlich BA-Leads aus.
           const [{ count: totalJobs }, { count: totalContacts }] = await Promise.all([
             db.from("lead_job_postings").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
             db.from("lead_contacts").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
@@ -91,7 +93,6 @@ export async function POST(request: Request) {
           );
           if (preCheck.cancelled) {
             const reason = preCheck.reasons.map((r) => r.reason).join("; ");
-            // Lead als cancelled markieren
             await db.from("leads").update({
               status: "cancelled",
               cancel_reason: reason,
@@ -105,13 +106,13 @@ export async function POST(request: Request) {
               cancelReason: formatCancelReason(reason),
               contactsCount: 0, jobsCount: 0, hasEmail: false, hasPhone: false,
             });
-            continue;
+            return;
           }
         }
 
         // === Enrichment durchführen ===
         try {
-          const result = await enrichLead(leadId, user.id, config, serviceMode);
+          const result = await enrichLead(leadId, userId, config, serviceMode);
 
           send({
             type: "complete",
@@ -141,10 +142,20 @@ export async function POST(request: Request) {
             error: formatError(e instanceof Error ? e.message : "Unbekannter Fehler"),
           });
         }
-
-        // Pause zwischen Leads
-        await new Promise((r) => setTimeout(r, 3000));
       }
+
+      // Worker-Pool: feste Anzahl paralleler Consumer pullen aus der Queue.
+      const queue = [...leadIds];
+      async function worker() {
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (!next) return;
+          await processLead(next);
+        }
+      }
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, leadIds.length) }, () => worker()),
+      );
 
       send({ type: "done" });
       controller.close();

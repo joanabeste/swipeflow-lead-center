@@ -126,7 +126,9 @@ export async function enrichLead(
     // dem Service-Modus aus enrichment_defaults geladen.
 
     // 1. Website-Seiten abrufen — bekannte Karriere-URL als Hint
+    const fetchStart = Date.now();
     const { pages } = await fetchCompanyPages(websiteOrDomain, config, lead.career_page_url ?? undefined);
+    const fetchMs = Date.now() - fetchStart;
 
     const successfulPages = pages.filter((p) => !p.error);
     if (successfulPages.length === 0) {
@@ -293,7 +295,7 @@ export async function enrichLead(
 
     await db.from("leads").update(leadUpdates).eq("id", leadId);
 
-    // 7. Enrichment-Log abschließen
+    // 7. Enrichment-Log abschließen — inkl. Phasen-Latenz und Token-Counts
     await db
       .from("lead_enrichments")
       .update({
@@ -302,6 +304,11 @@ export async function enrichLead(
         raw_response: result as unknown as Record<string, unknown>,
         pages_fetched: pages.map((p) => p.url),
         completed_at: new Date().toISOString(),
+        fetch_ms: fetchMs,
+        llm_ms: result.meta.llmMs,
+        input_chars: result.meta.inputChars,
+        prompt_tokens: result.meta.promptTokens,
+        completion_tokens: result.meta.completionTokens,
       })
       .eq("id", enrichmentId);
 

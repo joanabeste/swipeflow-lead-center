@@ -21,19 +21,58 @@ export async function findCompanyWebsite(companyName: string, city?: string | nu
     ? `${companyName} ${city}`
     : companyName;
 
-  // 1. Google
+  // 1. Brave Search API (wenn API-Key gesetzt) — zuverlässigste Quelle
+  const braveResult = await searchBrave(query);
+  if (braveResult) return braveResult;
+
+  // 2. Google-Scraping (oft durch CAPTCHA blockiert)
   const googleResult = await searchGoogle(query);
   if (googleResult) return googleResult;
 
-  // 2. DuckDuckGo als Fallback
+  // 3. DuckDuckGo als Fallback
   const ddgResult = await searchDuckDuckGo(query);
   if (ddgResult) return ddgResult;
 
-  // 3. Bing als letzter Fallback
+  // 4. Bing als letzter Fallback
   const bingResult = await searchBing(query);
   if (bingResult) return bingResult;
 
   return null;
+}
+
+async function searchBrave(query: string): Promise<string | null> {
+  const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&country=DE&count=5&safesearch=off`;
+    const res = await fetch(url, {
+      headers: {
+        "X-Subscription-Token": apiKey,
+        Accept: "application/json",
+        "Accept-Encoding": "gzip",
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      web?: { results?: { url?: string }[] };
+    };
+    const results = data.web?.results ?? [];
+    // Erst relevante Domain finden, sonst erstes verwertbares Ergebnis
+    for (const r of results) {
+      const domain = extractDomain(r.url ?? "");
+      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s)) && isRelevantDomain(domain, query)) {
+        return domain;
+      }
+    }
+    for (const r of results) {
+      const domain = extractDomain(r.url ?? "");
+      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s))) return domain;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function searchGoogle(query: string): Promise<string | null> {

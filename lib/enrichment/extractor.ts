@@ -34,6 +34,12 @@ export interface EnrichmentResult {
     legal_form: string | null;
     register_id: string | null;
   };
+  meta: {
+    llmMs: number;
+    inputChars: number;
+    promptTokens: number | null;
+    completionTokens: number | null;
+  };
 }
 
 function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phones: string[] }): string {
@@ -76,7 +82,7 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   const rules: string[] = ["Nur echte Daten, null wenn nicht vorhanden."];
   if (config.job_postings) {
     rules.push(
-      "job_postings: ALLE offenen Positionen — auch Ausbildung, Duales Studium, Praktikum, Werkstudent, Trainee, Minijob. Titel exakt von der Seite übernehmen (inkl. '(m/w/d)' etc.). Wenn auf der Karriereseite Stellen aufgelistet sind, MUSS jede einzeln im Array stehen.",
+      "job_postings: ALLE offenen Positionen — auch Ausbildung, Duales Studium, Praktikum, Werkstudent, Trainee, Minijob. Titel exakt von der Seite übernehmen (inkl. '(m/w/d)' etc.). Wenn auf der Karriereseite Stellen aufgelistet sind, MUSS jede einzeln im Array stehen. URLs stehen in eckigen Klammern direkt hinter dem Text, z.B. 'Titel [https://…]' — übernimm sie als `url`.",
     );
   }
   if (config.company_details) {
@@ -222,6 +228,9 @@ export async function extractFromPages(
 
   // GPT-4.1-mini als primäres Modell (30x günstiger), Fallback auf Claude
   let jsonText: string;
+  let promptTokens: number | null = null;
+  let completionTokens: number | null = null;
+  const llmStart = Date.now();
 
   if (process.env.OPENAI_API_KEY) {
     jsonText = await callWithRetry(async () => {
@@ -237,6 +246,8 @@ export async function extractFromPages(
       });
       const text = response.choices[0]?.message?.content;
       if (!text) throw new Error("Keine Antwort von GPT erhalten");
+      promptTokens = response.usage?.prompt_tokens ?? null;
+      completionTokens = response.usage?.completion_tokens ?? null;
       return text;
     });
   } else {
@@ -252,9 +263,12 @@ export async function extractFromPages(
       });
       const block = response.content.find((b) => b.type === "text");
       if (!block || block.type !== "text") throw new Error("Keine Antwort von Claude erhalten");
+      promptTokens = response.usage?.input_tokens ?? null;
+      completionTokens = response.usage?.output_tokens ?? null;
       return block.text;
     });
   }
+  const llmMs = Date.now() - llmStart;
 
   // JSON parsen
   try {
@@ -285,6 +299,12 @@ export async function extractFromPages(
         state: raw.additional_info?.state ?? null,
         legal_form: raw.additional_info?.legal_form ?? null,
         register_id: raw.additional_info?.register_id ?? null,
+      },
+      meta: {
+        llmMs,
+        inputChars: userMessage.length,
+        promptTokens,
+        completionTokens,
       },
     };
   } catch (e) {
