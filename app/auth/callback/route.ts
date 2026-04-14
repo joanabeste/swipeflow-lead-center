@@ -9,7 +9,10 @@ export async function GET(request: NextRequest) {
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type");
 
-  const response = NextResponse.redirect(`${origin}/`);
+  // Bei Recovery (Passwort zurücksetzen) → Passwort-Update-Seite
+  const isRecovery = type === "recovery";
+  const redirectTarget = isRecovery ? `${origin}/auth/update-password` : `${origin}/`;
+  const response = NextResponse.redirect(redirectTarget);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
   } else if (token_hash && type) {
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: type as "email" | "magiclink",
+      type: type as "email" | "magiclink" | "recovery",
     });
     if (error) return NextResponse.redirect(`${origin}/login`);
     user = data.user;

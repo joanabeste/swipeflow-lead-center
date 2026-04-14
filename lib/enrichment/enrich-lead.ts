@@ -18,6 +18,10 @@ export interface EnrichLeadResult {
   hasEmail?: boolean;
   hasPhone?: boolean;
   websiteIssues?: number;
+  hasSsl?: boolean;
+  isMobile?: boolean;
+  websiteTech?: string;
+  designEstimate?: string;
   cancelled?: boolean;
   cancelReason?: string;
 }
@@ -282,6 +286,10 @@ export async function enrichLead(
       hasEmail: result.contacts.some((c) => !!c.email),
       hasPhone: result.contacts.some((c) => !!c.phone),
       websiteIssues: websiteAnalysis?.issues.length ?? 0,
+      hasSsl: websiteAnalysis?.hasSsl,
+      isMobile: websiteAnalysis?.isMobileFriendly,
+      websiteTech: websiteAnalysis?.technology ?? undefined,
+      designEstimate: websiteAnalysis?.designEstimate,
       cancelled,
       cancelReason,
     };

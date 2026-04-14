@@ -23,6 +23,12 @@ interface EnrichResult {
   firstContactName?: string;
   hasEmail?: boolean;
   hasPhone?: boolean;
+  // Webdev-Modus
+  websiteIssues?: number;
+  hasSsl?: boolean;
+  isMobile?: boolean;
+  websiteTech?: string;
+  designEstimate?: string;
   cancelled?: boolean;
   cancelReason?: string;
   error?: string;
@@ -94,6 +100,11 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                 firstContactName: event.firstContactName,
                 hasEmail: event.hasEmail,
                 hasPhone: event.hasPhone,
+                websiteIssues: event.websiteIssues,
+                hasSsl: event.hasSsl,
+                isMobile: event.isMobile,
+                websiteTech: event.websiteTech,
+                designEstimate: event.designEstimate,
                 cancelled: event.cancelled,
                 cancelReason: event.cancelReason,
                 error: event.error,
@@ -130,7 +141,9 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
   }, [phase, results]);
 
   const successResults = results.filter((r) => r.success && !r.cancelled);
-  const readyResults = successResults.filter((r) => r.hasEmail && r.contactsCount && r.contactsCount > 0);
+  const readyResults = serviceMode === "webdev"
+    ? successResults.filter((r) => (r.websiteIssues ?? 0) > 0)
+    : successResults.filter((r) => r.hasEmail && r.contactsCount && r.contactsCount > 0);
   const cancelledCount = results.filter((r) => r.cancelled).length;
   const errorCount = results.filter((r) => !r.success).length;
 
@@ -235,7 +248,12 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                       {r.cancelled && <AlertTriangle className="h-3.5 w-3.5 text-orange-500" />}
                       {!r.success && !r.cancelled && <AlertTriangle className="h-3.5 w-3.5 text-red-500" />}
                       <span className="font-medium">{r.name}</span>
-                      {r.success && !r.cancelled && (
+                      {r.success && !r.cancelled && serviceMode === "webdev" && (
+                        <span className="text-gray-400">
+                          {r.hasSsl ? "SSL" : "kein SSL"}, {r.isMobile ? "Mobil" : "nicht mobil"}, {r.websiteTech ?? "–"}, {r.designEstimate ?? "–"}{r.websiteIssues ? `, ${r.websiteIssues} Issues` : ""}
+                        </span>
+                      )}
+                      {r.success && !r.cancelled && serviceMode !== "webdev" && (
                         <span className="text-gray-400">{r.contactsCount} Kontakte, {r.jobsCount} Stellen</span>
                       )}
                       {r.cancelled && <span className="text-orange-400">{r.cancelReason}</span>}
@@ -270,44 +288,78 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                 </div>
               </div>
 
-              {/* Vollständigkeits-Tabelle */}
+              {/* Ergebnis-Tabelle (modus-abhängig) */}
               {results.length > 0 && (
                 <div className="overflow-x-auto rounded-md border border-gray-200 dark:border-[#2c2c2e]">
                   <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-[#2c2c2e]">
                     <thead className="bg-gray-50 dark:bg-[#232325]">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Kontakt</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Telefon</th>
-                        <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Stellen</th>
+                        {serviceMode === "webdev" ? (
+                          <>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">SSL</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Mobil</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Technik</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Design</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Issues</th>
+                          </>
+                        ) : (
+                          <>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Kontakt</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Telefon</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Stellen</th>
+                          </>
+                        )}
                         <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
-                      {results.map((r) => (
+                      {results.map((r) => {
+                        const isWebdev = serviceMode === "webdev";
+                        const isOk = r.success && !r.cancelled;
+
+                        return (
                         <tr key={r.leadId}>
                           <td className="px-3 py-2 font-medium">{r.name}</td>
-                          {r.success && !r.cancelled ? (
+                          {isOk && isWebdev && (
                             <>
                               <td className="px-3 py-2 text-center">
-                                {r.contactsCount && r.contactsCount > 0
-                                  ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" />
-                                  : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
+                                {r.hasSsl ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" /> : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
                               </td>
                               <td className="px-3 py-2 text-center">
-                                {r.hasEmail
-                                  ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" />
-                                  : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
+                                {r.isMobile ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" /> : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
+                              </td>
+                              <td className="px-3 py-2 text-center text-xs">{r.websiteTech ?? "–"}</td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  r.designEstimate === "veraltet" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                                  r.designEstimate === "modern" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                                  "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                }`}>{r.designEstimate === "veraltet" ? "Veraltet" : r.designEstimate === "modern" ? "Modern" : "OK"}</span>
+                              </td>
+                              <td className="px-3 py-2 text-center font-medium">{r.websiteIssues ?? 0}</td>
+                              <td className="px-3 py-2 text-center">
+                                {(r.websiteIssues ?? 0) > 0 ? (
+                                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Potenzial</span>
+                                ) : (
+                                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">Gut</span>
+                                )}
+                              </td>
+                            </>
+                          )}
+                          {isOk && !isWebdev && (
+                            <>
+                              <td className="px-3 py-2 text-center">
+                                {r.contactsCount && r.contactsCount > 0 ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" /> : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
                               </td>
                               <td className="px-3 py-2 text-center">
-                                {r.hasPhone
-                                  ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" />
-                                  : <CircleX className="mx-auto h-4 w-4 text-gray-300 dark:text-gray-600" />}
+                                {r.hasEmail ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" /> : <CircleX className="mx-auto h-4 w-4 text-red-400" />}
                               </td>
-                              <td className="px-3 py-2 text-center font-medium">
-                                {r.jobsCount ?? 0}
+                              <td className="px-3 py-2 text-center">
+                                {r.hasPhone ? <CircleCheck className="mx-auto h-4 w-4 text-green-500" /> : <CircleX className="mx-auto h-4 w-4 text-gray-300 dark:text-gray-600" />}
                               </td>
+                              <td className="px-3 py-2 text-center font-medium">{r.jobsCount ?? 0}</td>
                               <td className="px-3 py-2 text-center">
                                 {r.hasEmail && r.contactsCount && r.contactsCount > 0 ? (
                                   <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Bereit</span>
@@ -316,9 +368,10 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                                 )}
                               </td>
                             </>
-                          ) : (
+                          )}
+                          {!isOk && (
                             <>
-                              <td colSpan={4} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                              <td colSpan={isWebdev ? 5 : 4} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                                 {r.cancelled ? (r.cancelReason ?? "Ausgeschlossen") : (r.error ?? "Fehler")}
                               </td>
                               <td className="px-3 py-2 text-center">
@@ -331,7 +384,8 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
                             </>
                           )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
