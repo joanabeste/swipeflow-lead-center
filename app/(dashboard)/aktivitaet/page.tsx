@@ -5,9 +5,12 @@ const actionLabels: Record<string, string> = {
   "lead.enriched_and_cancelled": "Lead angereichert & ausgeschlossen",
   "lead.updated": "Lead aktualisiert",
   "lead.bulk_status_update": "Status geändert",
+  "lead.crm_status_changed": "CRM-Status geändert",
+  "lead.note_added": "Notiz hinzugefügt",
+  "lead.note_deleted": "Notiz gelöscht",
+  "lead.call_logged": "Anruf protokolliert",
+  "lead.call_updated": "Anruf aktualisiert",
   "lead.deleted": "Lead gelöscht",
-  "export.success": "Export erfolgreich",
-  "export.failed": "Export fehlgeschlagen",
   "import.completed": "Import abgeschlossen",
   "import.url": "URL-Import",
   "import.directory": "Verzeichnis-Import",
@@ -15,6 +18,9 @@ const actionLabels: Record<string, string> = {
   "cancel_rule.deleted": "Ausschlussregel gelöscht",
   "cancel_rule.activated": "Ausschlussregel aktiviert",
   "cancel_rule.deactivated": "Ausschlussregel deaktiviert",
+  "custom_lead_status.created": "CRM-Status angelegt",
+  "custom_lead_status.updated": "CRM-Status geändert",
+  "custom_lead_status.deleted": "CRM-Status gelöscht",
 };
 
 function formatDetails(action: string, details: Record<string, unknown>): string {
@@ -34,8 +40,10 @@ function formatDetails(action: string, details: Record<string, unknown>): string
       return `${details.lead_count ?? "?"} Lead(s) → ${details.new_status ?? "?"}`;
     case "lead.updated":
       return `Felder: ${(details.fields as string[])?.join(", ") ?? "?"}`;
-    case "export.success":
-      return `HubSpot-ID: ${details.hubspot_company_id ?? "?"}`;
+    case "lead.crm_status_changed":
+      return `${details.old_status ?? "–"} → ${details.new_status ?? "?"}`;
+    case "lead.call_logged":
+      return `${details.direction ?? "?"}, ${details.duration_seconds ?? "?"}s, ${details.status ?? "?"}`;
     case "import.completed":
       return `${details.imported ?? 0} importiert, ${details.duplicates ?? 0} Duplikate, ${details.errors ?? 0} Fehler`;
     case "import.url":

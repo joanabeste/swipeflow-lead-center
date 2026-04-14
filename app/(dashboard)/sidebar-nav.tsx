@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   FileSpreadsheet,
   Upload,
-  Send,
+  PhoneCall,
   ShieldBan,
   Settings,
   ScrollText,
@@ -23,7 +23,7 @@ const mainNav: NavItem[] = [
   { href: "/", label: "Übersicht", icon: LayoutDashboard },
   { href: "/leads", label: "Leads", icon: FileSpreadsheet },
   { href: "/import", label: "Import", icon: Upload },
-  { href: "/export", label: "Export", icon: Send },
+  { href: "/crm", label: "CRM", icon: PhoneCall },
 ];
 
 const settingsNav: NavItem[] = [

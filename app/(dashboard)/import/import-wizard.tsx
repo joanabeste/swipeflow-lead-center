@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Upload, ArrowRight, ArrowLeft, Check, Loader2 } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
-import { hubspotFields, knownColumnAliases } from "@/lib/hubspot/schema";
+import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import type { MappingTemplate } from "@/lib/types";
 
@@ -210,7 +210,7 @@ export function ImportWizard({ templates }: Props) {
                   className="flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 >
                   <option value="">— Nicht zuordnen —</option>
-                  {hubspotFields.map((field) => (
+                  {leadFields.map((field) => (
                     <option key={field.key} value={field.key}>
                       {field.label}
                     </option>
@@ -250,9 +250,9 @@ export function ImportWizard({ templates }: Props) {
                 <tr>
                   {Object.entries(mapping)
                     .filter(([, v]) => v)
-                    .map(([csvCol, hubspotField]) => (
+                    .map(([csvCol, leadField]) => (
                       <th key={csvCol} className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
-                        {hubspotFields.find((f) => f.key === hubspotField)?.label ?? hubspotField}
+                        {leadFields.find((f) => f.key === leadField)?.label ?? leadField}
                       </th>
                     ))}
                 </tr>

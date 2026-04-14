@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Info } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
 import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, type CsvFormat } from "@/lib/csv/format-detector";
-import { hubspotFields, knownColumnAliases } from "@/lib/hubspot/schema";
+import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import { processJobListingImport } from "./job-listing-actions";
 import { processGoogleMapsImport } from "./google-maps-actions";
@@ -290,7 +290,7 @@ export function SmartImport({ templates }: Props) {
                   className="flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-[#1c1c1e] dark:text-gray-100"
                 >
                   <option value="">— Nicht zuordnen —</option>
-                  {hubspotFields.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
+                  {leadFields.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
                 </select>
               </div>
             ))}

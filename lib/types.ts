@@ -11,6 +11,7 @@ export interface Profile {
   status: UserStatus;
   service_mode: ServiceMode;
   lead_table_columns: string[] | null;
+  phonemondo_extension: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -45,7 +46,10 @@ export interface Lead {
   website: string | null;
   career_page_url: string | null;
   description: string | null;
+  /** Alte HubSpot-Referenz — bleibt als Altlast für Migrations-/Audit-Zwecke, wird nicht mehr geschrieben. */
   hubspot_company_id: string | null;
+  /** ID aus der custom_lead_statuses-Tabelle — CRM-Workflow-Status (Sales). */
+  crm_status_id: string | null;
   source_import_id: string | null;
   source_type: LeadSourceType;
   source_url: string | null;
@@ -153,12 +157,62 @@ export type ExportStatus = "pending" | "success" | "failed" | "duplicate";
 export interface ExportLog {
   id: string;
   lead_id: string;
+  /** Alte HubSpot-Referenz — bleibt für Altdaten. */
   hubspot_company_id: string | null;
   status: ExportStatus;
   error_message: string | null;
   response_data: Record<string, unknown> | null;
   created_by: string | null;
   created_at: string;
+}
+
+// ─── CRM ─────────────────────────────────────────────────────────
+
+export interface CustomLeadStatus {
+  id: string;
+  label: string;
+  color: string;
+  description: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadNote {
+  id: string;
+  lead_id: string;
+  content: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CallDirection = "outbound" | "inbound";
+export type CallStatus =
+  | "initiated"
+  | "ringing"
+  | "answered"
+  | "missed"
+  | "failed"
+  | "ended";
+
+export interface LeadCall {
+  id: string;
+  lead_id: string;
+  contact_id: string | null;
+  direction: CallDirection;
+  status: CallStatus;
+  duration_seconds: number | null;
+  notes: string | null;
+  phone_number: string | null;
+  mondo_call_id: string | null;
+  started_at: string;
+  ended_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface RequiredFieldProfile {

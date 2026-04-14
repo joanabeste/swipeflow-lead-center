@@ -2,13 +2,14 @@
 
 import { useActionState } from "react";
 import {
-  Plus, Trash2, Sparkles, Check, Globe, MapPin, Briefcase, ListChecks, Users,
+  Plus, Trash2, Sparkles, Check, Globe, MapPin, Briefcase, ListChecks, Users, PhoneCall,
 } from "lucide-react";
-import { hubspotFields } from "@/lib/hubspot/schema";
-import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode, WebdevScoringConfig, RecruitingScoringConfig, Profile } from "@/lib/types";
+import { leadFields } from "@/lib/csv/lead-fields";
+import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode, WebdevScoringConfig, RecruitingScoringConfig, Profile, CustomLeadStatus } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring, saveRecruitingScoring, saveHqLocation } from "./actions";
 import { UserManager } from "../nutzer/user-manager";
+import { CrmStatusManager } from "./crm-status-manager";
 
 interface Props {
   fieldProfiles: RequiredFieldProfile[];
@@ -17,6 +18,7 @@ interface Props {
   recruitingScoring: RecruitingScoringConfig;
   hq: HqLocation;
   profiles: Profile[];
+  crmStatuses: CustomLeadStatus[];
   currentUserId: string;
 }
 
@@ -442,7 +444,7 @@ function FieldProfilesCard({ profiles }: { profiles: RequiredFieldProfile[] }) {
           <div>
             <label className="block text-sm font-medium">Pflichtfelder</label>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-              {hubspotFields.map((field) => (
+              {leadFields.map((field) => (
                 <label key={field.key} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -515,6 +517,7 @@ function FieldProfilesCard({ profiles }: { profiles: RequiredFieldProfile[] }) {
 const SECTIONS = [
   { id: "standort", label: "Unser Standort", icon: MapPin },
   { id: "anreicherung", label: "Anreicherung", icon: Sparkles },
+  { id: "crm-status", label: "CRM-Status", icon: PhoneCall },
   { id: "recruiting-scoring", label: "Recruiting-Bewertung", icon: Briefcase },
   { id: "webdev-scoring", label: "Webdesign-Bewertung", icon: Globe },
   { id: "pflichtfelder", label: "Pflichtfelder", icon: ListChecks },
@@ -528,6 +531,7 @@ export function SettingsManager({
   recruitingScoring,
   hq,
   profiles,
+  crmStatuses,
   currentUserId,
 }: Props) {
   return (
@@ -569,6 +573,15 @@ export function SettingsManager({
             <EnrichmentDefaultsCard mode="recruiting" label="Recruiting" config={enrichmentDefaults.recruiting} />
             <EnrichmentDefaultsCard mode="webdev" label="Webentwicklung" config={enrichmentDefaults.webdev} />
           </div>
+        </section>
+
+        <section id="crm-status" className="scroll-mt-4">
+          <SectionHeader
+            icon={PhoneCall}
+            title="CRM-Status / Vertriebsphasen"
+            subtitle="Frei konfigurierbare Status-Labels für den Sales-Workflow im CRM. Leads bekommen beim Qualifizieren automatisch den Status 'Todo'."
+          />
+          <CrmStatusManager statuses={crmStatuses} />
         </section>
 
         <section id="recruiting-scoring" className="scroll-mt-4">

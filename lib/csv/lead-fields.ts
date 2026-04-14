@@ -1,11 +1,14 @@
-export interface HubSpotField {
+// Generisches Lead-Feld-Mapping (früher HubSpot-Schema, nun intern).
+// Wird vom CSV-Import-Wizard zum Auto-Mapping von Spalten genutzt.
+
+export interface LeadField {
   key: string;
   label: string;
   type: "text" | "number" | "email" | "phone" | "url";
   required: boolean;
 }
 
-export const hubspotFields: HubSpotField[] = [
+export const leadFields: LeadField[] = [
   { key: "company_name", label: "Firmenname", type: "text", required: true },
   { key: "domain", label: "Domain", type: "url", required: false },
   { key: "phone", label: "Telefon", type: "phone", required: false },
@@ -23,7 +26,7 @@ export const hubspotFields: HubSpotField[] = [
   { key: "description", label: "Beschreibung", type: "text", required: false },
 ];
 
-/** Bekannte Spaltenbezeichnungen -> HubSpot-Feld. Wird für Auto-Mapping genutzt. */
+/** Bekannte CSV-Spaltenbezeichnungen -> Lead-Feld-Key. Wird für Auto-Mapping genutzt. */
 export const knownColumnAliases: Record<string, string> = {
   // GaLaBau-Format
   "firmenname": "company_name",

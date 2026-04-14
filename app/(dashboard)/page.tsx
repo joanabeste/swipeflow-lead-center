@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { FileSpreadsheet, Upload, Send, Sparkles } from "lucide-react";
+import { FileSpreadsheet, Upload, PhoneCall, Sparkles } from "lucide-react";
 
 import type { ServiceMode } from "@/lib/types";
 import { Greeting } from "./greeting";
@@ -217,7 +217,7 @@ export default async function DashboardPage() {
           { href: "/leads", icon: FileSpreadsheet, label: "Leads", sub: `${total} gesamt`, accent: "text-primary" },
           { href: "/import", icon: Upload, label: "Import", sub: "CSV, URL, Verzeichnis", accent: "text-primary" },
           { href: "/leads?status=imported", icon: Sparkles, label: "Anreichern", sub: `${importedLeads ?? 0} wartend`, accent: "text-primary" },
-          { href: "/export", icon: Send, label: "Export", sub: `${qualifiedLeads ?? 0} bereit`, accent: "text-green-500" },
+          { href: "/crm", icon: PhoneCall, label: "CRM", sub: `${qualifiedLeads ?? 0} im Pipeline`, accent: "text-green-500" },
         ].map((a) => (
           <Link
             key={a.href}

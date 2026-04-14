@@ -49,7 +49,7 @@ export async function processImport(
     return { error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
-  // Zeilen auf HubSpot-Schema mappen + CSV-Injection sanitizen
+  // Zeilen auf Lead-Feld-Schema mappen + CSV-Injection sanitizen
   const mappedRows = rows.map((row) => {
     const mapped: Record<string, string | null> = {};
     headers.forEach((header, i) => {
