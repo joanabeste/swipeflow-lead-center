@@ -238,6 +238,8 @@ export type CompanyDetailField =
 
 export interface EnrichmentConfig {
   contacts_management: boolean;
+  /** HR-/Personal-/Recruiting-/Ausbildungs-/Bewerbungs-Verantwortliche gezielt extrahieren */
+  contacts_hr: boolean;
   contacts_all: boolean;
   job_postings: boolean;
   career_page: boolean;
@@ -248,7 +250,8 @@ export interface EnrichmentConfig {
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {
   contacts_management: true,
-  contacts_all: true,
+  contacts_hr: true,
+  contacts_all: false,
   job_postings: true,
   career_page: true,
   company_details: true,

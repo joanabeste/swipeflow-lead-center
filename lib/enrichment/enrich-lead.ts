@@ -139,7 +139,7 @@ export async function enrichLead(
     const result = await extractFromPages(lead.company_name, pages, config);
 
     // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur KI-Ergebnisse, keine Import-Daten
-    if (config.contacts_management || config.contacts_all) {
+    if (config.contacts_management || config.contacts_hr || config.contacts_all) {
       await db.from("lead_contacts").delete().eq("lead_id", leadId);
     }
     if (config.job_postings) {

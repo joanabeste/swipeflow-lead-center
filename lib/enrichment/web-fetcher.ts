@@ -86,11 +86,13 @@ function cacheSet(url: string, page: FetchedPage) {
 /** Hauptfunktion: Holt relevante Seiten einer Firmenwebsite */
 export async function fetchCompanyPages(
   websiteOrDomain: string,
-  config?: { job_postings?: boolean; career_page?: boolean; contacts_management?: boolean; contacts_all?: boolean },
+  config?: { job_postings?: boolean; career_page?: boolean; contacts_management?: boolean; contacts_hr?: boolean; contacts_all?: boolean },
   careerPageHint?: string,
 ): Promise<{ baseUrl: string; pages: FetchedPage[] }> {
   const needsKarriere = config?.job_postings !== false && config?.career_page !== false;
-  const needsTeam = config?.contacts_management !== false || config?.contacts_all === true;
+  // Team-Seite holen wenn IRGENDEINE Kontakt-Sucht aktiv ist (Default: ja).
+  const needsTeam =
+    config?.contacts_management !== false || config?.contacts_hr === true || config?.contacts_all === true;
   const baseUrl = buildBaseUrl(websiteOrDomain);
   const pages: FetchedPage[] = [];
 

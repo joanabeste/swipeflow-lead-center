@@ -49,7 +49,7 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
 
   // Schema
   const fields: string[] = [];
-  if (config.contacts_management || config.contacts_all) {
+  if (config.contacts_management || config.contacts_hr || config.contacts_all) {
     fields.push('"contacts":[{"name":"","role":"","email":"","phone":"","source_url":""}]');
   }
   if (config.career_page) fields.push('"career_page_url":""');
@@ -99,19 +99,28 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
     }
     rules.push(hints.join(" "));
   }
-  if (config.contacts_management && !config.contacts_all) {
-    rules.push("Kontakte: NUR Geschäftsführer/Inhaber/Management.");
-  } else if (config.contacts_all) {
+  // Kontakt-Regeln aus den unabhängigen Toggles ableiten
+  const wantHr = config.contacts_hr || config.contacts_all;
+  const wantManagement = config.contacts_management || config.contacts_hr || config.contacts_all;
+  const wantOthers = config.contacts_all;
+  if (wantHr || wantManagement || wantOthers) {
+    const groups: string[] = [];
+    if (wantHr) {
+      groups.push(
+        "HR-/Personal-/Recruiting-/Ausbildungs-/Bewerbungs-Verantwortliche (PFLICHT separat und einzeln erfassen — jede Person mit präziser role wie 'Personalleitung', 'HR-Manager/in', 'Personalreferent/in', 'Recruiting', 'Talent Acquisition', 'Ausbildungsleitung', 'Ansprechpartner Bewerbung'; auf Karriereseiten genannte Ansprechpartner für Bewerbungen MÜSSEN im Array stehen)",
+      );
+    }
+    if (wantManagement) {
+      groups.push("Geschäftsführer/Inhaber/Vorstand/Management");
+    }
+    if (wantOthers) {
+      groups.push("alle weiteren Ansprechpartner (Vertrieb, Support, Fachabteilungen)");
+    }
     rules.push(
-      "Kontakte: ALLE auf der Website auffindbaren Ansprechpartner — auch wenn nur Name + Rolle ohne E-Mail/Telefon. " +
-      "PFLICHT: HR-/Personal-Verantwortliche separat und einzeln erfassen — jede Person mit Personal-, HR-, Recruiting-, " +
-      "Talent-, Ausbildungs-, oder Bewerbungs-Bezug muss als eigener contacts-Eintrag mit präziser role stehen " +
-      "(z.B. 'Personalleitung', 'HR-Manager/in', 'Personalreferent/in', 'Recruiting', 'Talent Acquisition', " +
-      "'Ausbildungsleitung', 'Ansprechpartner Bewerbung'). Reihenfolge im Array: HR > GF > Vertrieb > Sonstige. " +
-      "Wenn auf der Karriereseite ein 'Ansprechpartner für Bewerbungen' o.ä. genannt wird, MUSS dieser im Array stehen.",
+      `Kontakte: ${groups.join(" + ")}. Auch erfassen, wenn nur Name + Rolle ohne E-Mail/Telefon. Reihenfolge im Array: HR > GF > Vertrieb > Sonstige.`,
     );
   }
-  if (config.contacts_management || config.contacts_all) {
+  if (config.contacts_management || config.contacts_hr || config.contacts_all) {
     rules.push("Telefon: +49-Format. Impressum auf Tel/Fon/+49/(0 prüfen.");
     if (preData.emails.length > 0) {
       rules.push(`Bereits gefundene E-Mails: ${preData.emails.join(", ")}. Ordne sie den passenden Personen zu.`);
@@ -171,7 +180,7 @@ export async function extractFromPages(
     .filter((p) => {
       if (p.category === "homepage" && pages.filter((pp) => !pp.error && pp.category !== "homepage").length >= 2) return false;
       if (p.category === "karriere" && !config.job_postings && !config.career_page) return false;
-      if (p.category === "team" && !config.contacts_management && !config.contacts_all) return false;
+      if (p.category === "team" && !config.contacts_management && !config.contacts_hr && !config.contacts_all) return false;
       return true;
     })
     .sort((a, b) => priorityOrder.indexOf(a.category) - priorityOrder.indexOf(b.category));
@@ -226,7 +235,7 @@ export async function extractFromPages(
   }
 
   // Dynamische max_tokens
-  const expectedOutput = (config.contacts_management || config.contacts_all ? 600 : 0)
+  const expectedOutput = (config.contacts_management || config.contacts_hr || config.contacts_all ? 600 : 0)
     + (config.job_postings ? 1000 : 0)
     + (config.career_page ? 80 : 0)
     + (config.company_details ? 350 : 0)

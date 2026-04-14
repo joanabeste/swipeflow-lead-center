@@ -207,7 +207,8 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { key: "contacts_management" as const, label: "Geschäftsführer", desc: "Inhaber & Management" },
-                  { key: "contacts_all" as const, label: "Alle Kontakte", desc: "HR, Vertrieb & weitere" },
+                  { key: "contacts_hr" as const, label: "HR-Verantwortliche", desc: "Personal, Recruiting, Ausbildung" },
+                  { key: "contacts_all" as const, label: "Alle weiteren Kontakte", desc: "Vertrieb, Support, sonstige" },
                   { key: "job_postings" as const, label: "Stellenanzeigen", desc: "Offene Jobs + Links" },
                   { key: "career_page" as const, label: "Karriereseite", desc: "Link zur Karriereseite" },
                   { key: "company_details" as const, label: "Firmendaten", desc: "Größe, Gründung, Fachgebiete" },

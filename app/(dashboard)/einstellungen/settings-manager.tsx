@@ -131,11 +131,12 @@ function HqLocationCard({ hq }: { hq: HqLocation }) {
 
 // ─── Enrichment Defaults ───────────────────────────────────────
 
-type EnrichmentBoolKey = "contacts_management" | "contacts_all" | "job_postings" | "career_page" | "company_details";
+type EnrichmentBoolKey = "contacts_management" | "contacts_hr" | "contacts_all" | "job_postings" | "career_page" | "company_details";
 
 const ENRICHMENT_OPTIONS: { key: EnrichmentBoolKey; label: string; hint?: string }[] = [
   { key: "contacts_management", label: "Geschäftsführung & Management", hint: "GF, Inhaber, Vorstand" },
-  { key: "contacts_all", label: "Alle Ansprechpartner", hint: "HR, Vertrieb, Support, weitere" },
+  { key: "contacts_hr", label: "HR-Verantwortliche", hint: "Personal, Recruiting, Ausbildung, Bewerbermanagement" },
+  { key: "contacts_all", label: "Alle weiteren Ansprechpartner", hint: "Vertrieb, Support, sonstige" },
   { key: "job_postings", label: "Stellenanzeigen", hint: "Offene Stellen von der Karriereseite" },
   { key: "career_page", label: "Karriereseite", hint: "Karriereseiten-URL finden" },
   { key: "company_details", label: "Firmendaten", hint: "Größe, Rechtsform, Adresse" },

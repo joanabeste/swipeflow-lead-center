@@ -78,6 +78,7 @@ export async function saveEnrichmentDefaults(
 
   const config: EnrichmentConfig = {
     contacts_management: formData.get("contacts_management") === "on",
+    contacts_hr: formData.get("contacts_hr") === "on",
     contacts_all: formData.get("contacts_all") === "on",
     job_postings: formData.get("job_postings") === "on",
     career_page: formData.get("career_page") === "on",

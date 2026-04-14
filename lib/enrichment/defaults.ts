@@ -7,6 +7,7 @@ const FALLBACK: Record<ServiceMode, EnrichmentConfig> = {
   recruiting: DEFAULT_ENRICHMENT_CONFIG,
   webdev: {
     contacts_management: true,
+    contacts_hr: false,
     contacts_all: false,
     job_postings: false,
     career_page: false,
