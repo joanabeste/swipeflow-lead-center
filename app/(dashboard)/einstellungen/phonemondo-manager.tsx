@@ -79,11 +79,12 @@ PHONEMONDO_API_BASE_URL=https://api.phonemondo.com
 
       {/* User-Extensions */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-        <h3 className="font-semibold">Durchwahlen der Nutzer</h3>
+        <h3 className="font-semibold">PhoneMondo-Sources pro Nutzer</h3>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Pro Nutzer hinterlegte PhoneMondo-Durchwahl. Nötig, damit Click-to-Call
-          funktioniert — PhoneMondo ruft zuerst diese Durchwahl an und verbindet
-          sie dann mit dem Lead.
+          Jeder Nutzer braucht die UID seines PhoneMondo-Telefons/Geräts
+          („Source"). Sie ist im PhoneMondo-Dashboard sichtbar und wird beim
+          Click-to-Call mitgegeben, damit PhoneMondo weiß, welches Telefon
+          zuerst klingeln soll.
         </p>
         <ul className="mt-4 divide-y divide-gray-100 dark:divide-[#2c2c2e]">
           {sortedProfiles.map((p) => (
@@ -177,8 +178,8 @@ function ExtensionRow({ profile }: { profile: Profile }) {
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="z.B. 101"
-        className="w-28 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
+        placeholder="Source-UID"
+        className="w-48 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
       />
       <button
         onClick={save}

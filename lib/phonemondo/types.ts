@@ -36,3 +36,12 @@ export interface TriggerCallResult {
   /** PhoneMondo-seitige Call-ID (wird in lead_calls.mondo_call_id gespeichert) */
   callId: string;
 }
+
+/** Eine Source (Telefon/Line) im PhoneMondo-Account. Aus GET /sources/mine. */
+export interface PhonemondoSource {
+  uid: string;
+  label: string;
+  identifier?: string;
+  enabled?: number;
+  deviceLabel?: string;
+}

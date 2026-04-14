@@ -8,11 +8,10 @@
 // einen konfigurations-Fehler zurück, damit der UI-Button eine klare Meldung zeigt.
 
 import crypto from "node:crypto";
-import type { PhoneMondoWebhookEvent, TriggerCallInput, TriggerCallResult } from "./types";
+import type { PhoneMondoWebhookEvent, TriggerCallInput, TriggerCallResult, PhonemondoSource } from "./types";
 
-// PhoneMondo betreibt die API unter phonemondo.com/api/v1 (nicht api.phonemondo.com
-// — dieser Subdomain antwortet zwar DNS, aber kein HTTPS).
-const DEFAULT_BASE_URL = "https://phonemondo.com/api/v1";
+// Offizielle API-Base-URL laut OpenAPI-Spec (https://www.phonemondo.com/res/apidoc/openapi.json).
+const DEFAULT_BASE_URL = "https://www.phonemondo.com/api";
 
 export function isPhoneMondoConfigured(): boolean {
   return !!process.env.PHONEMONDO_API_TOKEN;
@@ -34,8 +33,10 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
     );
   }
   const baseUrl = (process.env.PHONEMONDO_API_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-  // ANPASSEN nach API-Doku, sobald Endpoint-Pfad bestätigt ist
-  const url = `${baseUrl}/calls`;
+  // POST /sources/startcall?uid=<source-uid>&number=<target>
+  // Parameter im Query-String (nicht Body), siehe OpenAPI-Spec.
+  const params = new URLSearchParams({ uid: input.extension, number: input.target });
+  const url = `${baseUrl}/sources/startcall?${params.toString()}`;
 
   let response: Response;
   try {
@@ -43,15 +44,8 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({
-        // ANPASSEN nach API-Doku (z.B. "caller", "callee", "user_extension" o.ä.)
-        target: input.target,
-        extension: input.extension,
-        metadata: input.metadata ?? {},
-      }),
       signal: AbortSignal.timeout(10_000),
     });
   } catch (e) {
@@ -102,6 +96,56 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
     );
   }
   return { callId };
+}
+
+/**
+ * Holt alle Sources/Lines des Users via GET /sources/mine.
+ * Eine Source entspricht einem Telefon/Endgerät im PhoneMondo-Account —
+ * der User wählt eine aus, und ihre uid wird in profiles.phonemondo_extension
+ * gespeichert.
+ */
+export async function listMySources(): Promise<PhonemondoSource[]> {
+  const token = process.env.PHONEMONDO_API_TOKEN;
+  if (!token) throw new Error("PhoneMondo nicht konfiguriert (PHONEMONDO_API_TOKEN fehlt).");
+  const baseUrl = (process.env.PHONEMONDO_API_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  const url = `${baseUrl}/sources/mine`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : "unbekannt";
+    throw new Error(`PhoneMondo unter ${url} nicht erreichbar (${reason}).`);
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`PhoneMondo /sources/mine HTTP ${response.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = (await response.json()) as
+    | { state?: string; code?: string; msg?: string; items?: Array<Record<string, unknown>> }
+    | Record<string, unknown>;
+
+  const typed = data as Record<string, unknown>;
+  if (typed.state === "err") {
+    throw new Error(`PhoneMondo-Fehler (${typed.code ?? "ERR"}): ${typed.msg ?? "unbekannt"}`);
+  }
+
+  const items = Array.isArray(typed.items) ? (typed.items as Array<Record<string, unknown>>) : [];
+  return items.map((item) => ({
+    uid: String(item.uid ?? ""),
+    label: String(item.label ?? item.identifier ?? item.uid ?? ""),
+    identifier: typeof item.identifier === "string" ? item.identifier : undefined,
+    enabled: typeof item.enabled === "number" ? item.enabled : undefined,
+    deviceLabel:
+      item.device && typeof item.device === "object" && "label" in item.device
+        ? String((item.device as Record<string, unknown>).label ?? "")
+        : undefined,
+  }));
 }
 
 /** Sucht in einer typischerweise unbekannten API-Response nach einer Call-ID. */

@@ -50,8 +50,10 @@ export default async function MeinKontoPage() {
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
         <h2 className="font-semibold">Telefon (PhoneMondo)</h2>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Deine Durchwahl wird beim Click-to-Call im CRM benutzt. PhoneMondo ruft zuerst
-          dich auf dieser Durchwahl an und verbindet dich dann mit dem Lead.
+          Wähle dein PhoneMondo-Telefon (Source). Beim Click-to-Call im CRM
+          ruft PhoneMondo zuerst dieses Gerät an und verbindet dich dann
+          mit dem Lead. Tipp: Klick auf „Sources laden" holt deine verfügbaren
+          Geräte direkt aus deinem PhoneMondo-Account.
         </p>
         <PhonemondoForm extension={profile?.phonemondo_extension ?? null} />
       </div>
