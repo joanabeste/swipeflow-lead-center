@@ -147,11 +147,38 @@ export async function createImportLog(
   if (params.importType) insertData.import_type = params.importType;
   if (params.sourceUrl) insertData.source_url = params.sourceUrl;
 
-  const { data, error } = await db
+  let { data, error } = await db
     .from("import_logs")
     .insert(insertData)
     .select("id, file_name")
     .single();
+
+  // Fallback: wenn der CHECK-Constraint für import_type den Wert ablehnt
+  // (z.B. weil das Schema die neuen Werte 'ba_job_listing'/'google_maps' nicht kennt),
+  // ohne import_type erneut versuchen.
+  if (error && (error.code === "23514" || /import_type|type_check/i.test(error.message ?? ""))) {
+    delete insertData.import_type;
+    const retry = await db
+      .from("import_logs")
+      .insert(insertData)
+      .select("id, file_name")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  // Fallback 2: wenn der Insert wegen unbekannter Spalten fehlschlägt (z.B. source_url),
+  // entferne sie und versuche erneut.
+  if (error && /column .* does not exist/i.test(error.message ?? "")) {
+    delete insertData.source_url;
+    const retry = await db
+      .from("import_logs")
+      .insert(insertData)
+      .select("id, file_name")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error || !data) {
     throw new Error(
