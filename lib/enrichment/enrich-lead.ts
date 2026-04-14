@@ -191,8 +191,11 @@ export async function enrichLead(
     // 6. Lead aktualisieren + Auto-Qualifizierung prüfen
     // Cancel-Felder zurücksetzen — falls nachher die Cancel-Rule wieder matcht,
     // werden sie unten erneut gesetzt. So bleibt kein veralteter Grund stehen.
+    // Wichtig: bereits qualified/exported-Leads NICHT auf "enriched" zurückfallen
+    // lassen — sie sind im CRM und werden dort manuell gepflegt.
+    const keepCurrentStatus = lead.status === "qualified" || lead.status === "exported";
     const leadUpdates: Record<string, unknown> = {
-      status: "enriched",
+      status: keepCurrentStatus ? lead.status : "enriched",
       enriched_at: new Date().toISOString(),
       enrichment_source: "website",
       cancel_reason: null,
@@ -248,8 +251,12 @@ export async function enrichLead(
     const totalJobs = totalJobsCount ?? 0;
     const totalContacts = totalContactsCount ?? 0;
 
-    // Auto-Qualifizierung je nach Service-Modus
-    if (serviceMode === "webdev") {
+    // Auto-Qualifizierung nur für Leads, die noch nicht im CRM sind.
+    // Bereits qualified/exported-Leads werden vom Re-Enrich nur datenseitig
+    // aktualisiert, ihr Status bleibt unverändert.
+    if (keepCurrentStatus) {
+      // skip — Status bleibt wie er war
+    } else if (serviceMode === "webdev") {
       // Webdev: Qualifiziert wenn Kontakt da + genügend Issues laut Scoring-Schwellwert
       const hasContact = result.contacts.some((c) => !!c.email || !!c.phone);
       const minIssues = webdevScoring?.min_issues_to_qualify ?? 1;
@@ -316,9 +323,17 @@ export async function enrichLead(
     let cancelled = false;
     let cancelReason: string | undefined;
 
+    // Leads die bereits qualified/exported sind, dürfen durch ein Re-Enrichment
+    // NICHT mehr automatisch gecancelt werden — sie sind im CRM und werden dort
+    // manuell gepflegt. Der Re-Enrich-Flow dient nur zum Nachholen von Daten.
+    const skipCancelRules =
+      lead.status === "qualified" ||
+      lead.status === "exported" ||
+      lead.crm_status_id != null;
+
     // Im Webdev-Modus: Keine Recruiting-spezifischen Cancel-Rules anwenden
     // (z.B. "Keine offenen Stellen" ist irrelevant für Webentwicklung)
-    if (serviceMode === "recruiting") {
+    if (serviceMode === "recruiting" && !skipCancelRules) {
     const { data: cancelRules } = await db
       .from("cancel_rules")
       .select("*")
