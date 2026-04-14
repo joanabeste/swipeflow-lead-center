@@ -7,12 +7,14 @@ import type { ServiceMode } from "@/lib/types";
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Service-Mode laden
+  // Service-Mode + Name laden
   const { data: { user } } = await supabase.auth.getUser();
   let serviceMode: ServiceMode = "recruiting";
+  let userName: string | null = null;
   if (user) {
-    const { data: profile } = await supabase.from("profiles").select("service_mode").eq("id", user.id).single();
+    const { data: profile } = await supabase.from("profiles").select("service_mode, name").eq("id", user.id).single();
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
+    if (profile?.name) userName = profile.name as string;
   }
 
   const [
@@ -102,12 +104,41 @@ export default async function DashboardPage() {
     "import.directory": "Verzeichnis-Import",
   };
 
+  // Persönliche Begrüßung — Tageszeit in Berlin-Zeit (stabil, serverseitig)
+  const hourBerlin = Number(
+    new Intl.DateTimeFormat("de-DE", { hour: "2-digit", hour12: false, timeZone: "Europe/Berlin" }).format(new Date()),
+  );
+  const greeting =
+    hourBerlin < 5 ? "Nacht-Schicht"
+    : hourBerlin < 11 ? "Guten Morgen"
+    : hourBerlin < 14 ? "Moin"
+    : hourBerlin < 18 ? "Guten Tag"
+    : "Guten Abend";
+  // Vorname bevorzugt, sonst E-Mail-Prefix, sonst Fallback
+  const displayName = (userName?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "").trim();
+
+  // Kontextuelle Motivation — am Status der Pipeline orientiert
+  const readyToExport = qualifiedLeads ?? 0;
+  const waitingForEnrichment = importedLeads ?? 0;
+  const motivation =
+    total === 0
+      ? "Noch leer hier — ein Import bringt deinen Funnel in Schwung."
+      : readyToExport > 0
+      ? `${readyToExport} ${readyToExport === 1 ? "Lead ist" : "Leads sind"} bereit für den Export. Zeit zu closen.`
+      : waitingForEnrichment >= 10
+      ? `${waitingForEnrichment} Leads warten auf Anreicherung — heute wird's produktiv.`
+      : waitingForEnrichment > 0
+      ? `${waitingForEnrichment} ${waitingForEnrichment === 1 ? "Lead wartet" : "Leads warten"} auf Anreicherung. Lass uns loslegen.`
+      : qualifyRate >= 30
+      ? `Starke Quote: ${qualifyRate}% qualifizierte Leads. Weiter so.`
+      : "Heute ein guter Tag, um neue Leads reinzubringen.";
+
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight">Übersicht</h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        Lead-Pipeline auf einen Blick
-      </p>
+      <h1 className="text-2xl font-bold tracking-tight">
+        {greeting}{displayName ? `, ${displayName}` : ""} 👋
+      </h1>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{motivation}</p>
 
       {/* Pipeline-Balken */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
