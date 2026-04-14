@@ -14,8 +14,25 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lead Center",
+  title: {
+    default: "Lead Center",
+    template: "%s · Lead Center",
+  },
   description: "Zentrales Lead-Management für swipeflow GmbH",
+  applicationName: "Lead Center",
+  robots: { index: false, follow: false },
+  openGraph: {
+    title: "Lead Center",
+    description: "Zentrales Lead-Management für swipeflow GmbH",
+    type: "website",
+    locale: "de_DE",
+    siteName: "Lead Center",
+  },
+  twitter: {
+    card: "summary",
+    title: "Lead Center",
+    description: "Zentrales Lead-Management für swipeflow GmbH",
+  },
 };
 
 export default function RootLayout({

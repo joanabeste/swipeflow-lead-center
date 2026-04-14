@@ -8,8 +8,6 @@ export interface Toast {
   type: "success" | "error" | "info";
 }
 
-let globalAddToast: ((message: string, type?: Toast["type"]) => void) | null = null;
-
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -25,13 +23,5 @@ export function useToast() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // Global accessor
-  globalAddToast = addToast;
-
   return { toasts, addToast, removeToast };
-}
-
-/** Toast von außerhalb eines Hooks triggern */
-export function showToast(message: string, type: Toast["type"] = "success") {
-  if (globalAddToast) globalAddToast(message, type);
 }

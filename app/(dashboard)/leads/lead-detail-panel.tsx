@@ -60,8 +60,9 @@ export function LeadDetailPanel({ lead, changes }: Props) {
   ) {
     const updates: Record<string, string | null> = {};
     for (const key of Object.keys(fieldLabels)) {
-      const value = formData.get(key) as string | null;
-      updates[key] = value || null;
+      const raw = formData.get(key) as string | null;
+      const trimmed = raw?.trim();
+      updates[key] = trimmed ? trimmed : null;
     }
     return updateLead(lead.id, updates);
   }

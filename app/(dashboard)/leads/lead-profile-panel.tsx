@@ -1,40 +1,25 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useActionState } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import {
-  ArrowLeft,
-  Save,
-  AlertTriangle,
-  RotateCcw,
-  Sparkles,
-  Loader2,
-  User,
-  Mail,
-  Phone,
-  ExternalLink,
-  Briefcase,
-  MapPin,
-  Merge,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
-import { haversineKm, distanceCategory } from "@/lib/geo/distance";
-import { updateLead, findSimilarLeads, mergeLeads } from "./actions";
-import { isHrContact } from "@/lib/recruiting/hr-contact";
+import { updateLead } from "./actions";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { useServiceMode } from "@/lib/service-mode";
+import { LeadMasterDataForm } from "./_components/lead-master-data-form";
+import { LeadContactsList } from "./_components/lead-contacts-list";
+import { LeadJobPostingsList } from "./_components/lead-job-postings-list";
+import { LeadLocationCard } from "./_components/lead-location-card";
+import { LeadDuplicatesCard } from "./_components/lead-duplicates-card";
+import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
 
-// Leaflet-Map nur clientseitig laden — Zugriff auf `window`
-const LeadMap = dynamic(() => import("./lead-map"), { ssr: false, loading: () => (
-  <div className="flex h-[180px] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 text-xs text-gray-400 dark:border-[#2c2c2e] dark:bg-[#232325]">
-    Karte wird geladen…
-  </div>
-)});
+export type { ActivityItem };
 
 const statusOptions: { value: string; label: string; color: string }[] = [
   { value: "imported", label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -46,57 +31,6 @@ const statusOptions: { value: string; label: string; color: string }[] = [
   { value: "exported", label: "Exportiert", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
 ];
 
-const fieldLabels: Record<string, string> = {
-  company_name: "Firmenname",
-  domain: "Domain",
-  phone: "Telefon",
-  email: "E-Mail",
-  street: "Straße",
-  city: "Ort",
-  zip: "PLZ",
-  state: "Bundesland",
-  country: "Land",
-  industry: "Branche",
-  company_size: "Unternehmensgröße",
-  legal_form: "Rechtsform",
-  register_id: "Handelsregister-Nr.",
-  website: "Website",
-  career_page_url: "Karriereseite",
-  description: "Beschreibung",
-  status: "Status",
-};
-
-export interface ActivityItem {
-  id: string;
-  kind: "change" | "call" | "note" | "enrichment" | "crm_status" | "status";
-  at: string;
-  title: string;
-  detail?: string;
-  meta?: string;
-}
-
-function activityColor(kind: ActivityItem["kind"]): string {
-  switch (kind) {
-    case "call": return "#10b981";      // emerald
-    case "note": return "#f59e0b";      // amber
-    case "enrichment": return "#6366f1"; // indigo
-    case "crm_status": return "#ec4899"; // pink
-    case "status": return "#3b82f6";     // blue
-    default: return "#9ca3af";           // gray
-  }
-}
-
-function activityIcon(kind: ActivityItem["kind"]): string {
-  switch (kind) {
-    case "call": return "📞";
-    case "note": return "📝";
-    case "enrichment": return "✨";
-    case "crm_status": return "🎯";
-    case "status": return "🏷️";
-    default: return "•";
-  }
-}
-
 interface Props {
   lead: Lead;
   changes: LeadChange[];
@@ -104,18 +38,11 @@ interface Props {
   jobPostings: LeadJobPosting[];
   latestEnrichment: LeadEnrichment | null;
   hq: HqLocation;
-  /** Back-Navigation — default "/leads" */
   backHref?: string;
   backLabel?: string;
-  /** Wird links neben den Enrich-Button + Status-Dropdown im Header gerendert */
   headerExtras?: React.ReactNode;
-  /** Inhalte oberhalb der "Standort"-Karte in der rechten Spalte */
   extraRightColumn?: React.ReactNode;
-  /** Wenn gesetzt: ersetzt die Änderungshistorie durch eine einheitliche Timeline.
-   *  Die ActivityItems sollten bereits chronologisch absteigend sortiert übergeben werden. */
   activityItems?: ActivityItem[];
-  /** Rechte Spalte ist user-resizable (Drag-Handle). Breite wird pro
-   *  resizeStorageKey in localStorage persistiert. */
   resizableRightColumn?: boolean;
   resizeStorageKey?: string;
 }
@@ -131,16 +58,13 @@ export function LeadProfilePanel({
   resizeStorageKey = "lead-panel-right-width",
 }: Props) {
   const router = useRouter();
+  const { mode: serviceMode } = useServiceMode();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
-  const [enrichPending, startEnrichTransition] = useTransition();
-  const [enrichError, setEnrichError] = useState<string | null>(null);
-  const [enrichSuccess, setEnrichSuccess] = useState(false);
-  const [similarLeads, setSimilarLeads] = useState<{ id: string; company_name: string; domain: string | null; city: string | null; status: string }[]>([]);
-  const [similarLoaded, setSimilarLoaded] = useState(false);
-  const [mergePending, startMergeTransition] = useTransition();
+  const [enrichModalOpen, setEnrichModalOpen] = useState(false);
 
   const hasWebsite = !!(lead.website || lead.domain);
+  const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
 
   function handleStatusChange(newStatus: LeadStatus) {
     setCurrentStatus(newStatus);
@@ -149,31 +73,24 @@ export function LeadProfilePanel({
     });
   }
 
-  const { mode: serviceMode } = useServiceMode();
-  const [enrichModalOpen, setEnrichModalOpen] = useState(false);
+  const leftContent = (
+    <>
+      <LeadMasterDataForm lead={lead} />
+      <LeadContactsList contacts={contacts} hasWebsite={hasWebsite} />
+      <LeadJobPostingsList jobPostings={jobPostings} latestEnrichment={latestEnrichment} hasWebsite={hasWebsite} />
+    </>
+  );
 
-  function handleEnrich() {
-    setEnrichError(null);
-    setEnrichSuccess(false);
-    setEnrichModalOpen(true);
-  }
-
-  async function handleSubmit(
-    _prev: { error?: string; success?: boolean } | undefined,
-    formData: FormData,
-  ) {
-    const updates: Record<string, string | null> = {};
-    for (const key of Object.keys(fieldLabels)) {
-      const value = formData.get(key) as string | null;
-      updates[key] = value || null;
-    }
-    return updateLead(lead.id, updates);
-  }
-
-  const [state, formAction, pending] = useActionState(handleSubmit, undefined);
-
-  const editableFields = Object.keys(fieldLabels).filter((k) => k !== "status");
-  const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
+  const rightContent = (
+    <>
+      {extraRightColumn}
+      <LeadLocationCard lead={lead} hq={hq} />
+      <LeadDuplicatesCard leadId={lead.id} />
+      {activityItems
+        ? <LeadActivityTimeline items={activityItems} />
+        : <LeadChangesList changes={changes} />}
+    </>
+  );
 
   return (
     <div>
@@ -189,13 +106,13 @@ export function LeadProfilePanel({
         <div className="flex items-center gap-2">
           {headerExtras}
           <button
-            onClick={handleEnrich}
-            disabled={enrichPending || !hasWebsite}
+            onClick={() => setEnrichModalOpen(true)}
+            disabled={!hasWebsite}
             className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             title={!hasWebsite ? "Keine Website/Domain vorhanden" : undefined}
           >
-            {enrichPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {enrichPending ? "Anreichern…" : contacts.length > 0 ? "Erneut anreichern" : "Anreichern"}
+            <Sparkles className="h-3.5 w-3.5" />
+            {contacts.length > 0 ? "Erneut anreichern" : "Anreichern"}
           </button>
           <select
             value={currentStatus}
@@ -207,6 +124,7 @@ export function LeadProfilePanel({
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          {statusPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
         </div>
       </div>
 
@@ -221,7 +139,7 @@ export function LeadProfilePanel({
         </p>
       </div>
 
-      {/* Banner: Cancel / Blacklist / Enrich-Fehler */}
+      {/* Banner: Cancel / Blacklist */}
       {(lead.cancel_reason || (lead.blacklist_hit && lead.blacklist_reason)) && (
         <div className="mt-4 flex items-start gap-3 rounded-md border border-orange-200 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-900/20">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-600 dark:text-orange-400" />
@@ -246,365 +164,22 @@ export function LeadProfilePanel({
         </div>
       )}
 
-      {enrichError && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{enrichError}</div>
-      )}
-      {enrichSuccess && (
-        <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">Anreicherung abgeschlossen. Seite neu laden für aktualisierte Daten.</div>
-      )}
-
-      {state?.error && (
-        <div className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{state.error}</div>
-      )}
-      {state?.success && (
-        <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">Gespeichert.</div>
-      )}
-
       <div className="mt-6">
-      {(() => {
-      const leftContent = (
-        <>
-          {/* Stammdaten */}
-          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Stammdaten</h2>
-            <form action={formAction} className="mt-4 space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                {editableFields.map((key) => (
-                  <div key={key} className={key === "description" ? "sm:col-span-2" : ""}>
-                    <label htmlFor={key} className="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                      {fieldLabels[key]}
-                    </label>
-                    {key === "description" ? (
-                      <textarea
-                        id={key}
-                        name={key}
-                        defaultValue={lead[key as keyof Lead] as string ?? ""}
-                        rows={2}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                      />
-                    ) : (
-                      <input
-                        id={key}
-                        name={key}
-                        type="text"
-                        defaultValue={lead[key as keyof Lead] as string ?? ""}
-                        className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
-                >
-                  <Save className="h-4 w-4" />
-                  {pending ? "Speichern…" : "Speichern"}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Ansprechpartner — HR zuerst, dann Rest. HR-Kontakte mit Badge. */}
-          {(() => {
-            const hrContacts = contacts.filter((c) => isHrContact(c.role));
-            const otherContacts = contacts.filter((c) => !isHrContact(c.role));
-            const ordered = [...hrContacts, ...otherContacts];
-            return (
-              <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-                <div className="flex items-center justify-between">
-                  <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-                    <User className="h-3.5 w-3.5" />
-                    Ansprechpartner ({contacts.length})
-                    {hrContacts.length > 0 && (
-                      <span className="ml-1 text-xs font-normal text-emerald-600 dark:text-emerald-400">
-                        · {hrContacts.length} HR
-                      </span>
-                    )}
-                  </h2>
-                </div>
-                {contacts.length === 0 ? (
-                  <p className="mt-3 text-sm text-gray-400">
-                    {hasWebsite ? "Noch keine Kontakte — Lead anreichern um Kontakte zu finden." : "Keine Website vorhanden."}
-                  </p>
-                ) : (
-                  <div className="mt-3 space-y-2">
-                    {ordered.map((contact) => {
-                      const isHr = isHrContact(contact.role);
-                      return (
-                        <div
-                          key={contact.id}
-                          className={`flex items-start justify-between rounded-md border p-3 ${
-                            isHr
-                              ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10"
-                              : "border-gray-100 dark:border-[#2c2c2e]"
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{contact.name}</p>
-                              {isHr && (
-                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                  HR
-                                </span>
-                              )}
-                            </div>
-                            {contact.role && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400">{contact.role}</p>
-                            )}
-                            <div className="mt-1 flex flex-wrap gap-3 text-xs">
-                              {contact.email && (
-                                <a href={`mailto:${contact.email}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-                                  <Mail className="h-3 w-3" />
-                                  {contact.email}
-                                </a>
-                              )}
-                              {contact.phone && (
-                                <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-                                  <Phone className="h-3 w-3" />
-                                  {contact.phone}
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Offene Stellen */}
-          <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-                <Briefcase className="h-3.5 w-3.5" />
-                Offene Stellen ({jobPostings.length})
-              </h2>
-              {latestEnrichment?.career_page_url && (
-                <a
-                  href={latestEnrichment.career_page_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  Karriereseite
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
-            {jobPostings.length === 0 ? (
-              <p className="mt-3 text-sm text-gray-400">
-                {hasWebsite ? "Keine Stellen gefunden." : "Keine Website vorhanden."}
-              </p>
-            ) : (
-              <div className="mt-3 space-y-1.5">
-                {jobPostings.map((job) => (
-                  <div
-                    key={job.id}
-                    className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2 dark:border-[#2c2c2e]"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{job.title}</p>
-                      {job.location && (
-                        <p className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                          <MapPin className="h-3 w-3" />
-                          {job.location}
-                        </p>
-                      )}
-                    </div>
-                    {job.url && (
-                      <a
-                        href={job.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:text-primary-dark"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      );
-
-      const rightContent = (
-        <>
-          {extraRightColumn}
-          {/* Standort / Entfernung zu HQ */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-              <MapPin className="h-3.5 w-3.5" />
-              Standort
-            </h2>
-            {lead.latitude != null && lead.longitude != null ? (() => {
-              const km = haversineKm({ lat: hq.lat, lng: hq.lng }, { lat: lead.latitude, lng: lead.longitude });
-              const cat = distanceCategory(km);
-              const badgeClasses: Record<typeof cat.tone, string> = {
-                local: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-                regional: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-                far: "bg-gray-100 text-gray-600 dark:bg-[#232325] dark:text-gray-300",
-              };
-              return (
-                <div className="mt-3">
-                  <LeadMap hq={{ lat: hq.lat, lng: hq.lng }} lead={{ lat: lead.latitude, lng: lead.longitude }} />
-                  <div className="mt-3 flex items-baseline justify-between gap-2">
-                    <span className="text-2xl font-bold">{Math.round(km)} km</span>
-                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClasses[cat.tone]}`}>
-                      {cat.label}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Luftlinie von {hq.label}
-                  </p>
-                </div>
-              );
-            })() : (
-              <p className="mt-2 text-sm text-gray-400">
-                {(lead.street || lead.zip || lead.city)
-                  ? "Adresse konnte nicht geokodiert werden."
-                  : "Keine Adresse hinterlegt."}
-              </p>
-            )}
-          </div>
-
-          {/* Duplikate / Merge */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-                <Merge className="h-3.5 w-3.5" />
-                Duplikate
-              </h2>
-              {!similarLoaded && (
-                <button
-                  onClick={async () => {
-                    const results = await findSimilarLeads(lead.id);
-                    setSimilarLeads(results);
-                    setSimilarLoaded(true);
-                  }}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Prüfen
-                </button>
-              )}
-            </div>
-            {similarLoaded && similarLeads.length === 0 && (
-              <p className="mt-2 text-sm text-gray-400">Keine Duplikate gefunden.</p>
-            )}
-            {similarLeads.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {similarLeads.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
-                    <div>
-                      <p className="text-sm font-medium">{s.company_name}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{s.domain ?? s.city ?? "–"}</p>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (confirm(`"${s.company_name}" in diesen Lead zusammenführen? Der andere Lead wird gelöscht.`)) {
-                          startMergeTransition(async () => {
-                            await mergeLeads(lead.id, s.id);
-                            setSimilarLeads((prev) => prev.filter((p) => p.id !== s.id));
-                          });
-                        }
-                      }}
-                      disabled={mergePending}
-                      className="rounded bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-50"
-                    >
-                      Zusammenführen
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Historie: wenn activityItems übergeben wurden, einheitliche Timeline;
-              sonst die klassische Änderungshistorie (lead_changes). */}
-          {activityItems ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Historie ({activityItems.length})
-              </h2>
-              {activityItems.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-400">Noch keine Aktivitäten.</p>
-              ) : (
-                <ul className="mt-3 space-y-3">
-                  {activityItems.slice(0, 50).map((item) => (
-                    <li
-                      key={item.id}
-                      className="border-l-2 pl-3 text-sm"
-                      style={{ borderColor: activityColor(item.kind) }}
-                    >
-                      <p className="font-medium text-gray-700 dark:text-gray-300">
-                        <span className="mr-1">{activityIcon(item.kind)}</span>
-                        {item.title}
-                      </p>
-                      {item.detail && (
-                        <p className="text-gray-500 dark:text-gray-400">{item.detail}</p>
-                      )}
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(item.at).toLocaleString("de-DE")}
-                        {item.meta ? ` · ${item.meta}` : ""}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Änderungshistorie</h2>
-              {changes.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-400">Noch keine Änderungen.</p>
-              ) : (
-                <ul className="mt-3 space-y-3">
-                  {changes.map((change) => (
-                    <li key={change.id} className="border-l-2 border-gray-200 pl-3 text-sm dark:border-gray-700">
-                      <p className="font-medium text-gray-700 dark:text-gray-300">
-                        {fieldLabels[change.field_name] ?? change.field_name}
-                      </p>
-                      <p className="text-gray-500 dark:text-gray-400">
-                        <span className="line-through">{change.old_value ?? "–"}</span> → {change.new_value ?? "–"}
-                      </p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(change.created_at).toLocaleString("de-DE")}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </>
-      );
-
-      if (resizableRightColumn) {
-        return (
+        {resizableRightColumn ? (
           <ResizableColumns
-            left={leftContent}
-            right={rightContent}
+            left={<div className="space-y-6">{leftContent}</div>}
+            right={<div className="space-y-4">{rightContent}</div>}
             storageKey={resizeStorageKey}
             defaultRight={540}
             minRight={360}
             maxRight={900}
           />
-        );
-      }
-      return (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">{leftContent}</div>
-          <div className="space-y-4">{rightContent}</div>
-        </div>
-      );
-      })()}
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="space-y-6 lg:col-span-2">{leftContent}</div>
+            <div className="space-y-4">{rightContent}</div>
+          </div>
+        )}
       </div>
 
       {enrichModalOpen && (

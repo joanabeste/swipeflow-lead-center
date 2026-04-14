@@ -13,10 +13,14 @@ export interface WidgetMeta {
 }
 
 export const WIDGET_REGISTRY: WidgetMeta[] = [
+  { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 5 },
   { key: "pipeline", label: "Pipeline-Balken", description: "Lead-Verteilung über alle Status", defaultVisible: true, defaultOrder: 10 },
   { key: "stats", label: "Kennzahlen", description: "Vier Metriken passend zu deinem Modus", defaultVisible: true, defaultOrder: 20 },
   { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 25 },
+  { key: "crm-status-distribution", label: "CRM-Status-Verteilung", description: "Qualifizierte Leads nach Vertriebsphase", defaultVisible: false, defaultOrder: 27 },
   { key: "todays-calls", label: "Heutige Anrufe", description: "Calls aller Nutzer seit 00:00", defaultVisible: false, defaultOrder: 30 },
+  { key: "call-stats-7d", label: "Anrufe (7 Tage)", description: "Tägliche Anruf-Statistik aller Nutzer", defaultVisible: false, defaultOrder: 32 },
+  { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 34 },
   { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 40 },
   { key: "recent-leads", label: "Zuletzt bearbeitete Leads", description: "Die acht aktuellsten Leads", defaultVisible: true, defaultOrder: 50 },
   { key: "recent-activity", label: "Letzte Aktivitäten", description: "Audit-Log der letzten Schritte", defaultVisible: true, defaultOrder: 60 },

@@ -7,6 +7,7 @@ import { DashboardEditor } from "./widgets/dashboard-editor";
 import {
   PipelineWidget, StatsWidget, QuickActionsWidget,
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
+  MyDayWidget, CallStats7dWidget, EnrichmentTrend7dWidget, CrmStatusDistributionWidget,
 } from "./widgets/widgets";
 
 export default async function DashboardPage() {
@@ -31,7 +32,10 @@ export default async function DashboardPage() {
 
   // Zweispaltige Widgets (recent-leads / recent-activity / crm-queue / todays-calls)
   // vs. volle Breite (pipeline / stats / quick-actions). Gruppen für Layout-Paare.
-  const fullWidth = new Set(["pipeline", "stats", "quick-actions"]);
+  const fullWidth = new Set([
+    "pipeline", "stats", "quick-actions",
+    "call-stats-7d", "enrichment-trend-7d", "crm-status-distribution",
+  ]);
 
   const rendered: React.ReactNode[] = [];
   let i = 0;
@@ -73,13 +77,17 @@ export default async function DashboardPage() {
 
 function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboardData>>): React.ReactNode {
   switch (key) {
+    case "my-day": return <MyDayWidget data={data} />;
     case "pipeline": return <PipelineWidget data={data} />;
     case "stats": return <StatsWidget data={data} />;
     case "quick-actions": return <QuickActionsWidget data={data} />;
     case "recent-leads": return <RecentLeadsWidget data={data} />;
     case "recent-activity": return <RecentActivityWidget data={data} />;
     case "crm-queue": return <CrmQueueWidget data={data} />;
+    case "crm-status-distribution": return <CrmStatusDistributionWidget data={data} />;
     case "todays-calls": return <TodaysCallsWidget data={data} />;
+    case "call-stats-7d": return <CallStats7dWidget data={data} />;
+    case "enrichment-trend-7d": return <EnrichmentTrend7dWidget data={data} />;
     default: return null;
   }
 }

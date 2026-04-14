@@ -23,10 +23,16 @@ export async function POST(request: Request) {
     return new Response(`Invalid signature: ${verify.reason}`, { status: 401 });
   }
   if (!verify.verified) {
-    // Kein Secret gesetzt — akzeptiere trotzdem, aber deutlich loggen.
-    // Der Endpoint ist damit offen für jeden, der die URL kennt. Secret empfohlen.
+    // Production: Signatur ist Pflicht. Ohne Secret ist der Endpoint sonst
+    // offen für jeden, der die URL kennt → Manipulation von Call-Status.
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[phonemondo:webhook] Abgelehnt — PHONEMONDO_WEBHOOK_SECRET nicht gesetzt.",
+      );
+      return new Response("Webhook secret not configured", { status: 503 });
+    }
     console.warn(
-      "[phonemondo:webhook] Event wird ohne Signatur-Prüfung akzeptiert " +
+      "[phonemondo:webhook] Dev-Modus: Event ohne Signatur akzeptiert " +
       "(PHONEMONDO_WEBHOOK_SECRET nicht gesetzt).",
     );
   }

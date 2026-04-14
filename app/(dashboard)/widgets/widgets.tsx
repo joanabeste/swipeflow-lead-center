@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react";
+import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun } from "lucide-react";
 import type { DashboardData } from "./data";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -281,4 +281,195 @@ export function TodaysCallsWidget({ data }: { data: DashboardData }) {
       </div>
     </Card>
   );
+}
+
+// ─── Mein Tag ────────────────────────────────────────────────
+
+export function MyDayWidget({ data }: { data: DashboardData }) {
+  const m = data.myDay;
+  const greeting = greetingForHour(new Date().getHours());
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <Sun className="h-4 w-4 text-amber-500" />
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{greeting}</p>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-3">
+        <MyDayMetric icon={Phone} label="Deine Anrufe heute" value={m.callsToday} accent="text-emerald-600 dark:text-emerald-400" />
+        <MyDayMetric icon={StickyNote} label="Deine Notizen heute" value={m.notesToday} accent="text-blue-600 dark:text-blue-400" />
+        <MyDayMetric icon={CheckSquare} label="Offene CRM-Todos" value={m.openTodos} accent="text-primary" link="/crm?crm_status=todo" />
+      </div>
+    </Card>
+  );
+}
+
+function MyDayMetric({
+  icon: Icon, label, value, accent, link,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string; value: number; accent?: string; link?: string;
+}) {
+  const inner = (
+    <>
+      <div className="flex items-center gap-1.5">
+        <Icon className={`h-3.5 w-3.5 ${accent ?? "text-gray-500"}`} />
+        <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+      </div>
+      <p className={`mt-1 text-2xl font-bold ${accent ?? ""}`}>{value}</p>
+    </>
+  );
+  if (link) {
+    return (
+      <Link href={link} className="rounded-xl border border-gray-100 p-3 transition hover:border-primary/40 hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/[0.03]">
+        {inner}
+      </Link>
+    );
+  }
+  return <div className="rounded-xl border border-gray-100 p-3 dark:border-[#2c2c2e]">{inner}</div>;
+}
+
+function greetingForHour(h: number): string {
+  if (h < 5) return "Noch wach?";
+  if (h < 11) return "Guten Morgen";
+  if (h < 14) return "Mittag";
+  if (h < 18) return "Nachmittag";
+  return "Guten Abend";
+}
+
+// ─── Anrufe (7 Tage) ────────────────────────────────────────────────
+
+export function CallStats7dWidget({ data }: { data: DashboardData }) {
+  const maxDaily = Math.max(1, ...data.callsByDay.map((d) => d.outbound + d.inbound + d.missed));
+  const totalInbound = data.callsByDay.reduce((s, d) => s + d.inbound, 0);
+  const totalOutbound = data.callsByDay.reduce((s, d) => s + d.outbound, 0);
+  const totalMissed = data.callsByDay.reduce((s, d) => s + d.missed, 0);
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Anrufe (7 Tage)</p>
+          <p className="mt-0.5 text-lg font-bold">{data.callsTotal7d} gesamt</p>
+        </div>
+        <div className="flex gap-3 text-xs">
+          <LegendDot color="bg-emerald-500" label={`Ausgehend ${totalOutbound}`} />
+          <LegendDot color="bg-blue-500" label={`Eingehend ${totalInbound}`} />
+          <LegendDot color="bg-red-400" label={`Verpasst ${totalMissed}`} />
+        </div>
+      </div>
+      <div className="mt-5 flex h-28 items-end gap-1.5">
+        {data.callsByDay.map((d) => {
+          const total = d.outbound + d.inbound + d.missed;
+          const h = (total / maxDaily) * 100;
+          return (
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-col justify-end" style={{ height: "6rem" }}>
+                <div className="flex w-full flex-col overflow-hidden rounded-t-md" style={{ height: `${h}%` }}>
+                  {d.outbound > 0 && <div className="bg-emerald-500" style={{ flexGrow: d.outbound }} title={`Ausgehend: ${d.outbound}`} />}
+                  {d.inbound > 0 && <div className="bg-blue-500" style={{ flexGrow: d.inbound }} title={`Eingehend: ${d.inbound}`} />}
+                  {d.missed > 0 && <div className="bg-red-400" style={{ flexGrow: d.missed }} title={`Verpasst: ${d.missed}`} />}
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-400">{weekdayShort(d.date)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Enrichments (7 Tage) ───────────────────────────────────────
+
+export function EnrichmentTrend7dWidget({ data }: { data: DashboardData }) {
+  const maxDaily = Math.max(1, ...data.enrichmentsByDay.map((d) => d.completed + d.failed));
+  const totalOk = data.enrichmentsByDay.reduce((s, d) => s + d.completed, 0);
+  const totalFail = data.enrichmentsByDay.reduce((s, d) => s + d.failed, 0);
+  const rate = totalOk + totalFail > 0 ? Math.round((totalOk / (totalOk + totalFail)) * 100) : 0;
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Anreicherungen (7 Tage)</p>
+          <p className="mt-0.5 text-lg font-bold">{rate}% Erfolgsquote</p>
+        </div>
+        <div className="flex gap-3 text-xs">
+          <LegendDot color="bg-emerald-500" label={`Erfolg ${totalOk}`} />
+          <LegendDot color="bg-red-400" label={`Fehler ${totalFail}`} />
+        </div>
+      </div>
+      <div className="mt-5 flex h-28 items-end gap-1.5">
+        {data.enrichmentsByDay.map((d) => {
+          const total = d.completed + d.failed;
+          const h = (total / maxDaily) * 100;
+          return (
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-col justify-end" style={{ height: "6rem" }}>
+                <div className="flex w-full flex-col overflow-hidden rounded-t-md" style={{ height: `${h}%` }}>
+                  {d.completed > 0 && <div className="bg-emerald-500" style={{ flexGrow: d.completed }} title={`Erfolg: ${d.completed}`} />}
+                  {d.failed > 0 && <div className="bg-red-400" style={{ flexGrow: d.failed }} title={`Fehler: ${d.failed}`} />}
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-400">{weekdayShort(d.date)}</p>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─── CRM-Status-Verteilung ──────────────────────────────────────
+
+export function CrmStatusDistributionWidget({ data }: { data: DashboardData }) {
+  const total = data.crmStatusDistribution.reduce((s, d) => s + d.count, 0);
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">CRM-Status-Verteilung</p>
+        <p className="text-sm font-bold">{total} Leads</p>
+      </div>
+      {data.crmStatusDistribution.length === 0 ? (
+        <p className="mt-4 text-center text-sm text-gray-400">Noch keine CRM-Status konfiguriert.</p>
+      ) : (
+        <div className="mt-4 space-y-2.5">
+          {data.crmStatusDistribution.map((s) => {
+            const pct = total > 0 ? (s.count / total) * 100 : 0;
+            return (
+              <Link
+                key={s.id}
+                href={`/crm?crm_status=${s.id}`}
+                className="block rounded-lg p-1.5 transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+              >
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: s.color }} />
+                    <span className="font-medium">{s.label}</span>
+                  </div>
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {s.count} {total > 0 && <span className="ml-1 text-gray-400">· {pct.toFixed(0)}%</span>}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                  <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: s.color }} />
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400">
+      <span className={`inline-block h-2.5 w-2.5 rounded-full ${color}`} />
+      {label}
+    </span>
+  );
+}
+
+function weekdayShort(dateIso: string): string {
+  return new Date(dateIso).toLocaleDateString("de-DE", { weekday: "short" });
 }
