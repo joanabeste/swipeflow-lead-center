@@ -3,15 +3,22 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
+import type { EnrichmentConfig, ServiceMode } from "@/lib/types";
 
-export async function enrichLeadAction(leadId: string) {
+export async function enrichLeadAction(
+  leadId: string,
+  config?: EnrichmentConfig,
+  serviceMode?: ServiceMode,
+) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const result = await enrichLead(leadId, user?.id ?? null);
+  const result = await enrichLead(leadId, user?.id ?? null, config, serviceMode);
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${leadId}`);
 
   if (!result.success) {
     return { error: result.error ?? "Anreicherung fehlgeschlagen." };

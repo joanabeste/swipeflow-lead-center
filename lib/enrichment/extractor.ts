@@ -131,6 +131,14 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   }
   parts.push(rules.join(" "));
 
+  if (config.focus_query && config.focus_query.trim()) {
+    parts.push(
+      `SPEZIELLER FOKUS (Priorität 1): ${config.focus_query.trim()}. ` +
+      `Suche diese Information zuerst und gründlich — auch in Impressum, Kontakt-, Team- und Karriereseiten. ` +
+      `Wenn in den Seiten sichtbar, MUSS das Ergebnis im JSON stehen.`,
+    );
+  }
+
   return parts.join("\n");
 }
 

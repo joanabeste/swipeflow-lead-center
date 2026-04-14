@@ -1,17 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Sparkles, Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
 } from "@/lib/types";
+import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
-import { enrichLeadAction } from "../../leads/enrichment-actions";
+import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
+import { useServiceMode } from "@/lib/service-mode";
 
 type NoteRow = LeadNote & { profiles: { name: string } | null };
 type CallRow = LeadCall & { profiles: { name: string } | null };
@@ -39,18 +40,13 @@ interface Props {
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq,
 }: Props) {
-  const router = useRouter();
-  const [enrichPending, startEnrich] = useTransition();
-  const [enrichError, setEnrichError] = useState<string | null>(null);
+  const { mode: serviceMode } = useServiceMode();
+  const [enrichModalOpen, setEnrichModalOpen] = useState(false);
+  const [enrichError] = useState<string | null>(null);
   const latestEnrichment = enrichments[0] ?? null;
 
   function handleEnrich() {
-    setEnrichError(null);
-    startEnrich(async () => {
-      const res = await enrichLeadAction(lead.id);
-      if (res?.error) setEnrichError(res.error);
-      else router.refresh();
-    });
+    setEnrichModalOpen(true);
   }
 
   return (
@@ -67,11 +63,10 @@ export function CrmLeadDetail({
         <div className="flex items-center gap-2">
           <button
             onClick={handleEnrich}
-            disabled={enrichPending}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
           >
-            {enrichPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            {enrichPending ? "Anreichern…" : "Erneut anreichern"}
+            <Sparkles className="h-3.5 w-3.5" />
+            Anreichern…
           </button>
         </div>
       </div>
@@ -136,6 +131,16 @@ export function CrmLeadDetail({
           />
         }
       />
+
+      {enrichModalOpen && (
+        <SingleLeadEnrichModal
+          leadId={lead.id}
+          leadName={lead.company_name}
+          defaultConfig={{ ...DEFAULT_ENRICHMENT_CONFIG }}
+          serviceMode={serviceMode}
+          onClose={() => setEnrichModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

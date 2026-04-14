@@ -23,9 +23,11 @@ import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, Lea
 import type { HqLocation } from "@/lib/app-settings";
 import { haversineKm, distanceCategory } from "@/lib/geo/distance";
 import { updateLead, findSimilarLeads, mergeLeads } from "./actions";
-import { enrichLeadAction } from "./enrichment-actions";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { ResizableColumns } from "@/components/resizable-columns";
+import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
+import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
+import { useServiceMode } from "@/lib/service-mode";
 
 // Leaflet-Map nur clientseitig laden — Zugriff auf `window`
 const LeadMap = dynamic(() => import("./lead-map"), { ssr: false, loading: () => (
@@ -147,17 +149,13 @@ export function LeadProfilePanel({
     });
   }
 
+  const { mode: serviceMode } = useServiceMode();
+  const [enrichModalOpen, setEnrichModalOpen] = useState(false);
+
   function handleEnrich() {
     setEnrichError(null);
     setEnrichSuccess(false);
-    startEnrichTransition(async () => {
-      const result = await enrichLeadAction(lead.id);
-      if (result.error) {
-        setEnrichError(result.error);
-      } else {
-        setEnrichSuccess(true);
-      }
-    });
+    setEnrichModalOpen(true);
   }
 
   async function handleSubmit(
@@ -608,6 +606,16 @@ export function LeadProfilePanel({
       );
       })()}
       </div>
+
+      {enrichModalOpen && (
+        <SingleLeadEnrichModal
+          leadId={lead.id}
+          leadName={lead.company_name}
+          defaultConfig={{ ...DEFAULT_ENRICHMENT_CONFIG }}
+          serviceMode={serviceMode}
+          onClose={() => setEnrichModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

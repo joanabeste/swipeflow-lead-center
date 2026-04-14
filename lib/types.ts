@@ -300,6 +300,10 @@ export interface EnrichmentConfig {
   company_details: boolean;
   /** Optional: wenn gesetzt, werden NUR diese Firmendaten-Felder gesucht/überschrieben */
   company_details_fields?: CompanyDetailField[];
+  /** Optional: Freitext-Hinweis an das LLM, worauf es besonders achten soll.
+   *  Beispiel: "Suche gezielt nach Ausbildungsplätzen und HR-Ansprechpartner.
+   *  Gründungsjahr ist wichtig." Wird dem System-Prompt als Extra-Regel angehängt. */
+  focus_query?: string;
 }
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {
