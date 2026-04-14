@@ -1,6 +1,7 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export async function changeMyPassword(
   _prev: { error?: string; success?: boolean } | undefined,
@@ -35,5 +36,27 @@ export async function changeMyPassword(
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { error: "Passwort konnte nicht geändert werden." };
 
+  return { success: true };
+}
+
+export async function savePhonemondoExtension(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const raw = (formData.get("extension") as string | null) ?? "";
+  const extension = raw.trim() || null;
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("profiles")
+    .update({ phonemondo_extension: extension, updated_at: new Date().toISOString() })
+    .eq("id", user.id);
+  if (error) return { error: "Konnte nicht gespeichert werden." };
+
+  revalidatePath("/mein-konto");
   return { success: true };
 }
