@@ -5,6 +5,7 @@ import { extractFromPages } from "./extractor";
 import { findCompanyWebsite } from "./website-finder";
 import { analyzeWebsite } from "./website-analyzer";
 import { getWebdevScoringConfig } from "./webdev-scoring";
+import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
@@ -219,9 +220,19 @@ export async function enrichLead(
         leadUpdates.status = "qualified";
       }
     } else {
-      // Recruiting: Qualifiziert wenn Kontakt mit E-Mail + Pflichtfelder
+      // Recruiting: Qualifiziert wenn Scoring-Kriterien UND Pflichtfelder erfüllt
+      const scoring = await getRecruitingScoringConfig();
+
       const hasContactWithEmail = result.contacts.some((c) => !!c.email);
-      if (hasContactWithEmail) {
+      const hasAnyContact = result.contacts.length > 0;
+      const hasHrContact = result.contacts.some((c) => isHrContact(c.role));
+      const jobsCount = result.job_postings.length;
+
+      const contactOk = scoring.require_contact_email ? hasContactWithEmail : hasAnyContact;
+      const hrOk = !scoring.require_hr_contact || hasHrContact;
+      const jobsOk = jobsCount >= scoring.min_job_postings_to_qualify;
+
+      if (contactOk && hrOk && jobsOk) {
         const { data: defaultProfile } = await db
           .from("required_field_profiles")
           .select("required_fields")

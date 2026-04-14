@@ -254,6 +254,18 @@ export interface WebdevScoringConfig {
   check_outdated_html: boolean;
 }
 
+export interface RecruitingScoringConfig {
+  min_job_postings_to_qualify: number;
+  require_hr_contact: boolean;
+  require_contact_email: boolean;
+}
+
+export const DEFAULT_RECRUITING_SCORING: RecruitingScoringConfig = {
+  min_job_postings_to_qualify: 1,
+  require_hr_contact: false,
+  require_contact_email: true,
+};
+
 export const DEFAULT_WEBDEV_SCORING: WebdevScoringConfig = {
   strictness: "normal",
   design_focus: null,

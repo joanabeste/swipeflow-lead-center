@@ -1,17 +1,104 @@
 "use client";
 
 import { useActionState } from "react";
-import { Plus, Trash2, Sparkles, Check, Globe, MapPin } from "lucide-react";
+import { Plus, Trash2, Sparkles, Check, Globe, MapPin, Briefcase } from "lucide-react";
 import { hubspotFields } from "@/lib/hubspot/schema";
-import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode, WebdevScoringConfig } from "@/lib/types";
+import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode, WebdevScoringConfig, RecruitingScoringConfig } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
-import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring, saveHqLocation } from "./actions";
+import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring, saveRecruitingScoring, saveHqLocation } from "./actions";
 
 interface Props {
   fieldProfiles: RequiredFieldProfile[];
   enrichmentDefaults: Record<ServiceMode, EnrichmentConfig>;
   webdevScoring: WebdevScoringConfig;
+  recruitingScoring: RecruitingScoringConfig;
   hq: HqLocation;
+}
+
+function RecruitingScoringForm({ config }: { config: RecruitingScoringConfig }) {
+  const [state, formAction, pending] = useActionState(saveRecruitingScoring, undefined);
+
+  return (
+    <form action={formAction} className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+      <div className="flex items-center gap-2">
+        <Briefcase className="h-4 w-4 text-primary" />
+        <h2 className="text-lg font-bold">Recruiting-Bewertung</h2>
+      </div>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Wann soll ein Lead im Recruiting-Modus automatisch als qualifiziert gelten?
+      </p>
+
+      {state?.error && (
+        <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          {state.error}
+        </div>
+      )}
+      {state?.success && (
+        <div className="mt-3 inline-flex items-center gap-1 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400">
+          <Check className="h-3.5 w-3.5" />
+          Gespeichert
+        </div>
+      )}
+
+      <div className="mt-5">
+        <label htmlFor="min_jobs" className="block text-sm font-medium">
+          Mindest-Stellenanzeigen für Qualifizierung
+        </label>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Eine Firma muss beim Enrichment mindestens so viele offene Stellen haben, um automatisch qualifiziert zu werden. 0 = keine Stellen nötig.
+        </p>
+        <input
+          id="min_jobs"
+          name="min_job_postings_to_qualify"
+          type="number"
+          min={0}
+          max={50}
+          defaultValue={config.min_job_postings_to_qualify}
+          className="mt-1 w-32 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
+        />
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <label className="flex items-start gap-2 rounded-md border border-gray-200 p-3 text-sm dark:border-[#2c2c2e]">
+          <input
+            type="checkbox"
+            name="require_contact_email"
+            defaultChecked={config.require_contact_email}
+            className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+          />
+          <span>
+            <span className="block font-medium">E-Mail-Adresse beim Kontakt erforderlich</span>
+            <span className="block text-xs text-gray-500 dark:text-gray-400">
+              Lead gilt nur als qualifiziert, wenn mindestens ein Kontakt eine E-Mail hat (ansonsten reicht irgendein Kontakt).
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-2 rounded-md border border-gray-200 p-3 text-sm dark:border-[#2c2c2e]">
+          <input
+            type="checkbox"
+            name="require_hr_contact"
+            defaultChecked={config.require_hr_contact}
+            className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+          />
+          <span>
+            <span className="block font-medium">HR-Kontakt erforderlich</span>
+            <span className="block text-xs text-gray-500 dark:text-gray-400">
+              Nur qualifizieren, wenn mindestens ein Kontakt als HR/Personal/Recruiting/Talent/Ausbildung gelabelt ist. Strenger, aber gezielter.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <button
+        type="submit"
+        disabled={pending}
+        className="mt-5 inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+      >
+        {pending ? "Speichern…" : "Recruiting-Bewertung speichern"}
+      </button>
+    </form>
+  );
 }
 
 function HqLocationCard({ hq }: { hq: HqLocation }) {
@@ -307,7 +394,7 @@ function EnrichmentDefaultsCard({
   );
 }
 
-export function SettingsManager({ fieldProfiles, enrichmentDefaults, webdevScoring, hq }: Props) {
+export function SettingsManager({ fieldProfiles, enrichmentDefaults, webdevScoring, recruitingScoring, hq }: Props) {
   const [state, formAction, pending] = useActionState(saveFieldProfile, undefined);
 
   return (
@@ -337,6 +424,9 @@ export function SettingsManager({ fieldProfiles, enrichmentDefaults, webdevScori
           />
         </div>
       </div>
+
+      {/* Recruiting-Bewertung */}
+      <RecruitingScoringForm config={recruitingScoring} />
 
       {/* Webdesign-Bewertung */}
       <WebdevScoringForm config={webdevScoring} />

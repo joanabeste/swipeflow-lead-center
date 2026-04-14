@@ -169,6 +169,50 @@ export async function saveWebdevScoring(
   return { success: true };
 }
 
+export async function saveRecruitingScoring(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const db = createServiceClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: profile } = await db
+    .from("profiles")
+    .select("role")
+    .eq("id", user!.id)
+    .single();
+  if (profile?.role !== "admin") {
+    return { error: "Nur Administratoren dürfen die Recruiting-Bewertung ändern." };
+  }
+
+  const minJobs = Math.max(0, parseInt((formData.get("min_job_postings_to_qualify") as string) ?? "1", 10) || 1);
+
+  const { error } = await db.from("recruiting_scoring_config").upsert(
+    {
+      id: 1,
+      min_job_postings_to_qualify: minJobs,
+      require_hr_contact: formData.get("require_hr_contact") === "on",
+      require_contact_email: formData.get("require_contact_email") === "on",
+      updated_by: user?.id ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: user?.id ?? null,
+    action: "settings.recruiting_scoring_updated",
+    entityType: "recruiting_scoring_config",
+    details: { minJobs },
+  });
+
+  revalidatePath("/einstellungen");
+  return { success: true };
+}
+
 export async function saveHqLocation(
   _prev: { error?: string; success?: boolean } | undefined,
   formData: FormData,

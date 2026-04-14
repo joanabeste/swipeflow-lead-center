@@ -4,6 +4,7 @@ import { SettingsManager } from "./settings-manager";
 import { UserManager } from "../nutzer/user-manager";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
+import { getRecruitingScoringConfig } from "@/lib/enrichment/recruiting-scoring";
 import { getHqLocation } from "@/lib/app-settings";
 
 export default async function EinstellungenPage() {
@@ -27,11 +28,12 @@ export default async function EinstellungenPage() {
     );
   }
 
-  const [{ data: fieldProfiles }, { data: profiles }, enrichmentDefaults, webdevScoring, hq] = await Promise.all([
+  const [{ data: fieldProfiles }, { data: profiles }, enrichmentDefaults, webdevScoring, recruitingScoring, hq] = await Promise.all([
     supabase.from("required_field_profiles").select("*").order("name"),
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
     getAllEnrichmentDefaults(),
     getWebdevScoringConfig(),
+    getRecruitingScoringConfig(),
     getHqLocation(),
   ]);
 
@@ -46,6 +48,7 @@ export default async function EinstellungenPage() {
         fieldProfiles={fieldProfiles ?? []}
         enrichmentDefaults={enrichmentDefaults}
         webdevScoring={webdevScoring}
+        recruitingScoring={recruitingScoring}
         hq={hq}
       />
 

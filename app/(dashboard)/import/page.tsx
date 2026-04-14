@@ -27,12 +27,13 @@ export default async function ImportPage() {
         <ImportTabs templates={templates ?? []} />
       </div>
 
-      {imports && imports.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-lg font-bold">Vergangene Imports</h2>
-          <ImportHistory imports={imports} />
-        </div>
-      )}
+      <div className="mt-10">
+        <h2 className="text-lg font-bold">Vergangene Imports</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Zuletzt 20 Imports. Lösche einen Import, wenn du alle zugehörigen Leads wieder entfernen willst.
+        </p>
+        <ImportHistory imports={imports ?? []} />
+      </div>
     </div>
   );
 }
