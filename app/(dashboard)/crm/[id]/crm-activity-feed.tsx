@@ -9,8 +9,9 @@ import {
 import type {
   CustomLeadStatus, LeadContact, LeadNote, LeadCall, LeadEnrichment, LeadChange, CallDirection, CallStatus,
 } from "@/lib/types";
+import { Trash2, Pencil, Save, Check } from "lucide-react";
 import { CrmStatusBadge } from "../status-badge";
-import { addNote, logCall, startCall, updateCrmStatus } from "../actions";
+import { addNote, deleteNote, logCall, startCall, updateCrmStatus, updateNote } from "../actions";
 import { useToastContext } from "../../toast-provider";
 
 type NoteRow = LeadNote & { profiles: { name: string } | null };
@@ -70,7 +71,7 @@ export function CrmActivityFeed({
     items.push({
       id: `n-${n.id}`, kind: "note", at: n.created_at,
       author: n.profiles?.name ?? null,
-      render: () => <NoteItem note={n} />,
+      render: () => <NoteItem note={n} leadId={leadId} />,
     });
   }
   for (const c of calls) {
@@ -309,9 +310,97 @@ function filterLabel(kind: ActivityKind): string {
 
 // ─── Activity Items ──────────────────────────────────────────
 
-function NoteItem({ note }: { note: NoteRow }) {
+function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [editing, setEditing] = useState(false);
+  const [content, setContent] = useState(note.content);
+  const [pending, startTransition] = useTransition();
+
+  function handleSave() {
+    if (!content.trim()) return;
+    startTransition(async () => {
+      const res = await updateNote(note.id, leadId, content);
+      if (res.error) {
+        addToast(res.error, "error");
+      } else {
+        addToast("Notiz aktualisiert", "success");
+        setEditing(false);
+        router.refresh();
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm("Notiz wirklich löschen?")) return;
+    startTransition(async () => {
+      const res = await deleteNote(note.id, leadId);
+      if (res.error) addToast(res.error, "error");
+      else {
+        addToast("Notiz gelöscht", "success");
+        router.refresh();
+      }
+    });
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={3}
+          autoFocus
+          className="w-full resize-none rounded-md border border-amber-200 bg-amber-50/30 p-2 text-sm dark:border-amber-900/40 dark:bg-amber-900/5"
+        />
+        <div className="mt-1.5 flex justify-end gap-1">
+          <button
+            onClick={() => { setEditing(false); setContent(note.content); }}
+            className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={pending || !content.trim() || content === note.content}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+          >
+            <Save className="h-3 w-3" />
+            {pending ? "Speichern…" : "Speichern"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{note.content}</p>
+    <div className="group relative">
+      <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{note.content}</p>
+      {note.updated_at && note.updated_at !== note.created_at && (
+        <p className="mt-0.5 text-[10px] text-gray-400">
+          bearbeitet {new Date(note.updated_at).toLocaleString("de-DE")}
+        </p>
+      )}
+      <div className="absolute -right-1 -top-1 flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+        <button
+          onClick={() => setEditing(true)}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          title="Bearbeiten"
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={pending}
+          className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+          title="Löschen"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+      {false && <Check className="hidden" />}
+    </div>
   );
 }
 

@@ -82,6 +82,33 @@ export async function addNote(leadId: string, content: string) {
   return { success: true, note: data };
 }
 
+export async function updateNote(noteId: string, leadId: string, content: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (!content.trim()) return { error: "Notiz darf nicht leer sein." };
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("lead_notes")
+    .update({ content: content.trim(), updated_at: new Date().toISOString() })
+    .eq("id", noteId);
+  if (error) {
+    console.error("[updateNote] failed:", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.note_updated",
+    entityType: "lead",
+    entityId: leadId,
+    details: { note_id: noteId },
+  });
+
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
 export async function deleteNote(noteId: string, leadId: string) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
