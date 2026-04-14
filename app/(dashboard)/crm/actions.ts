@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { triggerCall, isPhoneMondoConfigured } from "@/lib/phonemondo/client";
+import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
 import type { CallDirection, CallStatus } from "@/lib/types";
 
 async function currentUser() {
@@ -231,6 +232,73 @@ export async function startCall(input: {
   revalidatePath(`/crm/${input.leadId}`);
   revalidatePath("/crm");
   return { success: true, callId: callRow.id, mondoCallId };
+}
+
+export async function createManualLead(input: {
+  companyName: string;
+  domain?: string | null;
+  website?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  street?: string | null;
+  zip?: string | null;
+  city?: string | null;
+  industry?: string | null;
+  companySize?: string | null;
+  crmStatusId?: string | null;
+}) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (!input.companyName.trim()) return { error: "Firmenname fehlt." };
+
+  const db = createServiceClient();
+  const website = normalizeUrl(input.website ?? null);
+  const domain = input.domain?.trim() || extractDomain(website) || extractDomain(input.email ?? null);
+
+  const { data, error } = await db
+    .from("leads")
+    .insert({
+      company_name: input.companyName.trim(),
+      domain: domain || null,
+      website: website,
+      phone: normalizePhone(input.phone ?? null),
+      email: normalizeEmail(input.email ?? null),
+      street: input.street?.trim() || null,
+      zip: input.zip?.trim() || null,
+      city: input.city?.trim() || null,
+      country: "Deutschland",
+      industry: input.industry?.trim() || null,
+      company_size: input.companySize?.trim() || null,
+      source_type: "manual",
+      status: "qualified",
+      crm_status_id: input.crmStatusId || "todo",
+      created_by: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[createManualLead] insert failed:", error);
+    if (/constraint.*source_type/i.test(error.message)) {
+      return { error: "Migration 021 muss in Supabase ausgeführt werden (source_type=manual)." };
+    }
+    if (/column.*crm_status_id/i.test(error.message)) {
+      return { error: "Migration 017 muss in Supabase ausgeführt werden (crm_status_id)." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.created_manual",
+    entityType: "lead",
+    entityId: data.id,
+    details: { company_name: data.company_name, source: "crm" },
+  });
+
+  revalidatePath("/crm");
+  revalidatePath("/leads");
+  return { success: true, leadId: data.id as string };
 }
 
 export async function updateCallNotes(callId: string, leadId: string, notes: string) {

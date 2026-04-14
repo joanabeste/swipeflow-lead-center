@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, Trash2, Phone, StickyNote, MessageSquare } from "lucide-react";
+import { Download, Trash2, Phone, StickyNote, MessageSquare, Plus } from "lucide-react";
 import type { CustomLeadStatus } from "@/lib/types";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads } from "../leads/actions";
 import { CrmStatusBadge } from "./status-badge";
+import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
 import { SearchBox } from "@/components/table/search-box";
 import { TablePagination } from "@/components/table/pagination";
@@ -75,6 +76,7 @@ export function CrmManager({
   const [lastIndex, setLastIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>(activeStatuses[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
+  const [showNewLead, setShowNewLead] = useState(false);
 
   const columns = ALL_COLUMNS.filter((c) => visibleCols.includes(c.key));
 
@@ -172,15 +174,26 @@ export function CrmManager({
         })}
       </div>
 
-      {/* Toolbar: Suche + Spalten-Picker */}
+      {/* Toolbar: Suche + Neuer Lead + Spalten-Picker */}
       <div className="flex items-center gap-3">
         <SearchBox
           defaultValue={currentQuery}
           placeholder="Suche nach Firmenname, Domain oder Ort…"
           onSubmit={(v) => updateParams({ q: v, page: "1" })}
         />
+        <button
+          onClick={() => setShowNewLead(true)}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-dark"
+        >
+          <Plus className="h-4 w-4" />
+          Neuer Lead
+        </button>
         <ColumnPicker columns={ALL_COLUMNS} visible={visibleCols} onToggle={toggleColumn} />
       </div>
+
+      {showNewLead && (
+        <NewLeadModal statuses={statuses} onClose={() => setShowNewLead(false)} />
+      )}
 
       {/* Aktive Spalten-Filter */}
       {Object.keys(currentFilters).length > 0 && (

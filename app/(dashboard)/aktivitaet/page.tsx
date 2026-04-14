@@ -6,6 +6,7 @@ const actionLabels: Record<string, string> = {
   "lead.updated": "Lead aktualisiert",
   "lead.bulk_status_update": "Status geändert",
   "lead.crm_status_changed": "CRM-Status geändert",
+  "lead.created_manual": "Lead manuell angelegt",
   "lead.note_added": "Notiz hinzugefügt",
   "lead.note_deleted": "Notiz gelöscht",
   "lead.call_logged": "Anruf protokolliert",

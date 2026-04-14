@@ -25,7 +25,7 @@ export type LeadStatus =
   | "qualified"
   | "exported";
 
-export type LeadSourceType = "csv" | "url" | "directory";
+export type LeadSourceType = "csv" | "url" | "directory" | "manual";
 
 export interface Lead {
   id: string;
