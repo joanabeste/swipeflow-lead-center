@@ -66,7 +66,9 @@ export default async function DashboardLayout({
       </aside>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      {/* min-h-0 + min-w-0: ohne das bläht langer Content das flex-Child über
+          100vh auf, body scrollt selbst und die Sidebar wandert aus dem Viewport. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex items-center justify-between border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
           <ServiceModeSwitch />
           <GlobalSearch />
