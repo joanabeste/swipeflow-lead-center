@@ -381,21 +381,23 @@ function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
           bearbeitet {new Date(note.updated_at).toLocaleString("de-DE")}
         </p>
       )}
-      <div className="absolute -right-1 -top-1 flex items-center gap-0.5">
+      <div className="mt-2 flex items-center gap-1">
         <button
           onClick={() => setEditing(true)}
-          className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-gray-100 hover:text-gray-700 hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
-          title="Bearbeiten"
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-primary hover:bg-primary/10 hover:text-primary dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-primary/20"
+          title="Notiz bearbeiten"
         >
-          <Pencil className="h-3.5 w-3.5" />
+          <Pencil className="h-3 w-3" />
+          Bearbeiten
         </button>
         <button
           onClick={handleDelete}
           disabled={pending}
-          className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-red-50 hover:text-red-600 hover:opacity-100 dark:hover:bg-red-900/20"
-          title="Löschen"
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:border-red-800 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+          title="Notiz löschen"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2 className="h-3 w-3" />
+          Löschen
         </button>
       </div>
       {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
