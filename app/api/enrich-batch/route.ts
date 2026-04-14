@@ -50,8 +50,8 @@ export async function POST(request: Request) {
 
         // === Pre-Check: Kann der Lead übersprungen werden? ===
 
-        // 1. Bereits gefiltert/ausgeschlossen
-        if (lead?.blacklist_hit || lead?.status === "filtered" || lead?.status === "cancelled") {
+        // 1. Hart gefiltert (Blacklist) oder explizit gefiltert — keine Re-Evaluation
+        if (lead?.blacklist_hit || lead?.status === "filtered") {
           const reason = lead.cancel_reason || "Bereits ausgeschlossen";
           send({
             type: "complete", leadId, name,
@@ -61,27 +61,31 @@ export async function POST(request: Request) {
           });
           continue;
         }
+        // Hinweis: status='cancelled' wird BEWUSST nicht short-circuit'd —
+        // Re-Enrich soll die Cancel-Rule neu auswerten (z.B. weil seitdem
+        // BA-Stellen importiert wurden oder die Karriereseite Jobs hat).
 
-        // 2. Keine Website
-        if (!lead?.website && !lead?.domain) {
-          send({
-            type: "complete", leadId, name,
-            success: false,
-            error: "Keine Website hinterlegt",
-          });
-          // Vermerk setzen
-          await db.from("leads").update({
-            enrichment_source: "nicht_moeglich:keine_website",
-            updated_at: new Date().toISOString(),
-          }).eq("id", leadId);
-          continue;
-        }
+        // Hinweis: Wenn Website/Domain fehlt, sucht enrichLead sie automatisch
+        // via findCompanyWebsite (Google/DuckDuckGo/Bing). Pre-Skip hier wäre
+        // zu früh — der Finder bekäme keine Chance.
 
         // 3. Cancel-Rules Pre-Check (Import-Phase Regeln — ohne Enrichment nötig)
         // Im Webdev-Modus: Nur Rechtsform/Größe prüfen, keine Stellen-bezogenen Regeln
         if (cancelRules && cancelRules.length > 0 && serviceMode === "recruiting") {
+          // Tatsächliche Counts aus DB — sonst matcht "job_postings_count = 0" gegen
+          // ein nicht existierendes Feld und schließt fälschlich BA-Leads aus.
+          const [{ count: totalJobs }, { count: totalContacts }] = await Promise.all([
+            db.from("lead_job_postings").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
+            db.from("lead_contacts").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
+          ]);
+          const leadForCheck = {
+            ...(lead as Record<string, unknown>),
+            job_postings_count: totalJobs ?? 0,
+            contacts_count: totalContacts ?? 0,
+          };
+
           const preCheck = evaluateCancelRules(
-            lead as unknown as Record<string, unknown>,
+            leadForCheck,
             cancelRules as CancelRule[],
             "import",
           );

@@ -44,6 +44,9 @@ export function preExtract(text: string): PreExtractedData {
     "geschäftsführ", "inhaber", "leitung", "personal", "ansprechpartner",
     "kontakt", "impressum", "tel", "fon", "telefon", "e-mail", "mail@",
     "@", "stellenangebot", "karriere", "job", "vakanz", "stelle",
+    "ausbildung", "azubi", "auszubildende", "praktik", "werkstudent",
+    "trainee", "volontariat", "minijob", "duales studium", "(m/w",
+    "(w/m", "(m/w/d)", "(w/m/d)", "(m/w/x)",
     "gründ", "mitarbeiter", "beschäftigt",
   ];
 

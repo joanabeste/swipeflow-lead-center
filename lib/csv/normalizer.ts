@@ -1,7 +1,10 @@
 /** Normalisiert deutsche Telefonnummern */
 export function normalizePhone(raw: string | null): string | null {
   if (!raw) return null;
-  let phone = raw.replace(/[\s\-\(\)\/]/g, "");
+  // Excel-Apostroph-Prefix ('+49… oder '0…) und andere Nicht-Ziffern/+ am Anfang entfernen,
+  // bevor Format-Logik läuft.
+  let phone = raw.trim().replace(/^['`´]+/, "");
+  phone = phone.replace(/[\s\-\(\)\/]/g, "");
 
   // Deutsche Nummern: 0xxx -> +49xxx
   if (phone.startsWith("0") && !phone.startsWith("00")) {

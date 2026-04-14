@@ -16,10 +16,17 @@ const KNOWN_PATHS: { path: string; category: FetchedPage["category"] }[] = [
   { path: "/about", category: "team" },
   { path: "/about-us", category: "team" },
   { path: "/karriere", category: "karriere" },
+  { path: "/karriere-bei-uns", category: "karriere" },
   { path: "/jobs", category: "karriere" },
+  { path: "/stellen", category: "karriere" },
   { path: "/stellenangebote", category: "karriere" },
+  { path: "/stellenanzeigen", category: "karriere" },
+  { path: "/offene-stellen", category: "karriere" },
   { path: "/career", category: "karriere" },
   { path: "/careers", category: "karriere" },
+  { path: "/jobs-karriere", category: "karriere" },
+  { path: "/unternehmen/karriere", category: "karriere" },
+  { path: "/de/karriere", category: "karriere" },
 ];
 
 const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
@@ -35,6 +42,11 @@ const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
   jobs: "karriere",
   stellen: "karriere",
   stellenangebote: "karriere",
+  stellenanzeigen: "karriere",
+  "offene stellen": "karriere",
+  ausbildung: "karriere",
+  ausbildungsplätze: "karriere",
+  ausbildungsplatz: "karriere",
 };
 
 const MAX_CHARS_PER_PAGE = 8_000; // Reduziert von 15.000 — weniger Rauschen
@@ -109,6 +121,60 @@ export async function fetchCompanyPages(
           foundCategories.add(link.category);
         }
       }
+    }
+  }
+
+  // 4. Falls Karriereseite gefunden, von DORT aus Job-Detail-/Listen-Links folgen
+  // Viele Firmen haben /karriere als Hub mit Links zu /karriere/<job> oder externen Boards.
+  if (needsKarriere) {
+    const karrierePages = pages.filter((p) => p.category === "karriere" && !p.error && p.content);
+    const visitedUrls = new Set(pages.map((p) => p.url));
+    const extraJobUrls: string[] = [];
+    for (const kp of karrierePages) {
+      // Hole Original-HTML noch mal, weil cleaned content keine href-Attribute hat
+      try {
+        const r = await fetch(kp.url, {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          redirect: "follow",
+        });
+        if (!r.ok) continue;
+        const html = await r.text();
+        const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = linkRegex.exec(html)) !== null) {
+          try {
+            const absolute = new URL(m[1], kp.url).toString().split("#")[0];
+            if (visitedUrls.has(absolute)) continue;
+            // Nur interne Links und nur welche, die nach Job-Detail aussehen
+            const text = m[2].replace(/<[^>]+>/g, " ").toLowerCase();
+            const looksLikeJob =
+              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|industriekaufmann|industriemechaniker|werkstudent|praktikum|trainee|duales studium|jobdetail|job-detail|stelle\/|jobs\/|ausbildung-)/i.test(absolute) ||
+              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|werkstudent|praktikum|trainee|duales studium|jetzt bewerben|details|mehr erfahren|zur stelle)/i.test(text);
+            if (!looksLikeJob) continue;
+            // Auch externe Job-Boards erlauben (Personio, Softgarden, d.vinci, Smart Recruiters, Greenhouse)
+            const isExternalBoard = /(personio|softgarden|dvinci|d-vinci|smartrecruiters|greenhouse|workable|recruitee|join\.com|jobs\.[\w-]+\.[a-z]{2,})/i.test(absolute);
+            if (!absolute.startsWith(baseUrl) && !isExternalBoard) continue;
+            extraJobUrls.push(absolute);
+            visitedUrls.add(absolute);
+            if (extraJobUrls.length >= 8) break;
+          } catch {
+            // ignore
+          }
+        }
+        if (extraJobUrls.length >= 8) break;
+      } catch {
+        // ignore karriere-page re-fetch failure
+      }
+    }
+
+    // Bis zu 8 zusätzliche Job-Seiten parallel holen — als "karriere" kategorisiert,
+    // damit ihr Inhalt zusammen mit der Karriere-Hauptseite ans LLM geht.
+    const extraPages = await Promise.all(
+      extraJobUrls.slice(0, 8).map((url) => fetchPage(url, "karriere")),
+    );
+    for (const ep of extraPages) {
+      if (!ep.error && ep.content) pages.push(ep);
     }
   }
 

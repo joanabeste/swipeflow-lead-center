@@ -74,6 +74,11 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
 
   // Regeln
   const rules: string[] = ["Nur echte Daten, null wenn nicht vorhanden."];
+  if (config.job_postings) {
+    rules.push(
+      "job_postings: ALLE offenen Positionen — auch Ausbildung, Duales Studium, Praktikum, Werkstudent, Trainee, Minijob. Titel exakt von der Seite übernehmen (inkl. '(m/w/d)' etc.). Wenn auf der Karriereseite Stellen aufgelistet sind, MUSS jede einzeln im Array stehen.",
+    );
+  }
   if (config.company_details) {
     const allowlist = config.company_details_fields;
     const includeField = (f: import("@/lib/types").CompanyDetailField) => !allowlist || allowlist.includes(f);
@@ -108,7 +113,7 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
 }
 
 // Token-Limits
-const MAX_TOTAL_CHARS = 25_000; // Weiter reduziert dank Pre-Extraktion
+const MAX_TOTAL_CHARS = 40_000; // erhöht, damit mehrere Karriere-/Job-Detailseiten reinpassen
 const CATEGORY_LIMITS: Record<string, number> = {
   impressum: 5_000,
   kontakt: 3_000,
@@ -117,6 +122,8 @@ const CATEGORY_LIMITS: Record<string, number> = {
   homepage: 2_000,
   other: 2_000,
 };
+// Pro-Seite-Limit für Folge-Karriereseiten (Job-Detail-Links nach der Hauptseite)
+const KARRIERE_FOLLOWUP_LIMIT = 3_500;
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 3_000;
@@ -164,17 +171,46 @@ export async function extractFromPages(
   let totalChars = 0;
   const pageTexts: string[] = [];
 
+  let karriereSeen = 0;
   for (const page of relevantPages) {
     const remaining = MAX_TOTAL_CHARS - totalChars;
     if (remaining <= 0) break;
-    const limit = Math.min(remaining, CATEGORY_LIMITS[page.category] ?? 2_000);
-    const compressed = compressPageContent(page.content, limit);
+    // Folge-Karriereseiten bekommen weniger Budget als die erste, damit Detail-
+    // Seiten nicht den ganzen Kontext fressen.
+    const baseLimit =
+      page.category === "karriere" && karriereSeen > 0
+        ? KARRIERE_FOLLOWUP_LIMIT
+        : CATEGORY_LIMITS[page.category] ?? 2_000;
+    const limit = Math.min(remaining, baseLimit);
+    // Karriereseiten NICHT keyword-filtern — die ganze Seite ist relevant.
+    // Sonst werden Joblisten ohne "Stelle"/"Job"-Wortlaut (z.B. nur "Ausbildung
+    // zum Industriekaufmann (m/w/d)") aussortiert.
+    const compressed =
+      page.category === "karriere"
+        ? page.content.slice(0, limit)
+        : compressPageContent(page.content, limit);
     pageTexts.push(`[${page.category}|${page.url}]\n${compressed}`);
     totalChars += compressed.length;
+    if (page.category === "karriere") karriereSeen++;
   }
 
   const systemPrompt = buildPrompt(config, preData);
   const userMessage = `${companyName}\n\n${pageTexts.join("\n\n")}`;
+
+  // DEBUG: aktivierbar via ENRICH_DEBUG=1 — zeigt geholte Seiten + LLM-Input-Größe
+  if (process.env.ENRICH_DEBUG) {
+    console.log("[ENRICH_DEBUG]", companyName);
+    for (const p of pages) {
+      console.log("  page:", p.category, p.url, p.error ? `ERROR: ${p.error}` : `${p.content.length} chars`);
+    }
+    console.log("  relevant pages →", relevantPages.map((p) => `${p.category}(${p.url})`).join(", "));
+    const karriere = relevantPages.find((p) => p.category === "karriere");
+    if (karriere) {
+      const hasJobs = /ausbildung|industriekaufmann|industriemechaniker|maschinen|stellenangebot/i.test(karriere.content);
+      console.log("  karriere content has job-keywords:", hasJobs);
+    }
+    console.log("  total userMessage chars:", userMessage.length);
+  }
 
   // Dynamische max_tokens
   const expectedOutput = (config.contacts_management || config.contacts_all ? 600 : 0)
@@ -228,6 +264,10 @@ export async function extractFromPages(
     }
 
     const raw = JSON.parse(cleaned);
+
+    if (process.env.ENRICH_DEBUG) {
+      console.log("[ENRICH_DEBUG] LLM job_postings:", JSON.stringify(raw.job_postings ?? []));
+    }
 
     return {
       contacts: Array.isArray(raw.contacts) ? raw.contacts : [],

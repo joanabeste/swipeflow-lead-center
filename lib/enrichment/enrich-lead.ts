@@ -187,10 +187,14 @@ export async function enrichLead(
     }
 
     // 6. Lead aktualisieren + Auto-Qualifizierung prüfen
+    // Cancel-Felder zurücksetzen — falls nachher die Cancel-Rule wieder matcht,
+    // werden sie unten erneut gesetzt. So bleibt kein veralteter Grund stehen.
     const leadUpdates: Record<string, unknown> = {
       status: "enriched",
       enriched_at: new Date().toISOString(),
       enrichment_source: "website",
+      cancel_reason: null,
+      cancel_rule_id: null,
       updated_at: new Date().toISOString(),
     };
 
@@ -233,6 +237,15 @@ export async function enrichLead(
       if (root) leadUpdates.website = root;
     }
 
+    // Tatsächliche Counts aus DB — inklusive BA-Import & manuelle Einträge.
+    // Werden sowohl für Auto-Qualifizierung als auch für Cancel-Rules verwendet.
+    const [{ count: totalJobsCount }, { count: totalContactsCount }] = await Promise.all([
+      db.from("lead_job_postings").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
+      db.from("lead_contacts").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
+    ]);
+    const totalJobs = totalJobsCount ?? 0;
+    const totalContacts = totalContactsCount ?? 0;
+
     // Auto-Qualifizierung je nach Service-Modus
     if (serviceMode === "webdev") {
       // Webdev: Qualifiziert wenn Kontakt da + genügend Issues laut Scoring-Schwellwert
@@ -249,7 +262,8 @@ export async function enrichLead(
       const hasContactWithEmail = result.contacts.some((c) => !!c.email);
       const hasAnyContact = result.contacts.length > 0;
       const hasHrContact = result.contacts.some((c) => isHrContact(c.role));
-      const jobsCount = result.job_postings.length;
+      // BA-importierte Stellen mitzählen — LLM-Treffer allein wäre zu eng.
+      const jobsCount = totalJobs;
 
       const contactOk = scoring.require_contact_email ? hasContactWithEmail : hasAnyContact;
       const hrOk = !scoring.require_hr_contact || hasHrContact;
@@ -304,12 +318,16 @@ export async function enrichLead(
       .eq("is_active", true);
 
     if (cancelRules && cancelRules.length > 0) {
-      // Enrichment-Daten für Cancel-Check aufbereiten
+      console.log("[CANCEL_CHECK]", lead.company_name, "leadId:", leadId,
+        "totalJobs:", totalJobs, "totalContacts:", totalContacts,
+        "llm_jobs:", result.job_postings.length, "llm_contacts:", result.contacts.length);
+
+      // Enrichment-Daten für Cancel-Check aufbereiten — Counts inkl. BA-Import.
       const enrichedLead: Record<string, unknown> = {
         ...lead,
         ...(leadUpdates.company_size ? { company_size: leadUpdates.company_size } : {}),
-        job_postings_count: result.job_postings.length,
-        contacts_count: result.contacts.length,
+        job_postings_count: totalJobs,
+        contacts_count: totalContacts,
       };
 
       const cancelResult = evaluateCancelRules(

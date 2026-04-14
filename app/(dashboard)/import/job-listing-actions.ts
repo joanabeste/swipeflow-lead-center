@@ -2,6 +2,7 @@
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { parseCSV, detectDelimiter } from "@/lib/csv/parser";
+import { normalizePhone } from "@/lib/csv/normalizer";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { analyzeJobDescription } from "@/lib/enrichment/job-description-analyzer";
@@ -87,7 +88,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
       email: sanitizeCellValue(row[colIndex.email]),
       salutation: sanitizeCellValue(row[colIndex.salutation]),
       contactName: sanitizeCellValue(row[colIndex.contact_name]),
-      phone: sanitizeCellValue(row[colIndex.phone]),
+      phone: normalizePhone(sanitizeCellValue(row[colIndex.phone])),
       careerPage: sanitizeCellValue(row[colIndex.career_page]),
       jobUrl: sanitizeCellValue(row[colIndex.job_url]),
       postedDate: sanitizeCellValue(row[colIndex.posted_date]),
