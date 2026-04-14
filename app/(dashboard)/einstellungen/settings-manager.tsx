@@ -1,15 +1,79 @@
 "use client";
 
 import { useActionState } from "react";
-import { Plus, Trash2, Sparkles, Check, Globe } from "lucide-react";
+import { Plus, Trash2, Sparkles, Check, Globe, MapPin } from "lucide-react";
 import { hubspotFields } from "@/lib/hubspot/schema";
 import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode, WebdevScoringConfig } from "@/lib/types";
-import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring } from "./actions";
+import type { HqLocation } from "@/lib/app-settings";
+import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults, saveWebdevScoring, saveHqLocation } from "./actions";
 
 interface Props {
   fieldProfiles: RequiredFieldProfile[];
   enrichmentDefaults: Record<ServiceMode, EnrichmentConfig>;
   webdevScoring: WebdevScoringConfig;
+  hq: HqLocation;
+}
+
+function HqLocationCard({ hq }: { hq: HqLocation }) {
+  const [state, formAction, pending] = useActionState(saveHqLocation, undefined);
+
+  return (
+    <form action={formAction} className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+      <div className="flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-primary" />
+        <h2 className="text-lg font-bold">Unser Standort</h2>
+      </div>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        Wird auf der Karte im Lead-Profil als Ausgangspunkt für die Entfernung genutzt.
+      </p>
+
+      {state?.error && (
+        <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          {state.error}
+        </div>
+      )}
+      {state?.success && (
+        <div className="mt-3 inline-flex items-center gap-1 rounded-md bg-green-50 px-3 py-1.5 text-xs text-green-700 dark:bg-green-900/20 dark:text-green-400">
+          <Check className="h-3.5 w-3.5" />
+          Gespeichert
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="hq_label" className="block text-sm font-medium">Bezeichnung</label>
+          <input
+            id="hq_label"
+            name="label"
+            defaultValue={hq.label}
+            placeholder="z.B. swipeflow GmbH"
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100 dark:placeholder-gray-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="hq_address" className="block text-sm font-medium">Adresse</label>
+          <input
+            id="hq_address"
+            name="address"
+            defaultValue={hq.address}
+            required
+            placeholder="Straße + PLZ + Ort"
+            className="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100 dark:placeholder-gray-500"
+          />
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        Aktuelle Koordinaten: {hq.lat.toFixed(4)}, {hq.lng.toFixed(4)}
+      </p>
+      <button
+        type="submit"
+        disabled={pending}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+      >
+        {pending ? "Speichern…" : "Standort speichern"}
+      </button>
+    </form>
+  );
 }
 
 const WEBDEV_CHECKS: { key: keyof WebdevScoringConfig; label: string; hint?: string }[] = [
@@ -243,11 +307,14 @@ function EnrichmentDefaultsCard({
   );
 }
 
-export function SettingsManager({ fieldProfiles, enrichmentDefaults, webdevScoring }: Props) {
+export function SettingsManager({ fieldProfiles, enrichmentDefaults, webdevScoring, hq }: Props) {
   const [state, formAction, pending] = useActionState(saveFieldProfile, undefined);
 
   return (
     <div className="mt-6 space-y-8">
+      {/* Unser Standort */}
+      <HqLocationCard hq={hq} />
+
       {/* Standard-Anreicherungskriterien */}
       <div>
         <div className="flex items-center gap-2">

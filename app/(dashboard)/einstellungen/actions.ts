@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import type { EnrichmentConfig, ServiceMode, WebdevStrictness } from "@/lib/types";
+import { saveHqLocation as saveHqLocationHelper } from "@/lib/app-settings";
+import { geocodeAddress } from "@/lib/geo/geocode";
 
 export async function saveFieldProfile(
   _prev: { error?: string } | undefined,
@@ -164,6 +166,49 @@ export async function saveWebdevScoring(
   });
 
   revalidatePath("/einstellungen");
+  return { success: true };
+}
+
+export async function saveHqLocation(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const db = createServiceClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: profile } = await db
+    .from("profiles")
+    .select("role")
+    .eq("id", user!.id)
+    .single();
+  if (profile?.role !== "admin") {
+    return { error: "Nur Administratoren dürfen den Standort ändern." };
+  }
+
+  const label = ((formData.get("label") as string) ?? "").trim() || "Unser Standort";
+  const address = ((formData.get("address") as string) ?? "").trim();
+  if (!address) return { error: "Bitte eine Adresse eingeben." };
+
+  const coords = await geocodeAddress(address);
+  if (!coords) {
+    return { error: "Adresse konnte nicht gefunden werden. Bitte genauer (z.B. Straße + PLZ + Ort)." };
+  }
+
+  await saveHqLocationHelper(
+    { lat: coords.lat, lng: coords.lng, label, address },
+    user?.id ?? null,
+  );
+
+  await logAudit({
+    userId: user?.id ?? null,
+    action: "settings.hq_location_updated",
+    entityType: "app_settings",
+    details: { label, address, lat: coords.lat, lng: coords.lng },
+  });
+
+  revalidatePath("/einstellungen");
+  revalidatePath("/leads");
   return { success: true };
 }
 

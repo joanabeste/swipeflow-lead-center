@@ -60,6 +60,9 @@ export interface Lead {
   website_issues: string[];
   enriched_at: string | null;
   enrichment_source: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geocoded_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
