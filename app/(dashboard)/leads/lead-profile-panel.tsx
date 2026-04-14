@@ -63,6 +63,37 @@ const fieldLabels: Record<string, string> = {
   status: "Status",
 };
 
+export interface ActivityItem {
+  id: string;
+  kind: "change" | "call" | "note" | "enrichment" | "crm_status" | "status";
+  at: string;
+  title: string;
+  detail?: string;
+  meta?: string;
+}
+
+function activityColor(kind: ActivityItem["kind"]): string {
+  switch (kind) {
+    case "call": return "#10b981";      // emerald
+    case "note": return "#f59e0b";      // amber
+    case "enrichment": return "#6366f1"; // indigo
+    case "crm_status": return "#ec4899"; // pink
+    case "status": return "#3b82f6";     // blue
+    default: return "#9ca3af";           // gray
+  }
+}
+
+function activityIcon(kind: ActivityItem["kind"]): string {
+  switch (kind) {
+    case "call": return "📞";
+    case "note": return "📝";
+    case "enrichment": return "✨";
+    case "crm_status": return "🎯";
+    case "status": return "🏷️";
+    default: return "•";
+  }
+}
+
 interface Props {
   lead: Lead;
   changes: LeadChange[];
@@ -70,9 +101,26 @@ interface Props {
   jobPostings: LeadJobPosting[];
   latestEnrichment: LeadEnrichment | null;
   hq: HqLocation;
+  /** Back-Navigation — default "/leads" */
+  backHref?: string;
+  backLabel?: string;
+  /** Wird links neben den Enrich-Button + Status-Dropdown im Header gerendert */
+  headerExtras?: React.ReactNode;
+  /** Inhalte oberhalb der "Standort"-Karte in der rechten Spalte */
+  extraRightColumn?: React.ReactNode;
+  /** Wenn gesetzt: ersetzt die Änderungshistorie durch eine einheitliche Timeline.
+   *  Die ActivityItems sollten bereits chronologisch absteigend sortiert übergeben werden. */
+  activityItems?: ActivityItem[];
 }
 
-export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestEnrichment, hq }: Props) {
+export function LeadProfilePanel({
+  lead, changes, contacts, jobPostings, latestEnrichment, hq,
+  backHref = "/leads",
+  backLabel = "Zurück zur Liste",
+  headerExtras,
+  extraRightColumn,
+  activityItems,
+}: Props) {
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
@@ -127,13 +175,14 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
       {/* Header */}
       <div className="flex items-center justify-between">
         <button
-          onClick={() => router.push("/leads")}
+          onClick={() => router.push(backHref)}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <ArrowLeft className="h-4 w-4" />
-          Zurück zur Liste
+          {backLabel}
         </button>
         <div className="flex items-center gap-2">
+          {headerExtras}
           <button
             onClick={handleEnrich}
             disabled={enrichPending || !hasWebsite}
@@ -382,6 +431,7 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
 
         {/* Rechte Spalte */}
         <div className="space-y-4">
+          {extraRightColumn}
           {/* Standort / Entfernung zu HQ */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -470,29 +520,63 @@ export function LeadProfilePanel({ lead, changes, contacts, jobPostings, latestE
             )}
           </div>
 
-          {/* Änderungshistorie */}
-          <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Änderungshistorie</h2>
-            {changes.length === 0 ? (
-              <p className="mt-2 text-sm text-gray-400">Noch keine Änderungen.</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {changes.map((change) => (
-                  <li key={change.id} className="border-l-2 border-gray-200 pl-3 text-sm dark:border-gray-700">
-                    <p className="font-medium text-gray-700 dark:text-gray-300">
-                      {fieldLabels[change.field_name] ?? change.field_name}
-                    </p>
-                    <p className="text-gray-500 dark:text-gray-400">
-                      <span className="line-through">{change.old_value ?? "–"}</span> → {change.new_value ?? "–"}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">
-                      {new Date(change.created_at).toLocaleString("de-DE")}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {/* Historie: wenn activityItems übergeben wurden, einheitliche Timeline;
+              sonst die klassische Änderungshistorie (lead_changes). */}
+          {activityItems ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Historie ({activityItems.length})
+              </h2>
+              {activityItems.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-400">Noch keine Aktivitäten.</p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {activityItems.slice(0, 50).map((item) => (
+                    <li
+                      key={item.id}
+                      className="border-l-2 pl-3 text-sm"
+                      style={{ borderColor: activityColor(item.kind) }}
+                    >
+                      <p className="font-medium text-gray-700 dark:text-gray-300">
+                        <span className="mr-1">{activityIcon(item.kind)}</span>
+                        {item.title}
+                      </p>
+                      {item.detail && (
+                        <p className="text-gray-500 dark:text-gray-400">{item.detail}</p>
+                      )}
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {new Date(item.at).toLocaleString("de-DE")}
+                        {item.meta ? ` · ${item.meta}` : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+              <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Änderungshistorie</h2>
+              {changes.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-400">Noch keine Änderungen.</p>
+              ) : (
+                <ul className="mt-3 space-y-3">
+                  {changes.map((change) => (
+                    <li key={change.id} className="border-l-2 border-gray-200 pl-3 text-sm dark:border-gray-700">
+                      <p className="font-medium text-gray-700 dark:text-gray-300">
+                        {fieldLabels[change.field_name] ?? change.field_name}
+                      </p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        <span className="line-through">{change.old_value ?? "–"}</span> → {change.new_value ?? "–"}
+                      </p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
+                        {new Date(change.created_at).toLocaleString("de-DE")}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
