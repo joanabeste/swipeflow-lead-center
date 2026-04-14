@@ -82,17 +82,6 @@ export function SettingsManager({ fieldProfiles, enrichmentDefaults }: Props) {
 
   return (
     <div className="mt-6 space-y-8">
-      {/* HubSpot-Konfiguration */}
-      <div className="rounded-lg border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-        <h2 className="text-lg font-bold">HubSpot-API</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Der API-Token wird über die Umgebungsvariable <code className="rounded bg-gray-100 px-1 font-mono text-xs dark:bg-[#232325]">HUBSPOT_API_TOKEN</code> konfiguriert.
-        </p>
-        <div className="mt-3 rounded-md bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-          Token in den Vercel Environment Variables hinterlegen und <code>vercel env pull</code> ausführen.
-        </div>
-      </div>
-
       {/* Standard-Anreicherungskriterien */}
       <div>
         <div className="flex items-center gap-2">

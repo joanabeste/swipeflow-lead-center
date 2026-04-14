@@ -1,16 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, Eye, X, Download, CircleCheck, CircleX } from "lucide-react";
+import {
+  Send, Loader2, Eye, X, Download, CircleCheck, CircleX,
+  Search, ArrowUpDown, ArrowUp, ArrowDown, Briefcase, Globe,
+} from "lucide-react";
 import { exportLead, batchExport, getExportPreview } from "./actions";
 
-interface QualifiedLead {
+export interface QualifiedLead {
   id: string;
   company_name: string;
   domain: string | null;
   city: string | null;
-  status: string;
+  industry: string | null;
+  company_size: string | null;
+  phone: string | null;
+  email: string | null;
+  service_type: "recruiting" | "webdesign";
+  contacts_count: number;
+  jobs_count: number;
+  issues_count: number;
+  has_ssl: boolean | null;
+  website_tech: string | null;
+  website_age_estimate: string | null;
+  enriched_at: string | null;
+  updated_at: string;
 }
 
 interface ExportLogEntry {
@@ -39,11 +54,37 @@ const LEAD_STATUS_OPTIONS = [
   { value: "Pipeline", label: "Pipeline" },
 ];
 
+type TypeFilter = "all" | "recruiting" | "webdesign";
+type SortKey = "company_name" | "city" | "industry" | "company_size" | "contacts_count" | "issues_count" | "updated_at";
+type SortOrder = "asc" | "desc";
+
 interface PreviewData {
   company: Record<string, string | null>;
   contacts: { name: string; role: string | null; email: string | null; phone: string | null }[];
   jobPostings: { title: string; location: string | null; url: string | null }[];
   careerPageUrl: string | null;
+}
+
+function TypeBadge({ type }: { type: "recruiting" | "webdesign" }) {
+  if (type === "webdesign") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+        <Globe className="h-3 w-3" />
+        Webdesign
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+      <Briefcase className="h-3 w-3" />
+      Recruiting
+    </span>
+  );
+}
+
+function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
+  if (!active) return <ArrowUpDown className="h-3 w-3 text-gray-400" />;
+  return order === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />;
 }
 
 export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
@@ -56,12 +97,54 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
   const [leadStatus, setLeadStatus] = useState("Manuelle Überprüfung");
   const [result, setResult] = useState<{ successCount: number; errorCount: number } | null>(null);
 
+  // Filter / Search / Sort State
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("updated_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+
+  const filteredLeads = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    let list = qualifiedLeads.filter((l) => {
+      if (typeFilter !== "all" && l.service_type !== typeFilter) return false;
+      if (term) {
+        const haystack = [
+          l.company_name, l.domain, l.city, l.industry, l.company_size, l.phone, l.email,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+
+    list = [...list].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      const aEmpty = av == null || av === "";
+      const bEmpty = bv == null || bv === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      let cmp = 0;
+      if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+      else cmp = String(av).localeCompare(String(bv), "de");
+      return sortOrder === "asc" ? cmp : -cmp;
+    });
+
+    return list;
+  }, [qualifiedLeads, search, typeFilter, sortKey, sortOrder]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortOrder("asc"); }
+  }
+
   function toggleAll() {
-    if (selected.size === qualifiedLeads.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(qualifiedLeads.map((l) => l.id)));
-    }
+    const visibleIds = filteredLeads.map((l) => l.id);
+    const allSelected = visibleIds.every((id) => selected.has(id));
+    const next = new Set(selected);
+    if (allSelected) visibleIds.forEach((id) => next.delete(id));
+    else visibleIds.forEach((id) => next.add(id));
+    setSelected(next);
   }
 
   function toggleOne(id: string) {
@@ -91,25 +174,27 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
     }
   }
 
+  const allVisibleSelected = filteredLeads.length > 0 && filteredLeads.every((l) => selected.has(l.id));
+
   return (
     <div className="mt-6 space-y-6">
       {result && (
-        <div className="rounded-md bg-blue-50 p-4 text-sm dark:bg-blue-900/20 dark:text-blue-300">
+        <div className="rounded-md bg-green-50 p-4 text-sm dark:bg-green-900/20 dark:text-green-300">
           Export abgeschlossen: {result.successCount} erfolgreich, {result.errorCount} fehlgeschlagen.
         </div>
       )}
 
       {/* Export-Queue */}
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-bold">Export-Queue</h2>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Lead-Status in HubSpot</label>
               <select
                 value={leadStatus}
                 onChange={(e) => setLeadStatus(e.target.value)}
-                className="mt-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
               >
                 {LEAD_STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -120,7 +205,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
               <button
                 onClick={handleBatchExport}
                 disabled={exporting}
-                className="mt-5 inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {selected.size} exportieren
@@ -129,35 +214,78 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
           </div>
         </div>
 
+        {/* Toolbar: Suche + Typ-Filter */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Firma, Domain, Stadt, Branche…"
+              className="w-full rounded-md border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-gray-100 dark:placeholder-gray-500"
+            />
+          </div>
+          <div className="inline-flex rounded-md border border-gray-300 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+            {([
+              { value: "all", label: `Alle (${qualifiedLeads.length})` },
+              { value: "recruiting", label: `Recruiting (${qualifiedLeads.filter((l) => l.service_type === "recruiting").length})` },
+              { value: "webdesign", label: `Webdesign (${qualifiedLeads.filter((l) => l.service_type === "webdesign").length})` },
+            ] as { value: TypeFilter; label: string }[]).map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setTypeFilter(opt.value)}
+                className={`px-3 py-2 text-xs font-medium transition ${
+                  typeFilter === opt.value
+                    ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                    : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-[#232325]"
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {filteredLeads.length} angezeigt
+          </span>
+        </div>
+
         <div className="mt-3 overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
             <thead className="bg-gray-50 dark:bg-[#232325]">
               <tr>
-                <th className="px-4 py-3">
+                <th className="w-10 px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={selected.size === qualifiedLeads.length && qualifiedLeads.length > 0}
+                    checked={allVisibleSelected}
                     onChange={toggleAll}
                     className="rounded border-gray-300 dark:border-gray-600"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Domain</th>
-                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Ort</th>
+                <Th label="Firma" sortKey="company_name" active={sortKey} order={sortOrder} onClick={toggleSort} />
+                <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Typ</th>
+                <Th label="Stadt" sortKey="city" active={sortKey} order={sortOrder} onClick={toggleSort} />
+                <Th label="Branche" sortKey="industry" active={sortKey} order={sortOrder} onClick={toggleSort} />
+                <Th label="Größe" sortKey="company_size" active={sortKey} order={sortOrder} onClick={toggleSort} />
+                <Th label="Kontakte" sortKey="contacts_count" active={sortKey} order={sortOrder} onClick={toggleSort} align="right" />
+                <th className="px-4 py-3 text-right text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Stellen/Issues</th>
+                <Th label="Angereichert" sortKey="updated_at" active={sortKey} order={sortOrder} onClick={toggleSort} />
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
-              {qualifiedLeads.length === 0 ? (
+              {filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                    Keine qualifizierten Leads zum Exportieren.
+                  <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    {qualifiedLeads.length === 0
+                      ? "Keine qualifizierten Leads zum Exportieren."
+                      : "Keine Treffer für Suche/Filter."}
                   </td>
                 </tr>
               ) : (
-                qualifiedLeads.map((lead) => (
-                  <tr key={lead.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                filteredLeads.map((lead) => (
+                  <tr key={lead.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
+                    <td className="px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selected.has(lead.id)}
@@ -165,15 +293,44 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                         className="rounded border-gray-300 dark:border-gray-600"
                       />
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium" onClick={() => {
-                      setPreviewLeadId(lead.id);
-                      startPreview(async () => {
-                        const data = await getExportPreview(lead.id);
-                        setPreview(data);
-                      });
-                    }}>{lead.company_name}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" onClick={() => router.push(`/leads/${lead.id}`)}>{lead.domain ?? "–"}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400" onClick={() => router.push(`/leads/${lead.id}`)}>{lead.city ?? "–"}</td>
+                    <td
+                      className="cursor-pointer px-4 py-3 text-sm font-medium"
+                      onClick={() => {
+                        setPreviewLeadId(lead.id);
+                        startPreview(async () => {
+                          const data = await getExportPreview(lead.id);
+                          setPreview(data);
+                        });
+                      }}
+                    >
+                      {lead.company_name}
+                      {lead.domain && (
+                        <div className="text-xs font-normal text-gray-500 dark:text-gray-400">{lead.domain}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <TypeBadge type={lead.service_type} />
+                    </td>
+                    <td className="cursor-pointer px-4 py-3 text-sm text-gray-600 dark:text-gray-400" onClick={() => router.push(`/leads/${lead.id}`)}>
+                      {lead.city ?? "–"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{lead.industry ?? "–"}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{lead.company_size ?? "–"}</td>
+                    <td className="px-4 py-3 text-right text-sm font-medium">{lead.contacts_count}</td>
+                    <td className="px-4 py-3 text-right text-sm">
+                      {lead.service_type === "webdesign" ? (
+                        <span className={lead.issues_count > 0 ? "font-medium text-orange-600 dark:text-orange-400" : "text-gray-400"}>
+                          {lead.issues_count} Issues
+                        </span>
+                      ) : (
+                        <span className={lead.jobs_count > 0 ? "font-medium" : "text-gray-400"}>
+                          {lead.jobs_count} Stellen
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      {lead.enriched_at ? new Date(lead.enriched_at).toLocaleDateString("de-DE") : "–"}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleSingleExport(lead.id)}
@@ -214,7 +371,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                 </tr>
               ) : (
                 exportLogs.map((log) => (
-                  <tr key={log.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                  <tr key={log.id} className="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5">
                     <td className="px-4 py-3 text-sm font-medium text-primary hover:underline" onClick={() => router.push(`/leads/${log.lead_id}`)}>{log.leads?.company_name ?? "–"}</td>
                     <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">{log.hubspot_company_id ?? "–"}</td>
                     <td className="px-4 py-3 text-sm">
@@ -222,7 +379,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                         log.status === "success" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
                         log.status === "failed" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
                         log.status === "duplicate" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
-                        "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        "bg-gray-100 text-gray-700 dark:bg-[#232325] dark:text-gray-300"
                       }`}>
                         {log.status === "success" ? "Erfolgreich" :
                          log.status === "failed" ? "Fehlgeschlagen" :
@@ -240,6 +397,7 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
           </table>
         </div>
       </div>
+
       {/* Vorschau-Modal */}
       {preview && previewLeadId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -254,7 +412,6 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
               </button>
             </div>
             <div className="max-h-[70vh] overflow-y-auto px-6 py-4 space-y-4">
-              {/* Company-Daten */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Firmendaten → HubSpot Company</h3>
                 <div className="mt-2 grid grid-cols-2 gap-2">
@@ -267,8 +424,6 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                   ))}
                 </div>
               </div>
-
-              {/* Kontakte */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Kontakte → HubSpot Contacts ({preview.contacts.length})</h3>
                 {preview.contacts.length === 0 ? (
@@ -288,8 +443,6 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                   </div>
                 )}
               </div>
-
-              {/* Stellen */}
               <div>
                 <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Stellenanzeigen → HubSpot Notiz ({preview.jobPostings.length})</h3>
                 {preview.jobPostings.length === 0 ? (
@@ -316,21 +469,21 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
                   setPreview(null);
                   setPreviewLeadId(null);
                 }}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark"
+                className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
               >
                 <Send className="h-4 w-4" />
                 Jetzt exportieren
               </button>
               <button
                 onClick={() => window.open(`/api/export-csv?ids=${previewLeadId}`, "_blank")}
-                className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
               >
                 <Download className="h-4 w-4" />
                 Als CSV
               </button>
               <button
                 onClick={() => { setPreview(null); setPreviewLeadId(null); }}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
               >
                 Schließen
               </button>
@@ -344,5 +497,28 @@ export function ExportManager({ qualifiedLeads, exportLogs }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function Th({
+  label, sortKey, active, order, onClick, align = "left",
+}: {
+  label: string;
+  sortKey: SortKey;
+  active: SortKey;
+  order: SortOrder;
+  onClick: (key: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  return (
+    <th className={`px-4 py-3 text-xs font-medium uppercase text-gray-500 dark:text-gray-400 ${align === "right" ? "text-right" : "text-left"}`}>
+      <button
+        onClick={() => onClick(sortKey)}
+        className={`inline-flex items-center gap-1 ${align === "right" ? "flex-row-reverse" : ""} hover:text-gray-700 dark:hover:text-gray-200`}
+      >
+        {label}
+        <SortIcon active={active === sortKey} order={order} />
+      </button>
+    </th>
   );
 }
