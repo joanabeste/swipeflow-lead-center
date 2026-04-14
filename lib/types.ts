@@ -43,6 +43,7 @@ export interface Lead {
   legal_form: string | null;
   register_id: string | null;
   website: string | null;
+  career_page_url: string | null;
   description: string | null;
   hubspot_company_id: string | null;
   source_import_id: string | null;

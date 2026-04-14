@@ -97,7 +97,7 @@ export async function mergeLeads(keepId: string, mergeId: string) {
   const fieldsToMerge = [
     "domain", "phone", "email", "street", "city", "zip", "state",
     "country", "industry", "company_size", "legal_form", "register_id",
-    "website", "description",
+    "website", "career_page_url", "description",
   ];
 
   const updates: Record<string, unknown> = {};

@@ -57,6 +57,7 @@ const fieldLabels: Record<string, string> = {
   legal_form: "Rechtsform",
   register_id: "Handelsregister-Nr.",
   website: "Website",
+  career_page_url: "Karriereseite",
   description: "Beschreibung",
   status: "Status",
 };

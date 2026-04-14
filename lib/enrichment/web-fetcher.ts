@@ -44,6 +44,7 @@ const FETCH_TIMEOUT_MS = 10_000;
 export async function fetchCompanyPages(
   websiteOrDomain: string,
   config?: { job_postings?: boolean; career_page?: boolean; contacts_management?: boolean; contacts_all?: boolean },
+  careerPageHint?: string,
 ): Promise<{ baseUrl: string; pages: FetchedPage[] }> {
   const needsKarriere = config?.job_postings !== false && config?.career_page !== false;
   const needsTeam = config?.contacts_management !== false || config?.contacts_all === true;
@@ -58,10 +59,21 @@ export async function fetchCompanyPages(
     return { baseUrl, pages };
   }
 
-  // 2. Bekannte Pfade ausprobieren (Kategorien filtern nach Config)
   const foundCategories = new Set<string>();
+
+  // 1b. Bekannte Karriere-URL direkt fetchen (falls übergeben, z.B. aus BA-Import)
+  if (needsKarriere && careerPageHint) {
+    const hintUrl = careerPageHint.startsWith("http") ? careerPageHint : `https://${careerPageHint}`;
+    const careerPage = await fetchPage(hintUrl, "karriere");
+    if (!careerPage.error) {
+      pages.push(careerPage);
+      foundCategories.add("karriere");
+    }
+  }
+
+  // 2. Bekannte Pfade ausprobieren (Kategorien filtern nach Config)
   const filteredPaths = KNOWN_PATHS.filter(({ category }) => {
-    if (category === "karriere" && !needsKarriere) return false;
+    if (category === "karriere" && (!needsKarriere || foundCategories.has("karriere"))) return false;
     if (category === "team" && !needsTeam) return false;
     return true;
   });
@@ -137,7 +149,15 @@ async function fetchPage(
       return { url, content: "", category, error: "Kein HTML" };
     }
 
-    const html = await res.text();
+    let html = await res.text();
+
+    // Karriere-Seiten enthalten oft iframes zu externen Job-Boards (Personio, d.vinci, Softgarden…)
+    // → iframe-Inhalte anfügen BEVOR die iframes weggestrippt werden.
+    if (category === "karriere") {
+      const iframeExtra = await fetchIframeContents(html, url);
+      if (iframeExtra) html = html + "\n\n" + iframeExtra;
+    }
+
     const content = cleanHtml(html, category).slice(0, MAX_CHARS_PER_PAGE);
 
     return { url, content, category };
@@ -148,6 +168,45 @@ async function fetchPage(
 }
 
 /** Entfernt HTML-Tags und extrahiert sichtbaren Text, mit kategorie-spezifischer Filterung */
+/** Holt HTML aller iframes einer Seite — für Job-Boards wie Personio, d.vinci, Softgarden */
+async function fetchIframeContents(html: string, baseUrl: string): Promise<string | null> {
+  const iframeSrcs = new Set<string>();
+  const srcRegex = /<iframe[^>]*\bsrc=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = srcRegex.exec(html)) !== null) {
+    try {
+      const absolute = new URL(match[1], baseUrl).toString();
+      // Nur http(s) — keine data: URIs, javascript: etc.
+      if (absolute.startsWith("http")) iframeSrcs.add(absolute);
+    } catch {
+      // ignore
+    }
+  }
+  if (iframeSrcs.size === 0) return null;
+
+  const parts: string[] = [];
+  for (const src of Array.from(iframeSrcs).slice(0, 3)) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      const r = await fetch(src, {
+        headers: { "User-Agent": USER_AGENT },
+        signal: controller.signal,
+        redirect: "follow",
+      });
+      clearTimeout(timeout);
+      if (!r.ok) continue;
+      const ct = r.headers.get("content-type") ?? "";
+      if (!ct.includes("text/html")) continue;
+      const inner = await r.text();
+      parts.push(`<!-- iframe:${src} -->\n${inner}`);
+    } catch {
+      // ignore individual failures
+    }
+  }
+  return parts.length > 0 ? parts.join("\n\n") : null;
+}
+
 function cleanHtml(html: string, category: FetchedPage["category"]): string {
   let text = html;
 

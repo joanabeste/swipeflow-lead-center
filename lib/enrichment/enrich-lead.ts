@@ -44,7 +44,23 @@ export async function enrichLead(
 
   if (!lead) return { success: false, error: "Lead nicht gefunden." };
 
-  let websiteOrDomain = lead.website ?? lead.domain;
+  // Homepage extrahieren — wenn website eine Sub-URL ist (z.B. /karriere),
+  // nimm die Domain als Ausgangspunkt. Alte Daten haben das oft falsch.
+  function rootFromUrl(url: string): string | null {
+    const m = url.match(/^(https?:\/\/[^/?#]+)/i);
+    return m ? m[1] : null;
+  }
+  const looksLikeSubpage = (url: string | null) =>
+    !!url && /^https?:\/\/[^/]+\/.+/i.test(url);
+
+  let websiteOrDomain: string | null = null;
+  if (lead.domain) {
+    websiteOrDomain = lead.domain;
+  } else if (lead.website) {
+    // Falls website-Feld eine Unterseite enthält → Root extrahieren
+    const root = looksLikeSubpage(lead.website) ? rootFromUrl(lead.website) : lead.website;
+    websiteOrDomain = root ?? lead.website;
+  }
 
   // Wenn keine Website hinterlegt: automatisch suchen
   if (!websiteOrDomain) {
@@ -108,8 +124,8 @@ export async function enrichLead(
     // Config wird 1:1 vom Modal übernommen — Defaults werden dort basierend auf
     // dem Service-Modus aus enrichment_defaults geladen.
 
-    // 1. Website-Seiten abrufen
-    const { pages } = await fetchCompanyPages(websiteOrDomain, config);
+    // 1. Website-Seiten abrufen — bekannte Karriere-URL als Hint
+    const { pages } = await fetchCompanyPages(websiteOrDomain, config, lead.career_page_url ?? undefined);
 
     const successfulPages = pages.filter((p) => !p.error);
     if (successfulPages.length === 0) {
@@ -176,6 +192,22 @@ export async function enrichLead(
     fillIfEmpty("state", ai.state);
     fillIfEmpty("legal_form", ai.legal_form);
     fillIfEmpty("register_id", ai.register_id);
+
+    // Karriereseite ins dedizierte Feld — vom Extraktor oder vom bisherigen Lead (Alt-Datensätze)
+    if (!lead.career_page_url) {
+      if (result.career_page_url) {
+        leadUpdates.career_page_url = result.career_page_url;
+      } else if (looksLikeSubpage(lead.website)) {
+        // Alt-Daten: website war eine Karriere-Unterseite → ins neue Feld verschieben
+        leadUpdates.career_page_url = lead.website;
+      }
+    }
+
+    // Website-Feld auf Homepage korrigieren falls dort noch eine Sub-URL steht
+    if (looksLikeSubpage(lead.website)) {
+      const root = rootFromUrl(lead.website!);
+      if (root) leadUpdates.website = root;
+    }
 
     // Auto-Qualifizierung je nach Service-Modus
     if (serviceMode === "webdev") {
