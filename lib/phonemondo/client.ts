@@ -68,12 +68,54 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
     throw new Error(`PhoneMondo-Call fehlgeschlagen (HTTP ${response.status} bei ${url}): ${text.slice(0, 200)}`);
   }
 
-  const json = (await response.json()) as { id?: string; call_id?: string };
-  const callId = json.call_id ?? json.id;
+  // Response kann unterschiedlich strukturiert sein. Wir probieren die typischen
+  // Keys und loggen bei Fehlen die volle Antwort, damit die Zuordnung nachvollziehbar ist.
+  const rawText = await response.text();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    console.error("[phonemondo] triggerCall — non-JSON response", { url, body: rawText.slice(0, 500) });
+    throw new Error(`PhoneMondo-Antwort nicht im JSON-Format: ${rawText.slice(0, 200)}`);
+  }
+
+  const callId = extractCallId(parsed);
   if (!callId) {
-    throw new Error("PhoneMondo-Antwort ohne call_id — API-Shape anpassen.");
+    console.error("[phonemondo] triggerCall — no call_id in response", {
+      url,
+      response: JSON.stringify(parsed).slice(0, 500),
+    });
+    throw new Error(
+      "PhoneMondo-Antwort enthält keine erkennbare Call-ID. Response: " +
+      JSON.stringify(parsed).slice(0, 300),
+    );
   }
   return { callId };
+}
+
+/** Sucht in einer typischerweise unbekannten API-Response nach einer Call-ID. */
+function extractCallId(obj: unknown): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  const candidates = [
+    "call_id", "callId", "callID", "id",
+    "uuid", "call_uuid", "callUuid",
+    "session_id", "sessionId",
+    "reference", "reference_id", "referenceId",
+  ];
+  const o = obj as Record<string, unknown>;
+  for (const key of candidates) {
+    const v = o[key];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  // In typischen REST-APIs ist das Objekt manchmal verschachtelt: { data: {...} }, { result: {...} }, { call: {...} }
+  for (const wrap of ["data", "result", "call", "response"]) {
+    const nested = o[wrap];
+    if (nested && typeof nested === "object") {
+      const inner = extractCallId(nested);
+      if (inner) return inner;
+    }
+  }
+  return null;
 }
 
 export type WebhookVerifyResult =
