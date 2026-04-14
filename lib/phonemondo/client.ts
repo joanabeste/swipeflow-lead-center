@@ -175,6 +175,7 @@ function extractCallId(obj: unknown): string | null {
   if (!obj || typeof obj !== "object") return null;
   const candidates = [
     "call_id", "callId", "callID", "id",
+    "uid", // PhoneMondo: {state:"ok", uid:"<call-uid>"}
     "uuid", "call_uuid", "callUuid",
     "session_id", "sessionId",
     "reference", "reference_id", "referenceId",
