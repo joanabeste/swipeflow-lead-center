@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
-import type { Lead, EnrichmentConfig } from "@/lib/types";
-import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
+import type { Lead, EnrichmentConfig, ServiceMode } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
@@ -12,6 +11,7 @@ interface Props {
   leadIds: string[];
   leads: Lead[];
   onClose: () => void;
+  defaults: Record<ServiceMode, EnrichmentConfig>;
 }
 
 interface EnrichResult {
@@ -36,16 +36,17 @@ interface EnrichResult {
 
 type Phase = "configure" | "running" | "complete";
 
-export function EnrichmentConfigModal({ leadIds, leads, onClose }: Props) {
+export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Props) {
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
 
   const [phase, setPhase] = useState<Phase>("configure");
-  const [config, setConfig] = useState<EnrichmentConfig>(
-    serviceMode === "webdev"
-      ? { contacts_management: true, contacts_all: false, job_postings: false, career_page: false, company_details: true }
-      : { ...DEFAULT_ENRICHMENT_CONFIG },
-  );
+  const [config, setConfig] = useState<EnrichmentConfig>({ ...defaults[serviceMode] });
+
+  // Wenn User im Modal den Modus wechselt, Config neu laden
+  useEffect(() => {
+    setConfig({ ...defaults[serviceMode] });
+  }, [serviceMode, defaults]);
   const [results, setResults] = useState<EnrichResult[]>([]);
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);

@@ -1,16 +1,83 @@
 "use client";
 
 import { useActionState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Sparkles, Check } from "lucide-react";
 import { hubspotFields } from "@/lib/hubspot/schema";
-import type { RequiredFieldProfile } from "@/lib/types";
-import { saveFieldProfile, deleteFieldProfile } from "./actions";
+import type { RequiredFieldProfile, EnrichmentConfig, ServiceMode } from "@/lib/types";
+import { saveFieldProfile, deleteFieldProfile, saveEnrichmentDefaults } from "./actions";
 
 interface Props {
   fieldProfiles: RequiredFieldProfile[];
+  enrichmentDefaults: Record<ServiceMode, EnrichmentConfig>;
 }
 
-export function SettingsManager({ fieldProfiles }: Props) {
+const ENRICHMENT_OPTIONS: { key: keyof EnrichmentConfig; label: string; hint?: string }[] = [
+  { key: "contacts_management", label: "Geschäftsführung & Management", hint: "GF, Inhaber, Vorstand" },
+  { key: "contacts_all", label: "Alle Ansprechpartner", hint: "HR, Vertrieb, Support, weitere" },
+  { key: "job_postings", label: "Stellenanzeigen", hint: "Offene Stellen von der Karriereseite" },
+  { key: "career_page", label: "Karriereseite", hint: "Karriereseiten-URL finden" },
+  { key: "company_details", label: "Firmendaten", hint: "Größe, Rechtsform, Adresse" },
+];
+
+function EnrichmentDefaultsCard({
+  mode,
+  label,
+  config,
+}: {
+  mode: ServiceMode;
+  label: string;
+  config: EnrichmentConfig;
+}) {
+  const [state, formAction, pending] = useActionState(saveEnrichmentDefaults, undefined);
+  const justSaved = state?.success && state.mode === mode;
+
+  return (
+    <form action={formAction} className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+      <input type="hidden" name="mode" value={mode} />
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold">{label}</h3>
+        {justSaved && (
+          <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+            <Check className="h-3.5 w-3.5" />
+            Gespeichert
+          </span>
+        )}
+      </div>
+      {state?.error && state.mode === mode && (
+        <div className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          {state.error}
+        </div>
+      )}
+      <div className="mt-4 space-y-2">
+        {ENRICHMENT_OPTIONS.map((opt) => (
+          <label key={opt.key} className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name={opt.key}
+              defaultChecked={config[opt.key]}
+              className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+            />
+            <span>
+              <span className="block font-medium">{opt.label}</span>
+              {opt.hint && (
+                <span className="block text-xs text-gray-500 dark:text-gray-400">{opt.hint}</span>
+              )}
+            </span>
+          </label>
+        ))}
+      </div>
+      <button
+        type="submit"
+        disabled={pending}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+      >
+        {pending ? "Speichern…" : "Speichern"}
+      </button>
+    </form>
+  );
+}
+
+export function SettingsManager({ fieldProfiles, enrichmentDefaults }: Props) {
   const [state, formAction, pending] = useActionState(saveFieldProfile, undefined);
 
   return (
@@ -23,6 +90,29 @@ export function SettingsManager({ fieldProfiles }: Props) {
         </p>
         <div className="mt-3 rounded-md bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
           Token in den Vercel Environment Variables hinterlegen und <code>vercel env pull</code> ausführen.
+        </div>
+      </div>
+
+      {/* Standard-Anreicherungskriterien */}
+      <div>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h2 className="text-lg font-bold">Standard-Anreicherungskriterien</h2>
+        </div>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Legen Sie fest, welche Daten beim Anreichern standardmäßig gesucht werden — getrennt für Recruiting und Webentwicklung.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <EnrichmentDefaultsCard
+            mode="recruiting"
+            label="Recruiting"
+            config={enrichmentDefaults.recruiting}
+          />
+          <EnrichmentDefaultsCard
+            mode="webdev"
+            label="Webentwicklung"
+            config={enrichmentDefaults.webdev}
+          />
         </div>
       </div>
 

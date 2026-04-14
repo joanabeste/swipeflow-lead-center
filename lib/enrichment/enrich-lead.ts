@@ -103,13 +103,11 @@ export async function enrichLead(
       }).eq("id", leadId);
     }
 
-    // Webdev-Modus: Enrichment-Config anpassen (nur GF, keine Stellen)
-    const effectiveConfig = serviceMode === "webdev"
-      ? { contacts_management: true, contacts_all: false, job_postings: false, career_page: false, company_details: true }
-      : config;
+    // Config wird 1:1 vom Modal übernommen — Defaults werden dort basierend auf
+    // dem Service-Modus aus enrichment_defaults geladen.
 
     // 1. Website-Seiten abrufen
-    const { pages } = await fetchCompanyPages(websiteOrDomain, effectiveConfig);
+    const { pages } = await fetchCompanyPages(websiteOrDomain, config);
 
     const successfulPages = pages.filter((p) => !p.error);
     if (successfulPages.length === 0) {
@@ -117,7 +115,7 @@ export async function enrichLead(
     }
 
     // 2. LLM-Extraktion (Kontakte + Firmendaten)
-    const result = await extractFromPages(lead.company_name, pages, effectiveConfig);
+    const result = await extractFromPages(lead.company_name, pages, config);
 
     // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur angeforderte Kategorien
     if (config.contacts_management || config.contacts_all) {

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
 import { SettingsManager } from "./settings-manager";
 import { UserManager } from "../nutzer/user-manager";
+import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 
 export default async function EinstellungenPage() {
   const supabase = await createClient();
@@ -24,9 +25,10 @@ export default async function EinstellungenPage() {
     );
   }
 
-  const [{ data: fieldProfiles }, { data: profiles }] = await Promise.all([
+  const [{ data: fieldProfiles }, { data: profiles }, enrichmentDefaults] = await Promise.all([
     supabase.from("required_field_profiles").select("*").order("name"),
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+    getAllEnrichmentDefaults(),
   ]);
 
   return (
@@ -36,7 +38,7 @@ export default async function EinstellungenPage() {
         HubSpot, Pflichtfelder und Nutzerverwaltung
       </p>
 
-      <SettingsManager fieldProfiles={fieldProfiles ?? []} />
+      <SettingsManager fieldProfiles={fieldProfiles ?? []} enrichmentDefaults={enrichmentDefaults} />
 
       <div className="mt-10 border-t border-gray-200 pt-8 dark:border-[#2c2c2e]">
         <h2 className="text-lg font-bold">Nutzer & Rollen</h2>

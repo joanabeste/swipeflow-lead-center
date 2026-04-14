@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { LeadTableWrapper } from "./lead-table-wrapper";
+import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -57,6 +58,8 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
 
+  const enrichmentDefaults = await getAllEnrichmentDefaults();
+
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
@@ -74,6 +77,7 @@ export default async function LeadsPage({ searchParams }: Props) {
         currentStatus={params.status ?? ""}
         currentFilters={columnFilters}
         visibleColumns={visibleColumns}
+        enrichmentDefaults={enrichmentDefaults}
       />
     </div>
   );
