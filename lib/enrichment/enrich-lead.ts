@@ -160,10 +160,20 @@ export async function enrichLead(
       updated_at: new Date().toISOString(),
     };
 
-    // Zusätzliche Infos in Lead-Felder übernehmen falls leer
-    if (!lead.company_size && result.additional_info.company_size_estimate) {
-      leadUpdates.company_size = result.additional_info.company_size_estimate;
-    }
+    // Zusätzliche Infos in Lead-Felder übernehmen — nur wenn im Lead noch leer
+    const ai = result.additional_info;
+    const fillIfEmpty = (field: string, value: string | null | undefined) => {
+      if (!(lead as Record<string, unknown>)[field] && value) leadUpdates[field] = value;
+    };
+    fillIfEmpty("company_size", ai.company_size_estimate);
+    fillIfEmpty("phone", ai.company_phone);
+    fillIfEmpty("email", ai.company_email);
+    fillIfEmpty("street", ai.street);
+    fillIfEmpty("zip", ai.zip);
+    fillIfEmpty("city", ai.city);
+    fillIfEmpty("state", ai.state);
+    fillIfEmpty("legal_form", ai.legal_form);
+    fillIfEmpty("register_id", ai.register_id);
 
     // Auto-Qualifizierung je nach Service-Modus
     if (serviceMode === "webdev") {

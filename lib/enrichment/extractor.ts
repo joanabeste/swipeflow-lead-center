@@ -24,6 +24,15 @@ export interface EnrichmentResult {
     company_size_estimate: string | null;
     founding_year: string | null;
     specializations: string[];
+    // Firmenstammdaten aus Impressum
+    company_phone: string | null;
+    company_email: string | null;
+    street: string | null;
+    zip: string | null;
+    city: string | null;
+    state: string | null;
+    legal_form: string | null;
+    register_id: string | null;
   };
 }
 
@@ -39,11 +48,14 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   }
   if (config.career_page) fields.push('"career_page_url":""');
   if (config.job_postings) fields.push('"job_postings":[{"title":"","url":"","location":"","posted_date":""}]');
-  if (config.company_details) fields.push('"additional_info":{"company_size_estimate":"","founding_year":"","specializations":[]}');
+  if (config.company_details) fields.push('"additional_info":{"company_size_estimate":"","founding_year":"","specializations":[],"company_phone":"","company_email":"","street":"","zip":"","city":"","state":"","legal_form":"","register_id":""}');
   parts.push(`Format: {${fields.join(",")}}`);
 
   // Regeln
   const rules: string[] = ["Nur echte Daten, null wenn nicht vorhanden."];
+  if (config.company_details) {
+    rules.push("Firmenstammdaten bevorzugt aus Impressum. legal_form: z.B. 'GmbH', 'AG', 'UG', 'GbR', 'e.K.'. register_id: z.B. 'HRB 12345 Amtsgericht München'. street: inkl. Hausnummer. zip: 5-stellig. state: Bundesland (z.B. 'Bayern'). company_phone: +49-Format.");
+  }
   if (config.contacts_management && !config.contacts_all) {
     rules.push("Kontakte: NUR Geschäftsführer/Inhaber/Management.");
   } else if (config.contacts_all) {
@@ -136,7 +148,7 @@ export async function extractFromPages(
   const expectedOutput = (config.contacts_management || config.contacts_all ? 600 : 0)
     + (config.job_postings ? 1000 : 0)
     + (config.career_page ? 80 : 0)
-    + (config.company_details ? 150 : 0)
+    + (config.company_details ? 350 : 0)
     + 80;
   const maxTokens = Math.min(Math.max(expectedOutput, 400), 2500);
 
@@ -189,10 +201,18 @@ export async function extractFromPages(
       contacts: Array.isArray(raw.contacts) ? raw.contacts : [],
       career_page_url: raw.career_page_url ?? null,
       job_postings: Array.isArray(raw.job_postings) ? raw.job_postings : [],
-      additional_info: raw.additional_info ?? {
-        company_size_estimate: null,
-        founding_year: null,
-        specializations: [],
+      additional_info: {
+        company_size_estimate: raw.additional_info?.company_size_estimate ?? null,
+        founding_year: raw.additional_info?.founding_year ?? null,
+        specializations: Array.isArray(raw.additional_info?.specializations) ? raw.additional_info.specializations : [],
+        company_phone: raw.additional_info?.company_phone ?? null,
+        company_email: raw.additional_info?.company_email ?? null,
+        street: raw.additional_info?.street ?? null,
+        zip: raw.additional_info?.zip ?? null,
+        city: raw.additional_info?.city ?? null,
+        state: raw.additional_info?.state ?? null,
+        legal_form: raw.additional_info?.legal_form ?? null,
+        register_id: raw.additional_info?.register_id ?? null,
       },
     };
   } catch (e) {
