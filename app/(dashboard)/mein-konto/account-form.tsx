@@ -3,11 +3,11 @@
 import { useActionState, useEffect } from "react";
 import { Lock, Check } from "lucide-react";
 import { changeMyPassword } from "./actions";
-import { useToast } from "@/lib/use-toast";
+import { useToastContext } from "../toast-provider";
 
 export function AccountForm({ hasPassword }: { hasPassword: boolean }) {
   const [state, formAction, pending] = useActionState(changeMyPassword, undefined);
-  const { addToast } = useToast();
+  const { addToast } = useToastContext();
 
   useEffect(() => {
     if (state?.success) addToast("Passwort erfolgreich geändert.", "success");

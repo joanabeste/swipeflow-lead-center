@@ -4,11 +4,11 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import { PhoneCall, Check, RefreshCw } from "lucide-react";
 import type { PhonemondoSource } from "@/lib/phonemondo/types";
 import { fetchMyPhonemondoSources, savePhonemondoExtension } from "./actions";
-import { useToast } from "@/lib/use-toast";
+import { useToastContext } from "../toast-provider";
 
 export function PhonemondoForm({ extension }: { extension: string | null }) {
   const [state, formAction, pending] = useActionState(savePhonemondoExtension, undefined);
-  const { addToast } = useToast();
+  const { addToast } = useToastContext();
   const [sources, setSources] = useState<PhonemondoSource[] | null>(null);
   const [loading, startLoading] = useTransition();
 
