@@ -10,7 +10,9 @@
 import crypto from "node:crypto";
 import type { PhoneMondoWebhookEvent, TriggerCallInput, TriggerCallResult } from "./types";
 
-const DEFAULT_BASE_URL = "https://api.phonemondo.com";
+// PhoneMondo betreibt die API unter phonemondo.com/api/v1 (nicht api.phonemondo.com
+// — dieser Subdomain antwortet zwar DNS, aber kein HTTPS).
+const DEFAULT_BASE_URL = "https://phonemondo.com/api/v1";
 
 export function isPhoneMondoConfigured(): boolean {
   return !!process.env.PHONEMONDO_API_TOKEN;
@@ -31,28 +33,39 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
       "PhoneMondo nicht konfiguriert. Setze PHONEMONDO_API_TOKEN in den Umgebungsvariablen.",
     );
   }
-  const baseUrl = process.env.PHONEMONDO_API_BASE_URL ?? DEFAULT_BASE_URL;
-  const url = `${baseUrl.replace(/\/+$/, "")}/v1/calls`; // ANPASSEN nach API-Doku
+  const baseUrl = (process.env.PHONEMONDO_API_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  // ANPASSEN nach API-Doku, sobald Endpoint-Pfad bestätigt ist
+  const url = `${baseUrl}/calls`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      // ANPASSEN nach API-Doku (z.B. "caller", "callee", "user_extension" o.ä.)
-      target: input.target,
-      extension: input.extension,
-      metadata: input.metadata ?? {},
-    }),
-    signal: AbortSignal.timeout(10_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        // ANPASSEN nach API-Doku (z.B. "caller", "callee", "user_extension" o.ä.)
+        target: input.target,
+        extension: input.extension,
+        metadata: input.metadata ?? {},
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : "unbekannt";
+    console.error("[phonemondo] triggerCall network error", { url, reason });
+    throw new Error(
+      `PhoneMondo unter ${url} nicht erreichbar (${reason}). Prüfe PHONEMONDO_API_BASE_URL in .env.local.`,
+    );
+  }
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`PhoneMondo-Call fehlgeschlagen (${response.status}): ${text.slice(0, 200)}`);
+    console.error("[phonemondo] triggerCall HTTP-Fehler", { url, status: response.status, body: text.slice(0, 500) });
+    throw new Error(`PhoneMondo-Call fehlgeschlagen (HTTP ${response.status} bei ${url}): ${text.slice(0, 200)}`);
   }
 
   const json = (await response.json()) as { id?: string; call_id?: string };

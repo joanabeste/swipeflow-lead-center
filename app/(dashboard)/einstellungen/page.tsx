@@ -46,7 +46,7 @@ export default async function EinstellungenPage() {
   const phonemondoStatus = {
     hasToken: !!process.env.PHONEMONDO_API_TOKEN,
     hasSecret: !!process.env.PHONEMONDO_WEBHOOK_SECRET,
-    baseUrl: process.env.PHONEMONDO_API_BASE_URL ?? "https://api.phonemondo.com",
+    baseUrl: process.env.PHONEMONDO_API_BASE_URL ?? "https://phonemondo.com/api/v1",
   };
 
   return (
