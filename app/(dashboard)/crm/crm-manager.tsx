@@ -58,12 +58,14 @@ interface Props {
   currentOrder: string;
   currentQuery: string;
   currentStatus: string;
+  currentActivity: string;
+  currentLastCall: string;
   currentFilters: Record<string, string>;
 }
 
 export function CrmManager({
   leads, statuses, totalPages, currentPage, currentSort, currentOrder,
-  currentQuery, currentStatus, currentFilters,
+  currentQuery, currentStatus, currentActivity, currentLastCall, currentFilters,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -141,54 +143,79 @@ export function CrmManager({
     return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
   }
 
+  const hasActiveFilter = currentStatus || currentActivity || currentLastCall || Object.keys(currentFilters).length > 0;
+
   return (
     <div className="mt-4 space-y-4">
-      {/* Status-Filter-Chips */}
+      {/* Toolbar: Suche + Filter-Dropdowns + Neuer Lead + Spalten-Picker */}
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => updateParams({ crm_status: "", page: "1" })}
-          className={`rounded-full px-3 py-1 text-sm transition ${
-            !currentStatus
-              ? "bg-primary text-white"
-              : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700"
-          }`}
-        >
-          Alle
-        </button>
-        {activeStatuses.map((s) => {
-          const active = currentStatus === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => updateParams({ crm_status: s.id, page: "1" })}
-              className="rounded-full px-3 py-1 text-sm transition"
-              style={
-                active
-                  ? { backgroundColor: s.color, color: "white" }
-                  : { backgroundColor: `${s.color}15`, color: s.color }
-              }
-            >
-              {s.label}
-            </button>
-          );
-        })}
-      </div>
+        <div className="flex-1 min-w-[240px]">
+          <SearchBox
+            defaultValue={currentQuery}
+            placeholder="Firmenname, Domain, Ort…"
+            onSubmit={(v) => updateParams({ q: v, page: "1" })}
+          />
+        </div>
 
-      {/* Toolbar: Suche + Neuer Lead + Spalten-Picker */}
-      <div className="flex items-center gap-3">
-        <SearchBox
-          defaultValue={currentQuery}
-          placeholder="Suche nach Firmenname, Domain oder Ort…"
-          onSubmit={(v) => updateParams({ q: v, page: "1" })}
+        <FilterSelect
+          label="CRM-Status"
+          value={currentStatus}
+          onChange={(v) => updateParams({ crm_status: v, page: "1" })}
+          options={[
+            { value: "", label: "Alle Status" },
+            ...activeStatuses.map((s) => ({ value: s.id, label: s.label })),
+          ]}
+          activeColor={currentStatus ? activeStatuses.find((s) => s.id === currentStatus)?.color : undefined}
         />
-        <button
-          onClick={() => setShowNewLead(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-dark"
-        >
-          <Plus className="h-4 w-4" />
-          Neuer Lead
-        </button>
-        <ColumnPicker columns={ALL_COLUMNS} visible={visibleCols} onToggle={toggleColumn} />
+
+        <FilterSelect
+          label="Aktivität"
+          value={currentActivity}
+          onChange={(v) => updateParams({ activity: v, page: "1" })}
+          options={[
+            { value: "", label: "Alle" },
+            { value: "called", label: "Mit Anrufen" },
+            { value: "uncalled", label: "Ohne Anrufe" },
+            { value: "noted", label: "Mit Notizen" },
+            { value: "unnoted", label: "Ohne Notizen" },
+          ]}
+        />
+
+        <FilterSelect
+          label="Letzter Anruf"
+          value={currentLastCall}
+          onChange={(v) => updateParams({ last_call: v, page: "1" })}
+          options={[
+            { value: "", label: "Egal" },
+            { value: "today", label: "Heute" },
+            { value: "7d", label: "Letzte 7 Tage" },
+            { value: "30d", label: "Letzte 30 Tage" },
+            { value: "older_30d", label: "Älter als 30 Tage" },
+            { value: "never", label: "Nie angerufen" },
+          ]}
+        />
+
+        {hasActiveFilter && (
+          <button
+            onClick={() => {
+              router.push("/crm");
+            }}
+            className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            Zurücksetzen
+          </button>
+        )}
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowNewLead(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-dark"
+          >
+            <Plus className="h-4 w-4" />
+            Neuer Lead
+          </button>
+          <ColumnPicker columns={ALL_COLUMNS} visible={visibleCols} onToggle={toggleColumn} />
+        </div>
       </div>
 
       {showNewLead && (
@@ -356,6 +383,44 @@ export function CrmManager({
         onPageChange={(p) => updateParams({ page: String(p) })}
       />
     </div>
+  );
+}
+
+function FilterSelect({
+  label, value, onChange, options, activeColor,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  activeColor?: string;
+}) {
+  const isActive = value !== "";
+  const currentLabel = options.find((o) => o.value === value)?.label ?? label;
+  return (
+    <label className="relative inline-flex items-center">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none rounded-md border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-gray-100 dark:hover:bg-white/5"
+        style={
+          isActive && activeColor
+            ? { borderColor: activeColor, color: activeColor, backgroundColor: `${activeColor}10` }
+            : undefined
+        }
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.value === "" ? label : opt.label}
+          </option>
+        ))}
+      </select>
+      <svg className="pointer-events-none absolute right-2 h-3 w-3 text-gray-400" viewBox="0 0 12 12" fill="currentColor">
+        <path d="M6 8L2 4h8z" />
+      </svg>
+      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+      {false && <span>{currentLabel}</span>}
+    </label>
   );
 }
 

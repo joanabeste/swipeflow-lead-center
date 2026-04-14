@@ -29,14 +29,30 @@ export default async function CrmPage({
     .order("display_order", { ascending: true });
   const statuses = (statusRows ?? []) as CustomLeadStatus[];
 
-  // CRM-Scope: alle Leads mit status='qualified' ODER mindestens einem Anruf
+  // Alle Leads mit mindestens einem Call
   const { data: calledRows } = await db
     .from("lead_calls")
     .select("lead_id")
-    .limit(5000);
+    .limit(10000);
   const calledLeadIds = Array.from(new Set((calledRows ?? []).map((r) => r.lead_id)));
 
+  // Recent-Calls für last_call-Filter
+  async function fetchRecentCallLeadIds(sinceIso: string): Promise<string[]> {
+    const { data } = await db
+      .from("lead_calls")
+      .select("lead_id")
+      .gte("started_at", sinceIso)
+      .limit(10000);
+    return Array.from(new Set((data ?? []).map((r) => r.lead_id)));
+  }
+
+  // Alle Leads mit Notizen (für activity-Filter)
+  const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
+  const notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
+
   let query = db.from("leads").select("*", { count: "exact" });
+
+  // CRM-Scope: qualified ODER hat mind. einen Call
   if (calledLeadIds.length > 0) {
     query = query.or(`status.eq.qualified,id.in.(${calledLeadIds.join(",")})`);
   } else {
@@ -44,12 +60,54 @@ export default async function CrmPage({
   }
 
   if (sp.crm_status) query = query.eq("crm_status_id", sp.crm_status);
+
+  // Aktivitäts-Filter
+  if (sp.activity === "called" && calledLeadIds.length > 0) {
+    query = query.in("id", calledLeadIds);
+  } else if (sp.activity === "uncalled") {
+    if (calledLeadIds.length > 0) {
+      query = query.not("id", "in", `(${calledLeadIds.join(",")})`);
+    }
+  } else if (sp.activity === "noted" && notedLeadIds.length > 0) {
+    query = query.in("id", notedLeadIds);
+  } else if (sp.activity === "unnoted") {
+    if (notedLeadIds.length > 0) {
+      query = query.not("id", "in", `(${notedLeadIds.join(",")})`);
+    }
+  }
+
+  // Letzter-Anruf-Filter (Zeitfenster)
+  if (sp.last_call === "today") {
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    const recent = await fetchRecentCallLeadIds(since.toISOString());
+    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (sp.last_call === "7d") {
+    const since = new Date(Date.now() - 7 * 86400_000);
+    const recent = await fetchRecentCallLeadIds(since.toISOString());
+    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (sp.last_call === "30d") {
+    const since = new Date(Date.now() - 30 * 86400_000);
+    const recent = await fetchRecentCallLeadIds(since.toISOString());
+    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (sp.last_call === "older_30d") {
+    // in calledLeadIds ABER nicht in recent(30d)
+    const recent = await fetchRecentCallLeadIds(new Date(Date.now() - 30 * 86400_000).toISOString());
+    const recentSet = new Set(recent);
+    const older = calledLeadIds.filter((id) => !recentSet.has(id));
+    query = older.length > 0 ? query.in("id", older) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+  } else if (sp.last_call === "never") {
+    if (calledLeadIds.length > 0) {
+      query = query.not("id", "in", `(${calledLeadIds.join(",")})`);
+    }
+  }
+
   if (sp.q) {
     const like = `%${sp.q}%`;
     query = query.or(`company_name.ilike.${like},domain.ilike.${like},city.ilike.${like}`);
   }
 
-  // Spalten-Filter (filter_<col>=...)
+  // Spalten-Filter
   const columnFilters: Record<string, string> = {};
   for (const [key, value] of Object.entries(sp)) {
     if (key.startsWith("filter_") && value) {
@@ -66,7 +124,7 @@ export default async function CrmPage({
   const leadList = (leads ?? []) as Lead[];
   const leadIds = leadList.map((l) => l.id);
 
-  const [{ data: callCounts }, { data: noteCounts }] = await Promise.all([
+  const [{ data: callDetails }, { data: noteCounts }] = await Promise.all([
     leadIds.length
       ? db.from("lead_calls").select("lead_id, status, started_at").in("lead_id", leadIds)
       : Promise.resolve({ data: [] as { lead_id: string; status: string; started_at: string }[] }),
@@ -76,7 +134,7 @@ export default async function CrmPage({
   ]);
 
   const callByLead = new Map<string, { count: number; lastAt: string | null }>();
-  for (const c of callCounts ?? []) {
+  for (const c of callDetails ?? []) {
     const prev = callByLead.get(c.lead_id) ?? { count: 0, lastAt: null as string | null };
     const nextLast = !prev.lastAt || c.started_at > prev.lastAt ? c.started_at : prev.lastAt;
     callByLead.set(c.lead_id, { count: prev.count + 1, lastAt: nextLast });
@@ -123,6 +181,8 @@ export default async function CrmPage({
         currentOrder={order}
         currentQuery={sp.q ?? ""}
         currentStatus={sp.crm_status ?? ""}
+        currentActivity={sp.activity ?? ""}
+        currentLastCall={sp.last_call ?? ""}
         currentFilters={columnFilters}
       />
     </div>
