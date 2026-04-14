@@ -77,10 +77,32 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
   if (parsed && typeof parsed === "object") {
     const o = parsed as Record<string, unknown>;
     if (o.state === "err" || o.status === "err" || o.success === false) {
-      const code = o.code ?? o.error_code ?? "ERR";
+      const code = String(o.code ?? o.error_code ?? "ERR");
       const msg = o.msg ?? o.message ?? o.error ?? "unbekannt";
       console.error("[phonemondo] triggerCall — API-Error", { url, code, msg, body: rawText.slice(0, 300) });
-      throw new Error(`PhoneMondo-API-Fehler (${code}): ${msg}. Endpoint ${url} prüfen.`);
+
+      // Pure NOTFOUND ohne SOURCE-Prefix = der Endpoint-Pfad existiert gar nicht.
+      // Typische Ursache: PHONEMONDO_API_BASE_URL zeigt auf den falschen Pfad
+      // (z.B. noch /api/v1/ — korrekt ist https://www.phonemondo.com/api).
+      if (code === "NOTFOUND") {
+        throw new Error(
+          `PhoneMondo: Endpoint ${url} existiert nicht. Prüfe PHONEMONDO_API_BASE_URL — ` +
+          `korrekt ist 'https://www.phonemondo.com/api' (ohne /v1).`,
+        );
+      }
+      if (code === "SOURCENOTFOUND") {
+        throw new Error(
+          `PhoneMondo: Source-UID nicht gefunden. In Mein Konto → 'Sources laden' ` +
+          `klicken und korrekte UID auswählen.`,
+        );
+      }
+      if (code === "SOURCEBUSY") {
+        throw new Error(`PhoneMondo: Die Source ist gerade beschäftigt. Kurz warten und erneut versuchen.`);
+      }
+      if (code === "INSUFFICIENT_CAPABILITIES") {
+        throw new Error(`PhoneMondo: Deine Source unterstützt Click-to-Call nicht (fehlende Capability).`);
+      }
+      throw new Error(`PhoneMondo-API-Fehler (${code}): ${msg}.`);
     }
   }
 
