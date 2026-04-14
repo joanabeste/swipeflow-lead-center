@@ -307,21 +307,21 @@ function ContactRow({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5">
           <button
             onClick={onEdit}
-            className="rounded p-1 text-gray-400 hover:bg-white hover:text-gray-700 dark:hover:bg-[#2c2c2e] dark:hover:text-gray-200"
+            className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-white hover:text-gray-700 hover:opacity-100 dark:hover:bg-[#2c2c2e] dark:hover:text-gray-200"
             title="Bearbeiten"
           >
-            <Pencil className="h-3 w-3" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={handleDelete}
             disabled={pending}
-            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+            className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-red-50 hover:text-red-600 hover:opacity-100 dark:hover:bg-red-900/20"
             title="Löschen"
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
@@ -485,10 +485,10 @@ function JobRow({ job, leadId }: { job: LeadJobPosting; leadId: string }) {
         <button
           onClick={handleDelete}
           disabled={pending}
-          className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-900/20"
+          className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-red-50 hover:text-red-600 hover:opacity-100 dark:hover:bg-red-900/20"
           title="Löschen"
         >
-          <Trash2 className="h-3 w-3" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
