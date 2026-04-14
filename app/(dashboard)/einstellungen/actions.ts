@@ -273,3 +273,105 @@ export async function deleteFieldProfile(id: string) {
 
   revalidatePath("/einstellungen");
 }
+
+// ─── Custom Lead Status (CRM-Workflow) ───────────────────────────────
+
+async function ensureAdmin() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." as const };
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+  if (profile?.role !== "admin") return { error: "Nur Administratoren." as const };
+  return { user };
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/ü/g, "ue").replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "status";
+}
+
+export async function saveCrmStatus(_prev: unknown, formData: FormData) {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  const id = (formData.get("id") as string | null)?.trim();
+  const label = (formData.get("label") as string).trim();
+  const color = ((formData.get("color") as string) || "#6b7280").trim();
+  const description = ((formData.get("description") as string) || "").trim() || null;
+  const displayOrder = parseInt((formData.get("display_order") as string) || "0", 10) || 0;
+  const isActive = formData.get("is_active") === "on";
+
+  if (!label) return { error: "Label fehlt." };
+
+  if (id) {
+    const { error } = await db
+      .from("custom_lead_statuses")
+      .update({
+        label, color, description,
+        display_order: displayOrder,
+        is_active: isActive,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) return { error: error.message };
+    await logAudit({
+      userId: check.user.id,
+      action: "custom_lead_status.updated",
+      entityType: "custom_lead_status",
+      entityId: id,
+      details: { label },
+    });
+  } else {
+    // Neuer Eintrag — ID aus Label ableiten; bei Kollision Suffix anhängen.
+    let newId = slugify(label);
+    for (let i = 2; i < 50; i++) {
+      const { data: exists } = await db.from("custom_lead_statuses").select("id").eq("id", newId).maybeSingle();
+      if (!exists) break;
+      newId = `${slugify(label)}-${i}`;
+    }
+    const { error } = await db.from("custom_lead_statuses").insert({
+      id: newId, label, color, description,
+      display_order: displayOrder,
+      is_active: isActive,
+      created_by: check.user.id,
+    });
+    if (error) return { error: error.message };
+    await logAudit({
+      userId: check.user.id,
+      action: "custom_lead_status.created",
+      entityType: "custom_lead_status",
+      entityId: newId,
+      details: { label },
+    });
+  }
+
+  revalidatePath("/einstellungen");
+  revalidatePath("/crm");
+  return { success: true };
+}
+
+export async function deleteCrmStatus(id: string) {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  const { error } = await db.from("custom_lead_statuses").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "custom_lead_status.deleted",
+    entityType: "custom_lead_status",
+    entityId: id,
+  });
+
+  revalidatePath("/einstellungen");
+  revalidatePath("/crm");
+  return { success: true };
+}

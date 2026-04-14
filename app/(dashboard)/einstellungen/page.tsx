@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Profile } from "@/lib/types";
+import type { CustomLeadStatus, Profile } from "@/lib/types";
 import { SettingsManager } from "./settings-manager";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
@@ -27,9 +27,10 @@ export default async function EinstellungenPage() {
     );
   }
 
-  const [{ data: fieldProfiles }, { data: profiles }, enrichmentDefaults, webdevScoring, recruitingScoring, hq] = await Promise.all([
+  const [{ data: fieldProfiles }, { data: profiles }, { data: crmStatuses }, enrichmentDefaults, webdevScoring, recruitingScoring, hq] = await Promise.all([
     supabase.from("required_field_profiles").select("*").order("name"),
     supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+    supabase.from("custom_lead_statuses").select("*").order("display_order", { ascending: true }),
     getAllEnrichmentDefaults(),
     getWebdevScoringConfig(),
     getRecruitingScoringConfig(),
@@ -52,6 +53,7 @@ export default async function EinstellungenPage() {
         recruitingScoring={recruitingScoring}
         hq={hq}
         profiles={(profiles as Profile[]) ?? []}
+        crmStatuses={(crmStatuses as CustomLeadStatus[]) ?? []}
         currentUserId={user!.id}
       />
     </div>
