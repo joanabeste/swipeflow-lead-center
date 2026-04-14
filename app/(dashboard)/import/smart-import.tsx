@@ -62,7 +62,19 @@ export function SmartImport({ templates }: Props) {
     return clean.length > max ? clean.slice(0, max - 1) + "…" : clean || "–";
   }
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+  const MAX_ROWS_CLIENT = 10_000;
+
   async function processFile(file: File) {
+    // Datei-Größe prüfen
+    if (file.size > MAX_FILE_SIZE) {
+      setResult({
+        error: `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum: 50 MB. Teile die Datei auf.`,
+      });
+      setPhase("result");
+      return;
+    }
+
     setFileName(file.name);
     const buffer = await file.arrayBuffer();
     const text = decodeBuffer(buffer);
@@ -71,6 +83,16 @@ export function SmartImport({ templates }: Props) {
     const det = detectDelimiter(text);
     setDelimiter(det);
     const { headers: h, rows } = parseCSV(text, det);
+
+    // Zeilen-Limit prüfen
+    if (rows.length > MAX_ROWS_CLIENT) {
+      setResult({
+        error: `Zu viele Zeilen (${rows.length}). Maximum: ${MAX_ROWS_CLIENT} pro Import. Teile die Datei auf.`,
+      });
+      setPhase("result");
+      return;
+    }
+
     setHeaders(h);
     setAllRows(rows);
 

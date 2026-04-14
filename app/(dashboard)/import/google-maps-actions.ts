@@ -3,11 +3,29 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import { isFuzzyMatch, normalizeDomain } from "@/lib/csv/dedup";
 import { GOOGLE_MAPS_COLUMNS } from "@/lib/csv/format-detector";
 import { logAudit } from "@/lib/audit-log";
-import type { BlacklistRule, BlacklistEntry, CancelRule } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+import {
+  validateCsvSize,
+  sanitizeCellValue,
+  loadImportContext,
+  buildLeadIndex,
+  findMatchingLead,
+  createImportLog,
+  finalizeImportLog,
+  batchInsert,
+} from "@/lib/csv/import-helpers";
+
+// Mojibake-Fix für Google-Maps-Exports
+function fixMojibake(s: string | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/Ã¤/g, "ä").replace(/Ã¶/g, "ö").replace(/Ã¼/g, "ü")
+    .replace(/Ã„/g, "Ä").replace(/Ã–/g, "Ö").replace(/Ãœ/g, "Ü")
+    .replace(/ÃŸ/g, "ß").replace(/Â·/g, "").replace(/Â­/g, "")
+    .replace(/Â /g, " ").trim();
+}
 
 export async function processGoogleMapsImport(rows: string[][]): Promise<{
   success: boolean;
@@ -26,53 +44,43 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
   // Valide Zeilen filtern (müssen Firmenname haben)
   const validRows = rows.filter((r) => r[col.companyName]?.trim());
 
-  // Import-Log
-  const { data: importLog } = await db
-    .from("import_logs")
-    .insert({
-      file_name: "google-maps-import",
-      file_path: "",
-      row_count: validRows.length,
-      import_type: "csv",
-      status: "processing",
-      created_by: user.id,
-    })
-    .select()
-    .single();
+  // Limit-Check
+  const sizeError = validateCsvSize(validRows.length);
+  if (sizeError) return { success: false, imported: 0, updated: 0, skipped: 0, error: sizeError.error };
 
-  // Blacklist + Cancel-Rules
-  const [{ data: rules }, { data: entries }, { data: cancelRules }] = await Promise.all([
-    db.from("blacklist_rules").select("*").eq("is_active", true),
-    db.from("blacklist_entries").select("*"),
-    db.from("cancel_rules").select("*").eq("is_active", true),
-  ]);
+  // Import-Log (wirft bei Fehler)
+  let importLog;
+  try {
+    importLog = await createImportLog(db, {
+      fileName: "google-maps-import",
+      rowCount: validRows.length,
+      importType: "google_maps",
+      userId: user.id,
+    });
+  } catch (e) {
+    return { success: false, imported: 0, updated: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+  }
 
-  // Bestehende Leads
+  // Blacklist + Cancel-Rules + Lead-Index
+  const ctx = await loadImportContext(db);
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, domain, city");
+    .select("id, company_name, domain");
+  const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
   let updated = 0;
   let skipped = 0;
 
-  // Mojibake fixen
-  function fix(s: string | undefined): string {
-    if (!s) return "";
-    return s
-      .replace(/Ã¤/g, "ä").replace(/Ã¶/g, "ö").replace(/Ã¼/g, "ü")
-      .replace(/Ã„/g, "Ä").replace(/Ã–/g, "Ö").replace(/Ãœ/g, "Ü")
-      .replace(/ÃŸ/g, "ß").replace(/Â·/g, "").replace(/Â­/g, "")
-      .replace(/Â /g, " ").trim();
-  }
+  // Sammelliste neue Leads für Batch-Insert
+  const newLeads: Record<string, unknown>[] = [];
 
   for (const row of validRows) {
-    const companyName = fix(row[col.companyName]);
-    const phone = fix(row[col.phone]);
+    const companyName = sanitizeCellValue(fixMojibake(row[col.companyName])) ?? "";
+    const phone = sanitizeCellValue(fixMojibake(row[col.phone]));
     const websiteRaw = row[col.website]?.trim() ?? "";
-    const category = fix(row[col.category]);
-    const address = fix(row[col.address]);
-    const rating = row[col.rating]?.replace(",", ".")?.trim();
+    const category = sanitizeCellValue(fixMojibake(row[col.category]));
+    const address = sanitizeCellValue(fixMojibake(row[col.address]));
 
     // Website bereinigen (Google Ads Links ausfiltern)
     const website = websiteRaw.includes("google.com/aclk") ? null : websiteRaw || null;
@@ -86,26 +94,15 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
       } catch { /* ignore */ }
     }
 
-    // Blacklist
+    // Blacklist + Cancel
     const leadData: Record<string, string | null> = { company_name: companyName, domain, phone };
-    const blacklistResult = checkLead(leadData, (rules as BlacklistRule[]) ?? [], (entries as BlacklistEntry[]) ?? []);
-    if (blacklistResult.blocked) { skipped++; continue; }
+    if (checkLead(leadData, ctx.rules, ctx.entries).blocked) { skipped++; continue; }
+    if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) { skipped++; continue; }
 
-    // Cancel-Rules
-    const cancelResult = evaluateCancelRules(leadData as Record<string, unknown>, (cancelRules as CancelRule[]) ?? [], "import");
-    if (cancelResult.cancelled) { skipped++; continue; }
-
-    // Duplikat-Check
-    let existingId: string | null = null;
-    if (existingLeads) {
-      for (const ex of existingLeads) {
-        if (domain && ex.domain && normalizeDomain(domain) === normalizeDomain(ex.domain)) { existingId = ex.id; break; }
-        if (isFuzzyMatch(companyName, ex.company_name)) { existingId = ex.id; break; }
-      }
-    }
+    // O(1)/O(n) Duplikat-Check
+    const existingId = findMatchingLead(leadIndex, domain, companyName);
 
     if (existingId) {
-      // Update leere Felder
       const { data: existingLead } = await db.from("leads").select("*").eq("id", existingId).single();
       if (existingLead) {
         const updates: Record<string, unknown> = {};
@@ -121,7 +118,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
         }
       }
     } else {
-      await db.from("leads").insert({
+      newLeads.push({
         company_name: companyName,
         phone,
         domain,
@@ -130,26 +127,30 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
         street: address || null,
         country: "Deutschland",
         source_type: "csv",
-        source_import_id: importLog?.id,
+        source_import_id: importLog.id,
         status: "imported",
         created_by: user.id,
       });
-      imported++;
     }
   }
 
-  await db.from("import_logs").update({
-    imported_count: imported,
-    updated_count: updated,
-    skipped_count: skipped,
-    status: "completed",
-  }).eq("id", importLog?.id);
+  // Batch-Insert neue Leads
+  if (newLeads.length > 0) {
+    const result = await batchInsert(db, "leads", newLeads);
+    imported = result.inserted;
+  }
+
+  await finalizeImportLog(db, importLog.id, {
+    imported,
+    updated,
+    skipped,
+  });
 
   await logAudit({
     userId: user.id,
     action: "import.google_maps",
     entityType: "import_log",
-    entityId: importLog?.id,
+    entityId: importLog.id,
     details: { total: validRows.length, imported, updated, skipped },
   });
 

@@ -7,8 +7,15 @@ import { normalizeLeadRow } from "@/lib/csv/normalizer";
 import { findInternalDuplicates, findDbDuplicates } from "@/lib/csv/dedup";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import type { CancelRule } from "@/lib/types";
 import { logAudit } from "@/lib/audit-log";
+import {
+  validateCsvSize,
+  sanitizeCellValue,
+  loadImportContext,
+  createImportLog,
+  finalizeImportLog,
+  batchInsert,
+} from "@/lib/csv/import-helpers";
 
 export async function processImport(
   fileContent: string,
@@ -25,30 +32,30 @@ export async function processImport(
   // CSV parsen
   const { headers, rows } = parseCSV(fileContent, delimiter);
 
-  // Import-Log erstellen
-  const { data: importLog, error: logError } = await db
-    .from("import_logs")
-    .insert({
-      file_name: "csv-import",
-      file_path: "",
-      row_count: rows.length,
-      status: "processing",
-      created_by: user?.id ?? null,
-    })
-    .select()
-    .single();
+  // Limit-Check
+  const sizeError = validateCsvSize(rows.length);
+  if (sizeError) return { error: sizeError.error };
 
-  if (logError || !importLog) {
-    return { error: `Import-Log konnte nicht erstellt werden: ${logError?.message ?? "Unbekannter Fehler"} (Code: ${logError?.code ?? "?"})` };
+  // Import-Log (wirft bei Fehler — kein silent fail)
+  let importLog;
+  try {
+    importLog = await createImportLog(db, {
+      fileName: "csv-import",
+      rowCount: rows.length,
+      importType: "csv",
+      userId: user?.id ?? null,
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
-  // Zeilen auf HubSpot-Schema mappen
+  // Zeilen auf HubSpot-Schema mappen + CSV-Injection sanitizen
   const mappedRows = rows.map((row) => {
     const mapped: Record<string, string | null> = {};
     headers.forEach((header, i) => {
       const targetField = mapping[header];
       if (targetField && row[i]) {
-        mapped[targetField] = row[i];
+        mapped[targetField] = sanitizeCellValue(row[i]);
       }
     });
     return normalizeLeadRow(mapped);
@@ -60,12 +67,8 @@ export async function processImport(
   // DB-Duplikate finden
   const dbDups = await findDbDuplicates(db, mappedRows);
 
-  // Blacklist-Regeln, Einträge und Cancel-Rules laden
-  const [{ data: rules }, { data: entries }, { data: cancelRules }] = await Promise.all([
-    db.from("blacklist_rules").select("*").eq("is_active", true),
-    db.from("blacklist_entries").select("*"),
-    db.from("cancel_rules").select("*").eq("is_active", true),
-  ]);
+  // Blacklist-Regeln, Einträge und Cancel-Rules in einem Rutsch laden (gecacht für gesamten Import)
+  const ctx = await loadImportContext(db);
 
   let importedCount = 0;
   let skippedCount = 0;
@@ -137,12 +140,12 @@ export async function processImport(
     }
 
     // Blacklist-Check
-    const blacklistResult = checkLead(row, rules ?? [], entries ?? []);
+    const blacklistResult = checkLead(row, ctx.rules, ctx.entries);
 
     // Cancel-Rules-Check (Import-Phase)
     const cancelResult = evaluateCancelRules(
       row as unknown as Record<string, unknown>,
-      (cancelRules as CancelRule[]) ?? [],
+      ctx.cancelRules,
       "import",
     );
 
@@ -190,30 +193,23 @@ export async function processImport(
     importedCount++;
   }
 
-  // Batch-Inserts
-  for (let i = 0; i < leadsToInsert.length; i += BATCH_SIZE) {
-    const batch = leadsToInsert.slice(i, i + BATCH_SIZE);
-    const { error } = await db.from("leads").insert(batch);
-    if (error) {
-      errorCount += batch.length;
-      importedCount -= batch.length;
-      errors.push({ row: i, field: "", message: error.message });
-    }
+  // Batch-Inserts mit Fehlersammlung
+  const batchResult = await batchInsert(db, "leads", leadsToInsert, BATCH_SIZE);
+  if (batchResult.failed > 0) {
+    importedCount -= batchResult.failed;
+    errorCount += batchResult.failed;
+    batchResult.errors.forEach((msg) => errors.push({ row: -1, field: "batch", message: msg }));
   }
 
-  // Import-Log aktualisieren
-  await db
-    .from("import_logs")
-    .update({
-      status: "completed",
-      imported_count: importedCount,
-      skipped_count: skippedCount,
-      duplicate_count: duplicateCount,
-      updated_count: updatedCount,
-      error_count: errorCount,
-      errors,
-    })
-    .eq("id", importLog.id);
+  // Import-Log abschließen
+  await finalizeImportLog(db, importLog.id, {
+    imported: importedCount,
+    skipped: skippedCount,
+    duplicates: duplicateCount,
+    updated: updatedCount,
+    errors: errorCount,
+    errorDetails: errors,
+  });
 
   // Mapping-Template speichern
   if (templateName) {

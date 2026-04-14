@@ -5,6 +5,8 @@ import { ImportHistory } from "./import-history";
 // Diese Seite darf nicht gecacht werden — Import-Historie muss nach jedem Import frisch sein
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+// Server Actions auf dieser Page (z.B. Imports) dürfen bis zu 5 Min laufen
+export const maxDuration = 300;
 
 export default async function ImportPage() {
   const db = createServiceClient();
@@ -14,9 +16,10 @@ export default async function ImportPage() {
     .select("*")
     .order("name");
 
+  // Robust gegen alte Schemata: zuerst minimale Spalten, dann Full-Select
   const { data: imports, error: importsError, count } = await db
     .from("import_logs")
-    .select("*", { count: "exact" })
+    .select("id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count", { count: "exact" })
     .order("created_at", { ascending: false })
     .limit(20);
 

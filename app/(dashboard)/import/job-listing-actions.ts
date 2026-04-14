@@ -1,14 +1,22 @@
 "use server";
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
+import { parseCSV, detectDelimiter } from "@/lib/csv/parser";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { analyzeJobDescription } from "@/lib/enrichment/job-description-analyzer";
-import { isFuzzyMatch, normalizeDomain } from "@/lib/csv/dedup";
 import { logAudit } from "@/lib/audit-log";
-import type { BlacklistRule, BlacklistEntry, CancelRule } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+import {
+  validateCsvSize,
+  sanitizeCellValue,
+  loadImportContext,
+  buildLeadIndex,
+  findMatchingLead,
+  createImportLog,
+  finalizeImportLog,
+  batchInsert,
+} from "@/lib/csv/import-helpers";
 
 // BA-Spalten Mapping
 const COLUMN_MAP: Record<string, string> = {
@@ -56,6 +64,10 @@ export async function processJobListingImport(fileContent: string): Promise<{
   const delimiter = detectDelimiter(fileContent);
   const { headers, rows } = parseCSV(fileContent, delimiter);
 
+  // Limit-Check
+  const sizeError = validateCsvSize(rows.length);
+  if (sizeError) return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: sizeError.error };
+
   // Spalten-Mapping
   const colIndex: Record<string, number> = {};
   headers.forEach((h, i) => {
@@ -68,19 +80,19 @@ export async function processJobListingImport(fileContent: string): Promise<{
     return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: "Spalte 'Kontakt' (Firmenname) nicht gefunden." };
   }
 
-  // Zeilen parsen
+  // Zeilen parsen + sanitizen
   const listings: ParsedJobListing[] = rows
     .map((row) => ({
-      companyName: row[colIndex.company_name]?.trim() ?? "",
-      email: row[colIndex.email]?.trim() || null,
-      salutation: row[colIndex.salutation]?.trim() || null,
-      contactName: row[colIndex.contact_name]?.trim() || null,
-      phone: row[colIndex.phone]?.trim() || null,
-      careerPage: row[colIndex.career_page]?.trim() || null,
-      jobUrl: row[colIndex.job_url]?.trim() || null,
-      postedDate: row[colIndex.posted_date]?.trim() || null,
-      jobTitle: row[colIndex.job_title]?.trim() || null,
-      description: row[colIndex.description]?.trim() || null,
+      companyName: sanitizeCellValue(row[colIndex.company_name]) ?? "",
+      email: sanitizeCellValue(row[colIndex.email]),
+      salutation: sanitizeCellValue(row[colIndex.salutation]),
+      contactName: sanitizeCellValue(row[colIndex.contact_name]),
+      phone: sanitizeCellValue(row[colIndex.phone]),
+      careerPage: sanitizeCellValue(row[colIndex.career_page]),
+      jobUrl: sanitizeCellValue(row[colIndex.job_url]),
+      postedDate: sanitizeCellValue(row[colIndex.posted_date]),
+      jobTitle: sanitizeCellValue(row[colIndex.job_title]),
+      description: sanitizeCellValue(row[colIndex.description]),
     }))
     .filter((l) => l.companyName.length > 0);
 
@@ -93,31 +105,25 @@ export async function processJobListingImport(fileContent: string): Promise<{
     grouped.set(key, existing);
   }
 
-  // Import-Log erstellen
-  const { data: importLog } = await db
-    .from("import_logs")
-    .insert({
-      file_name: "stellenanzeigen-import",
-      file_path: "",
-      row_count: listings.length,
-      import_type: "job_listing",
-      status: "processing",
-      created_by: user.id,
-    })
-    .select()
-    .single();
+  // Import-Log (wirft bei Fehler)
+  let importLog;
+  try {
+    importLog = await createImportLog(db, {
+      fileName: "stellenanzeigen-import",
+      rowCount: listings.length,
+      importType: "ba_job_listing",
+      userId: user.id,
+    });
+  } catch (e) {
+    return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+  }
 
-  // Blacklist + Cancel-Rules laden
-  const [{ data: rules }, { data: entries }, { data: cancelRules }] = await Promise.all([
-    db.from("blacklist_rules").select("*").eq("is_active", true),
-    db.from("blacklist_entries").select("*"),
-    db.from("cancel_rules").select("*").eq("is_active", true),
-  ]);
-
-  // Bestehende Leads laden für Duplikat-Check
+  // Blacklist + Cancel-Rules + bestehende Leads — einmal laden
+  const ctx = await loadImportContext(db);
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, domain, city");
+    .select("id, company_name, domain");
+  const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
   let updated = 0;
@@ -125,10 +131,20 @@ export async function processJobListingImport(fileContent: string): Promise<{
   let jobsCreated = 0;
   let skipped = 0;
 
+  // Sammelliste neue Leads für Batch-Insert
+  interface PendingNewLead {
+    company: ParsedJobListing;
+    domain: string | null;
+    descData: ReturnType<typeof analyzeJobDescription>;
+    listings: ParsedJobListing[];
+  }
+  const newLeads: PendingNewLead[] = [];
+
+  // Phase 1: Updates auf bestehende Leads sofort, neue Leads sammeln
   for (const [, companyListings] of grouped) {
     const first = companyListings[0];
 
-    // Domain aus Website extrahieren
+    // Domain extrahieren
     let domain: string | null = null;
     if (first.careerPage) {
       try {
@@ -137,50 +153,26 @@ export async function processJobListingImport(fileContent: string): Promise<{
       } catch { /* ignore */ }
     }
 
-    // Beschreibung analysieren (Regex-basiert, kein API-Call)
+    // Beschreibung analysieren (Regex, keine API)
     const descData = analyzeJobDescription(first.description ?? "");
 
-    // Blacklist-Check
+    // Blacklist + Cancel-Rules
     const leadData: Record<string, string | null> = {
       company_name: first.companyName,
       domain,
       email: first.email,
     };
-    const blacklistResult = checkLead(leadData, (rules as BlacklistRule[]) ?? [], (entries as BlacklistEntry[]) ?? []);
-    if (blacklistResult.blocked) {
-      skipped++;
-      continue;
-    }
+    if (checkLead(leadData, ctx.rules, ctx.entries).blocked) { skipped++; continue; }
+    if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) { skipped++; continue; }
 
-    // Cancel-Rules Check
-    const cancelResult = evaluateCancelRules(leadData as Record<string, unknown>, (cancelRules as CancelRule[]) ?? [], "import");
-    if (cancelResult.cancelled) {
-      skipped++;
-      continue;
-    }
-
-    // Duplikat-Check: Bestehenden Lead finden
-    let existingLeadId: string | null = null;
-    if (existingLeads) {
-      for (const existing of existingLeads) {
-        if (domain && existing.domain && normalizeDomain(domain) === normalizeDomain(existing.domain)) {
-          existingLeadId = existing.id;
-          break;
-        }
-        if (isFuzzyMatch(first.companyName, existing.company_name)) {
-          existingLeadId = existing.id;
-          break;
-        }
-      }
-    }
-
-    let leadId: string;
+    // Duplikat-Check via O(1)/O(n) Index
+    const existingLeadId = findMatchingLead(leadIndex, domain, first.companyName);
 
     if (existingLeadId) {
-      // Bestehenden Lead aktualisieren (leere Felder ergänzen)
-      const updates: Record<string, unknown> = {};
+      // Update bestehender Lead — nur leere Felder ergänzen
       const { data: existingLead } = await db.from("leads").select("*").eq("id", existingLeadId).single();
       if (existingLead) {
+        const updates: Record<string, unknown> = {};
         if (!existingLead.email && first.email) updates.email = first.email;
         if (!existingLead.phone && first.phone) updates.phone = first.phone;
         if (!existingLead.domain && domain) updates.domain = domain;
@@ -197,83 +189,105 @@ export async function processJobListingImport(fileContent: string): Promise<{
           updated++;
         }
       }
-      leadId = existingLeadId;
+
+      // Kontakt + Jobs für bestehenden Lead direkt einfügen
+      await createContactsAndJobs(db, existingLeadId, first, descData, companyListings);
+      contactsCreated += contactCountFor(first, descData);
+      jobsCreated += companyListings.filter((l) => l.jobTitle).length;
     } else {
-      // Neuen Lead erstellen
-      const { data: newLead } = await db
-        .from("leads")
-        .insert({
-          company_name: first.companyName,
-          email: first.email,
-          phone: first.phone,
-          domain,
-          website: domain ? `https://${domain}` : null,
-          career_page_url: first.careerPage,
-          city: descData.city,
-          zip: descData.zip,
-          street: descData.street,
-          company_size: descData.companySize,
-          country: "Deutschland",
-          source_type: "csv",
-          source_import_id: importLog?.id,
-          status: "imported",
-          created_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (!newLead) continue;
-      leadId = newLead.id;
-      imported++;
+      newLeads.push({ company: first, domain, descData, listings: companyListings });
     }
+  }
 
-    // Kontakt erstellen (wenn Ansprechpartner vorhanden)
-    const contactName = first.contactName?.trim() || descData.contactName;
-    if (contactName) {
-      const fullName = first.salutation ? `${first.salutation} ${contactName}`.trim() : contactName;
-      await db.from("lead_contacts").insert({
-        lead_id: leadId,
-        name: fullName,
-        role: "Ansprechpartner",
-        email: first.email ?? descData.contactEmail,
-        phone: first.phone ?? descData.contactPhone,
-        source_url: first.jobUrl,
-      });
-      contactsCreated++;
-    }
+  // Phase 2: Neue Leads im Batch anlegen
+  if (newLeads.length > 0) {
+    const insertPayload = newLeads.map((nl) => ({
+      company_name: nl.company.companyName,
+      email: nl.company.email,
+      phone: nl.company.phone,
+      domain: nl.domain,
+      website: nl.domain ? `https://${nl.domain}` : null,
+      career_page_url: nl.company.careerPage,
+      city: nl.descData.city,
+      zip: nl.descData.zip,
+      street: nl.descData.street,
+      company_size: nl.descData.companySize,
+      country: "Deutschland",
+      source_type: "csv",
+      source_import_id: importLog.id,
+      status: "imported",
+      created_by: user.id,
+    }));
 
-    // Job-Postings erstellen (alle Stellen dieser Firma)
-    for (const listing of companyListings) {
-      if (listing.jobTitle) {
-        await db.from("lead_job_postings").insert({
-          lead_id: leadId,
-          title: listing.jobTitle,
-          url: listing.jobUrl,
-          location: descData.city,
-          posted_date: listing.postedDate,
-          source: "ba_import",
-        });
-        jobsCreated++;
+    // Batch-Insert mit Returning
+    const { data: insertedRows, error } = await db
+      .from("leads")
+      .insert(insertPayload)
+      .select("id, company_name");
+
+    if (error) {
+      // Fallback: einzeln einfügen, damit ein einzelner Konflikt nicht alles killt
+      for (let i = 0; i < newLeads.length; i++) {
+        const { data: row } = await db.from("leads").insert(insertPayload[i]).select("id").single();
+        if (row) {
+          imported++;
+          await createContactsAndJobs(db, row.id, newLeads[i].company, newLeads[i].descData, newLeads[i].listings);
+          contactsCreated += contactCountFor(newLeads[i].company, newLeads[i].descData);
+          jobsCreated += newLeads[i].listings.filter((l) => l.jobTitle).length;
+        }
       }
+    } else if (insertedRows) {
+      imported = insertedRows.length;
+      // Kontakte + Jobs in Batches anlegen
+      const allContacts: Record<string, unknown>[] = [];
+      const allJobs: Record<string, unknown>[] = [];
+      for (let i = 0; i < insertedRows.length && i < newLeads.length; i++) {
+        const leadId = insertedRows[i].id;
+        const nl = newLeads[i];
+        const contactName = nl.company.contactName?.trim() || nl.descData.contactName;
+        if (contactName) {
+          const fullName = nl.company.salutation ? `${nl.company.salutation} ${contactName}`.trim() : contactName;
+          allContacts.push({
+            lead_id: leadId,
+            name: fullName,
+            role: "Ansprechpartner",
+            email: nl.company.email ?? nl.descData.contactEmail,
+            phone: nl.company.phone ?? nl.descData.contactPhone,
+            source_url: nl.company.jobUrl,
+          });
+          contactsCreated++;
+        }
+        for (const listing of nl.listings) {
+          if (listing.jobTitle) {
+            allJobs.push({
+              lead_id: leadId,
+              title: listing.jobTitle,
+              url: listing.jobUrl,
+              location: nl.descData.city,
+              posted_date: listing.postedDate,
+              source: "ba_import",
+            });
+            jobsCreated++;
+          }
+        }
+      }
+      if (allContacts.length > 0) await batchInsert(db, "lead_contacts", allContacts);
+      if (allJobs.length > 0) await batchInsert(db, "lead_job_postings", allJobs);
     }
   }
 
   // Import-Log abschließen
-  await db
-    .from("import_logs")
-    .update({
-      imported_count: imported,
-      updated_count: updated,
-      skipped_count: skipped,
-      status: "completed",
-    })
-    .eq("id", importLog?.id);
+  await finalizeImportLog(db, importLog.id, {
+    imported,
+    updated,
+    skipped,
+  });
 
   await logAudit({
     userId: user.id,
     action: "import.job_listings",
     entityType: "import_log",
-    entityId: importLog?.id,
+    entityId: importLog.id,
     details: { total: listings.length, imported, updated, contacts: contactsCreated, jobs: jobsCreated, skipped },
   });
 
@@ -282,4 +296,53 @@ export async function processJobListingImport(fileContent: string): Promise<{
   revalidatePath("/");
 
   return { success: true, imported, updated, contacts: contactsCreated, jobs: jobsCreated, skipped };
+}
+
+// ─── Helpers ────────────────────────────────────────────────
+
+function contactCountFor(c: ParsedJobListing, d: ReturnType<typeof analyzeJobDescription>): number {
+  return c.contactName?.trim() || d.contactName ? 1 : 0;
+}
+
+async function createContactsAndJobs(
+  db: ReturnType<typeof createServiceClient>,
+  leadId: string,
+  first: ParsedJobListing,
+  descData: ReturnType<typeof analyzeJobDescription>,
+  companyListings: ParsedJobListing[],
+): Promise<void> {
+  const contactName = first.contactName?.trim() || descData.contactName;
+  if (contactName) {
+    const fullName = first.salutation ? `${first.salutation} ${contactName}`.trim() : contactName;
+    await db.from("lead_contacts").insert({
+      lead_id: leadId,
+      name: fullName,
+      role: "Ansprechpartner",
+      email: first.email ?? descData.contactEmail,
+      phone: first.phone ?? descData.contactPhone,
+      source_url: first.jobUrl,
+    });
+  }
+
+  const jobsToInsert = companyListings
+    .filter((l) => l.jobTitle)
+    .map((listing) => ({
+      lead_id: leadId,
+      title: listing.jobTitle,
+      url: listing.jobUrl,
+      location: descData.city,
+      posted_date: listing.postedDate,
+      source: "ba_import" as const,
+    }));
+  if (jobsToInsert.length > 0) {
+    // Mit URL: upsert wegen Unique-Index; ohne URL: regulärer insert
+    const withUrl = jobsToInsert.filter((j) => j.url);
+    const withoutUrl = jobsToInsert.filter((j) => !j.url);
+    if (withUrl.length > 0) {
+      await db.from("lead_job_postings").upsert(withUrl, { onConflict: "lead_id,url", ignoreDuplicates: true });
+    }
+    if (withoutUrl.length > 0) {
+      await db.from("lead_job_postings").insert(withoutUrl);
+    }
+  }
 }

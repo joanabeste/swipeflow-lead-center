@@ -10,6 +10,7 @@ import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import type { BlacklistEntry, BlacklistRule, CancelRule } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
+
 // ============================================================
 // Einzelne Firmen-URL importieren
 // ============================================================
