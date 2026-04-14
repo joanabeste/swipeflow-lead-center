@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { PhoneOutgoing, Plus, StickyNote, Phone as PhoneIcon } from "lucide-react";
+import { PhoneOutgoing, Plus, StickyNote, Phone as PhoneIcon, Mail as MailIcon } from "lucide-react";
 import type { LeadContact, CallDirection, CallStatus } from "@/lib/types";
 import { addNote, logCall, startCall } from "../actions";
 
@@ -97,6 +97,18 @@ export function CrmSidePanel({
           {manualOpen ? "Manuelles Protokoll schließen" : "Anruf manuell protokollieren"}
         </button>
         {manualOpen && <ManualCallForm leadId={leadId} contacts={contacts} defaultPhone={leadPhone} />}
+      </div>
+
+      {/* E-Mail (Platzhalter bis zur Integration) */}
+      <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 dark:border-[#2c2c2e] dark:bg-[#161618]/50">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+          <MailIcon className="h-3.5 w-3.5" />
+          E-Mails
+        </h2>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Kommt bald: gesendete und empfangene E-Mails mit diesem Lead
+          erscheinen hier und in der Historie rechts.
+        </p>
       </div>
 
       {/* Notiz */}

@@ -25,6 +25,7 @@ import { haversineKm, distanceCategory } from "@/lib/geo/distance";
 import { updateLead, findSimilarLeads, mergeLeads } from "./actions";
 import { enrichLeadAction } from "./enrichment-actions";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
+import { ResizableColumns } from "@/components/resizable-columns";
 
 // Leaflet-Map nur clientseitig laden — Zugriff auf `window`
 const LeadMap = dynamic(() => import("./lead-map"), { ssr: false, loading: () => (
@@ -111,6 +112,10 @@ interface Props {
   /** Wenn gesetzt: ersetzt die Änderungshistorie durch eine einheitliche Timeline.
    *  Die ActivityItems sollten bereits chronologisch absteigend sortiert übergeben werden. */
   activityItems?: ActivityItem[];
+  /** Rechte Spalte ist user-resizable (Drag-Handle). Breite wird pro
+   *  resizeStorageKey in localStorage persistiert. */
+  resizableRightColumn?: boolean;
+  resizeStorageKey?: string;
 }
 
 export function LeadProfilePanel({
@@ -120,6 +125,8 @@ export function LeadProfilePanel({
   headerExtras,
   extraRightColumn,
   activityItems,
+  resizableRightColumn = false,
+  resizeStorageKey = "lead-panel-right-width",
 }: Props) {
   const router = useRouter();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
@@ -255,10 +262,10 @@ export function LeadProfilePanel({
         <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">Gespeichert.</div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        {/* Linke Spalte: Firmendaten + Kontakte + Stellen */}
-        <div className="space-y-6 lg:col-span-2">
-
+      <div className="mt-6">
+      {(() => {
+      const leftContent = (
+        <>
           {/* Stammdaten */}
           <div className="rounded-lg border border-gray-200 bg-white p-5 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">Stammdaten</h2>
@@ -427,10 +434,11 @@ export function LeadProfilePanel({
               </div>
             )}
           </div>
-        </div>
+        </>
+      );
 
-        {/* Rechte Spalte */}
-        <div className="space-y-4">
+      const rightContent = (
+        <>
           {extraRightColumn}
           {/* Standort / Entfernung zu HQ */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
@@ -577,7 +585,28 @@ export function LeadProfilePanel({
               )}
             </div>
           )}
+        </>
+      );
+
+      if (resizableRightColumn) {
+        return (
+          <ResizableColumns
+            left={leftContent}
+            right={rightContent}
+            storageKey={resizeStorageKey}
+            defaultRight={540}
+            minRight={360}
+            maxRight={900}
+          />
+        );
+      }
+      return (
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">{leftContent}</div>
+          <div className="space-y-4">{rightContent}</div>
         </div>
+      );
+      })()}
       </div>
     </div>
   );

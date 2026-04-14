@@ -177,6 +177,8 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
         />
       }
       activityItems={items}
+      resizableRightColumn
+      resizeStorageKey="crm-right-width"
     />
   );
 }
