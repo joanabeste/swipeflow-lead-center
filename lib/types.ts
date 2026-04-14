@@ -11,6 +11,7 @@ export interface Profile {
   status: UserStatus;
   service_mode: ServiceMode;
   lead_table_columns: string[] | null;
+  dashboard_widgets: string[] | null;
   phonemondo_extension: string | null;
   created_at: string;
   updated_at: string;
