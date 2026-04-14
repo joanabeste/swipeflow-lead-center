@@ -177,15 +177,23 @@ export async function fetchCompanyPages(
           try {
             const absolute = new URL(m[1], kp.url).toString().split("#")[0];
             if (visitedUrls.has(absolute)) continue;
-            // Nur interne Links und nur welche, die nach Job-Detail aussehen
+            // Nur Links die nach Job-Detail/Job-Portal aussehen
             const text = m[2].replace(/<[^>]+>/g, " ").toLowerCase();
             const looksLikeJob =
-              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|industriekaufmann|industriemechaniker|werkstudent|praktikum|trainee|duales studium|jobdetail|job-detail|stelle\/|jobs\/|ausbildung-)/i.test(absolute) ||
-              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|werkstudent|praktikum|trainee|duales studium|jetzt bewerben|details|mehr erfahren|zur stelle)/i.test(text);
+              // URL: konkrete Job-Details ODER allgemeine Job-Portal-Pfade (karriere/, jobs/, stellen/, career/)
+              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|industriekaufmann|industriemechaniker|werkstudent|praktikum|trainee|duales studium|jobdetail|job-detail|ausbildung-)/i.test(absolute) ||
+              /\/(karriere(n)?|karriere-bei-uns|jobs?|stelle(n|nangebote|nanzeigen)?|offene-stellen|career(s)?|ausbildung)(\/|\?|$)/i.test(absolute) ||
+              // Anchor-Text: Job-Kontext
+              /(stellenangebot|stellenanzeige|ausbildung|m\/w\/d|w\/m\/d|werkstudent|praktikum|trainee|duales studium|jetzt bewerben|offene stellen|alle jobs|zur stelle|karriereportal|karriere-seite)/i.test(text);
             if (!looksLikeJob) continue;
-            // Auch externe Job-Boards erlauben (Personio, Softgarden, d.vinci, Smart Recruiters, Greenhouse)
-            const isExternalBoard = /(personio|softgarden|dvinci|d-vinci|smartrecruiters|greenhouse|workable|recruitee|join\.com|jobs\.[\w-]+\.[a-z]{2,})/i.test(absolute);
-            if (!absolute.startsWith(baseUrl) && !isExternalBoard) continue;
+            // Bekannte Job-Boards (Personio, Softgarden, d.vinci, Smart Recruiters, Greenhouse, Workable, Recruitee, Join, jobs.*)
+            const isKnownJobBoard = /(personio|softgarden|dvinci|d-vinci|smartrecruiters|greenhouse|workable|recruitee|join\.com|jobs\.[\w-]+\.[a-z]{2,})/i.test(absolute);
+            // Auch generische externe Karriere-Portale (z.B. Muttergesellschaft wie jck.de/karriere/?company=…)
+            // erlauben, wenn der Pfad Karriere/Jobs/Stellen enthält. Schließt Social-Media aus.
+            const isCareerPortalPath = /\/(karriere|karrieren|jobs?|stelle(n)?|career|ausbildung)(\/|\?|$)/i.test(absolute);
+            const isBlockedDomain = /(facebook\.com|linkedin\.com|xing\.com|instagram\.com|youtube\.com|twitter\.com|x\.com|tiktok\.com)/i.test(absolute);
+            const isExternalAllowed = !isBlockedDomain && (isKnownJobBoard || isCareerPortalPath);
+            if (!absolute.startsWith(baseUrl) && !isExternalAllowed) continue;
             extraJobUrls.push(absolute);
             visitedUrls.add(absolute);
             if (extraJobUrls.length >= 8) break;
@@ -343,8 +351,14 @@ function cleanHtml(html: string, category: FetchedPage["category"]): string {
     text = text.replace(/<header[\s\S]*?<\/header>/gi, "");
   }
 
-  // Cookie-Banner, Popups, Sidebars
-  text = text.replace(/<div[^>]*(?:cookie|consent|banner|popup|modal|overlay|sidebar|widget)[^>]*>[\s\S]*?<\/div>/gi, "");
+  // Cookie-/Consent-Banner entfernen — scharfe Keywords, sonst erwischt es
+  // Elementor/Divi-Widgets (alles mit "widget" im Klassennamen) und reißt die
+  // halbe Seite mit raus. "sidebar"/"widget"/"popup"/"modal"/"overlay" sind zu
+  // generisch und werden in normalen Layouts verwendet.
+  text = text.replace(
+    /<div[^>]*(?:cookie-?(banner|consent|notice|popup|bar)|consent-?(banner|popup|layer)|gdpr-?(banner|consent|popup|notice)|usercentrics|cookiebot|onetrust-|klaro-|borlabs-cookie)[^>]*>[\s\S]*?<\/div>/gi,
+    "",
+  );
 
   // Block-Elemente durch Newlines ersetzen
   text = text.replace(/<\/(div|p|h[1-6]|li|tr|td|th|br|hr|section|article)[^>]*>/gi, "\n");
