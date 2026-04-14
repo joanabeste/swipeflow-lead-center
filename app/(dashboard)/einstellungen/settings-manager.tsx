@@ -131,7 +131,9 @@ function HqLocationCard({ hq }: { hq: HqLocation }) {
 
 // ─── Enrichment Defaults ───────────────────────────────────────
 
-const ENRICHMENT_OPTIONS: { key: keyof EnrichmentConfig; label: string; hint?: string }[] = [
+type EnrichmentBoolKey = "contacts_management" | "contacts_all" | "job_postings" | "career_page" | "company_details";
+
+const ENRICHMENT_OPTIONS: { key: EnrichmentBoolKey; label: string; hint?: string }[] = [
   { key: "contacts_management", label: "Geschäftsführung & Management", hint: "GF, Inhaber, Vorstand" },
   { key: "contacts_all", label: "Alle Ansprechpartner", hint: "HR, Vertrieb, Support, weitere" },
   { key: "job_postings", label: "Stellenanzeigen", hint: "Offene Stellen von der Karriereseite" },

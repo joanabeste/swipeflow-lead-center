@@ -181,6 +181,8 @@ export interface LeadContact {
   created_at: string;
 }
 
+export type JobPostingSource = "ba_import" | "enrichment" | "manual";
+
 export interface LeadJobPosting {
   id: string;
   lead_id: string;
@@ -188,6 +190,7 @@ export interface LeadJobPosting {
   url: string | null;
   location: string | null;
   posted_date: string | null;
+  source: JobPostingSource;
   created_at: string;
 }
 
@@ -223,12 +226,24 @@ export interface AuditLog {
 // Enrichment-Konfiguration
 // ============================================================
 
+export type CompanyDetailField =
+  | "address"
+  | "phone"
+  | "email"
+  | "legal_form"
+  | "register_id"
+  | "company_size"
+  | "industry"
+  | "founding_year";
+
 export interface EnrichmentConfig {
   contacts_management: boolean;
   contacts_all: boolean;
   job_postings: boolean;
   career_page: boolean;
   company_details: boolean;
+  /** Optional: wenn gesetzt, werden NUR diese Firmendaten-Felder gesucht/überschrieben */
+  company_details_fields?: CompanyDetailField[];
 }
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {

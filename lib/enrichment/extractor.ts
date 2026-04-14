@@ -48,13 +48,45 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   }
   if (config.career_page) fields.push('"career_page_url":""');
   if (config.job_postings) fields.push('"job_postings":[{"title":"","url":"","location":"","posted_date":""}]');
-  if (config.company_details) fields.push('"additional_info":{"company_size_estimate":"","founding_year":"","specializations":[],"company_phone":"","company_email":"","street":"","zip":"","city":"","state":"","legal_form":"","register_id":""}');
+  if (config.company_details) {
+    // Wenn Whitelist gesetzt → nur diese Felder im Schema, sonst alle
+    const allowlist = config.company_details_fields;
+    const includeField = (f: import("@/lib/types").CompanyDetailField) => !allowlist || allowlist.includes(f);
+    const subFields: string[] = [];
+    if (includeField("company_size")) subFields.push('"company_size_estimate":""');
+    if (includeField("founding_year")) subFields.push('"founding_year":""');
+    if (includeField("industry")) subFields.push('"specializations":[]');
+    if (includeField("phone")) subFields.push('"company_phone":""');
+    if (includeField("email")) subFields.push('"company_email":""');
+    if (includeField("address")) {
+      subFields.push('"street":""');
+      subFields.push('"zip":""');
+      subFields.push('"city":""');
+      subFields.push('"state":""');
+    }
+    if (includeField("legal_form")) subFields.push('"legal_form":""');
+    if (includeField("register_id")) subFields.push('"register_id":""');
+    if (subFields.length > 0) {
+      fields.push(`"additional_info":{${subFields.join(",")}}`);
+    }
+  }
   parts.push(`Format: {${fields.join(",")}}`);
 
   // Regeln
   const rules: string[] = ["Nur echte Daten, null wenn nicht vorhanden."];
   if (config.company_details) {
-    rules.push("Firmenstammdaten bevorzugt aus Impressum. legal_form: z.B. 'GmbH', 'AG', 'UG', 'GbR', 'e.K.'. register_id: z.B. 'HRB 12345 Amtsgericht München'. street: inkl. Hausnummer. zip: 5-stellig. state: Bundesland (z.B. 'Bayern'). company_phone: +49-Format.");
+    const allowlist = config.company_details_fields;
+    const includeField = (f: import("@/lib/types").CompanyDetailField) => !allowlist || allowlist.includes(f);
+    const hints: string[] = [];
+    hints.push("Firmenstammdaten bevorzugt aus Impressum.");
+    if (includeField("legal_form")) hints.push("legal_form: z.B. 'GmbH', 'AG', 'UG', 'GbR', 'e.K.'.");
+    if (includeField("register_id")) hints.push("register_id: z.B. 'HRB 12345 Amtsgericht München'.");
+    if (includeField("address")) hints.push("street: inkl. Hausnummer. zip: 5-stellig. state: Bundesland (z.B. 'Bayern').");
+    if (includeField("phone")) hints.push("company_phone: +49-Format.");
+    if (allowlist && allowlist.length > 0) {
+      hints.push(`FOKUS: Suche gezielt nur nach ${allowlist.join(", ")}. Ignoriere andere Firmendaten.`);
+    }
+    rules.push(hints.join(" "));
   }
   if (config.contacts_management && !config.contacts_all) {
     rules.push("Kontakte: NUR Geschäftsführer/Inhaber/Management.");

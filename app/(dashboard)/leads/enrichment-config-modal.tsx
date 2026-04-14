@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
-import type { Lead, EnrichmentConfig, ServiceMode } from "@/lib/types";
+import type { Lead, EnrichmentConfig, ServiceMode, CompanyDetailField } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
@@ -42,10 +42,14 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
 
   const [phase, setPhase] = useState<Phase>("configure");
   const [config, setConfig] = useState<EnrichmentConfig>({ ...defaults[serviceMode] });
+  const [showDetailFields, setShowDetailFields] = useState(false);
+  const [detailFields, setDetailFields] = useState<Set<CompanyDetailField>>(new Set());
 
   // Wenn User im Modal den Modus wechselt, Config neu laden
   useEffect(() => {
     setConfig({ ...defaults[serviceMode] });
+    setShowDetailFields(false);
+    setDetailFields(new Set());
   }, [serviceMode, defaults]);
   const [results, setResults] = useState<EnrichResult[]>([]);
   const [currentLead, setCurrentLead] = useState<string>("");
@@ -59,11 +63,20 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
     setResults([]);
     setCompleted(0);
 
+    // Effektive Config: wenn Detail-Modus aktiv und Felder ausgewählt → Whitelist mitsenden
+    const effectiveConfig: EnrichmentConfig = {
+      ...config,
+      company_details_fields:
+        showDetailFields && detailFields.size > 0
+          ? Array.from(detailFields)
+          : undefined,
+    };
+
     try {
       const res = await fetch("/api/enrich-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadIds, config, serviceMode }),
+        body: JSON.stringify({ leadIds, config: effectiveConfig, serviceMode }),
       });
 
       if (!res.ok || !res.body) {
@@ -213,6 +226,58 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
                   </label>
                 ))}
               </div>
+
+              {/* Detail-Modus: Nur bestimmte Firmendaten-Felder */}
+              {config.company_details && (
+                <div className="rounded-md border border-gray-200 dark:border-[#2c2c2e]">
+                  <button
+                    type="button"
+                    onClick={() => setShowDetailFields((v) => !v)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-white/5"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium">Nur bestimmte Firmendaten-Felder</span>
+                      <span className="text-xs text-gray-400">(optional, spart Tokens)</span>
+                    </span>
+                    <span className="text-gray-400">{showDetailFields ? "▴" : "▾"}</span>
+                  </button>
+                  {showDetailFields && (
+                    <div className="border-t border-gray-200 p-3 dark:border-[#2c2c2e]">
+                      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                        Nichts anhaken = alle Felder. Ausgewählte Felder werden gezielt gesucht und bereits gefüllte andere Felder bleiben unverändert.
+                      </p>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {([
+                          { key: "address", label: "Adresse" },
+                          { key: "phone", label: "Telefon" },
+                          { key: "email", label: "E-Mail" },
+                          { key: "legal_form", label: "Rechtsform" },
+                          { key: "register_id", label: "Registernummer" },
+                          { key: "company_size", label: "Größe" },
+                          { key: "industry", label: "Branche" },
+                          { key: "founding_year", label: "Gründungsjahr" },
+                        ] as const).map((f) => (
+                          <label key={f.key} className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-white/5">
+                            <input
+                              type="checkbox"
+                              checked={detailFields.has(f.key)}
+                              onChange={(e) => {
+                                const next = new Set(detailFields);
+                                if (e.target.checked) next.add(f.key);
+                                else next.delete(f.key);
+                                setDetailFields(next);
+                              }}
+                              className="rounded border-gray-300 dark:border-gray-600"
+                            />
+                            {f.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={startEnrichment}
                 className="w-full rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"

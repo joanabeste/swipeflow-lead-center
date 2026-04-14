@@ -251,6 +251,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
           url: listing.jobUrl,
           location: descData.city,
           posted_date: listing.postedDate,
+          source: "ba_import",
         });
         jobsCreated++;
       }

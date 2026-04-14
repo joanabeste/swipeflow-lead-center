@@ -136,12 +136,16 @@ export async function enrichLead(
     // 2. LLM-Extraktion (Kontakte + Firmendaten)
     const result = await extractFromPages(lead.company_name, pages, config);
 
-    // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur angeforderte Kategorien
+    // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur KI-Ergebnisse, keine Import-Daten
     if (config.contacts_management || config.contacts_all) {
       await db.from("lead_contacts").delete().eq("lead_id", leadId);
     }
     if (config.job_postings) {
-      await db.from("lead_job_postings").delete().eq("lead_id", leadId);
+      // NUR Enrichment-Jobs löschen. BA-Import- und manuelle Jobs bleiben erhalten!
+      await db.from("lead_job_postings")
+        .delete()
+        .eq("lead_id", leadId)
+        .eq("source", "enrichment");
     }
 
     // 4. Neue Kontakte einfügen
@@ -158,17 +162,28 @@ export async function enrichLead(
       );
     }
 
-    // 5. Neue Stellenanzeigen einfügen
+    // 5. Neue Stellenanzeigen einfügen — upsert verhindert Dubletten mit BA-Import
     if (result.job_postings.length > 0) {
-      await db.from("lead_job_postings").insert(
-        result.job_postings.map((j) => ({
-          lead_id: leadId,
-          title: j.title,
-          url: j.url,
-          location: j.location,
-          posted_date: j.posted_date,
-        })),
-      );
+      const jobsToInsert = result.job_postings.map((j) => ({
+        lead_id: leadId,
+        title: j.title,
+        url: j.url,
+        location: j.location,
+        posted_date: j.posted_date,
+        source: "enrichment" as const,
+      }));
+      // Ohne URL: normaler insert (Unique-Index greift nur bei url IS NOT NULL)
+      const withUrl = jobsToInsert.filter((j) => j.url);
+      const withoutUrl = jobsToInsert.filter((j) => !j.url);
+      if (withUrl.length > 0) {
+        await db.from("lead_job_postings").upsert(withUrl, {
+          onConflict: "lead_id,url",
+          ignoreDuplicates: true,
+        });
+      }
+      if (withoutUrl.length > 0) {
+        await db.from("lead_job_postings").insert(withoutUrl);
+      }
     }
 
     // 6. Lead aktualisieren + Auto-Qualifizierung prüfen
@@ -180,19 +195,27 @@ export async function enrichLead(
     };
 
     // Zusätzliche Infos in Lead-Felder übernehmen — nur wenn im Lead noch leer
+    // UND nur wenn das Feld Teil der Whitelist ist (falls gesetzt)
     const ai = result.additional_info;
+    const allowlist = config.company_details_fields; // undefined = alle erlaubt
+    const isFieldAllowed = (group: import("@/lib/types").CompanyDetailField) =>
+      !allowlist || allowlist.includes(group);
+
     const fillIfEmpty = (field: string, value: string | null | undefined) => {
       if (!(lead as Record<string, unknown>)[field] && value) leadUpdates[field] = value;
     };
-    fillIfEmpty("company_size", ai.company_size_estimate);
-    fillIfEmpty("phone", ai.company_phone);
-    fillIfEmpty("email", ai.company_email);
-    fillIfEmpty("street", ai.street);
-    fillIfEmpty("zip", ai.zip);
-    fillIfEmpty("city", ai.city);
-    fillIfEmpty("state", ai.state);
-    fillIfEmpty("legal_form", ai.legal_form);
-    fillIfEmpty("register_id", ai.register_id);
+
+    if (isFieldAllowed("company_size")) fillIfEmpty("company_size", ai.company_size_estimate);
+    if (isFieldAllowed("phone")) fillIfEmpty("phone", ai.company_phone);
+    if (isFieldAllowed("email")) fillIfEmpty("email", ai.company_email);
+    if (isFieldAllowed("address")) {
+      fillIfEmpty("street", ai.street);
+      fillIfEmpty("zip", ai.zip);
+      fillIfEmpty("city", ai.city);
+      fillIfEmpty("state", ai.state);
+    }
+    if (isFieldAllowed("legal_form")) fillIfEmpty("legal_form", ai.legal_form);
+    if (isFieldAllowed("register_id")) fillIfEmpty("register_id", ai.register_id);
 
     // Karriereseite ins dedizierte Feld — vom Extraktor oder vom bisherigen Lead (Alt-Datensätze)
     if (!lead.career_page_url) {
