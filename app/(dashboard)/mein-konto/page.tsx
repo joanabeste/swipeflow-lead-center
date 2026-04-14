@@ -52,7 +52,7 @@ export default async function MeinKontoPage() {
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Wähle dein PhoneMondo-Telefon (Source). Beim Click-to-Call im CRM
           ruft PhoneMondo zuerst dieses Gerät an und verbindet dich dann
-          mit dem Lead. Tipp: Klick auf „Sources laden" holt deine verfügbaren
+          mit dem Lead. Tipp: Klick auf &bdquo;Sources laden&ldquo; holt deine verfügbaren
           Geräte direkt aus deinem PhoneMondo-Account.
         </p>
         <PhonemondoForm extension={profile?.phonemondo_extension ?? null} />

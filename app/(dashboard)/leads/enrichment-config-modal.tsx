@@ -2,14 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
-import type { Lead, EnrichmentConfig, ServiceMode, CompanyDetailField } from "@/lib/types";
+import type { EnrichmentConfig, ServiceMode, CompanyDetailField } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
 
 interface Props {
   leadIds: string[];
-  leads: Lead[];
   onClose: () => void;
   defaults: Record<ServiceMode, EnrichmentConfig>;
 }
@@ -36,7 +35,7 @@ interface EnrichResult {
 
 type Phase = "configure" | "running" | "complete";
 
-export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Props) {
+export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
 
@@ -45,8 +44,11 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
   const [showDetailFields, setShowDetailFields] = useState(false);
   const [detailFields, setDetailFields] = useState<Set<CompanyDetailField>>(new Set());
 
-  // Wenn User im Modal den Modus wechselt, Config neu laden
+  // Wenn User im Modal den Modus wechselt, Config + Detail-Felder neu laden.
+  // Das ist bewusst Derived-State-Reset beim Modus-Wechsel; setState im
+  // Effect ist hier die pragmatische Lösung.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConfig({ ...defaults[serviceMode] });
     setShowDetailFields(false);
     setDetailFields(new Set());
@@ -133,7 +135,7 @@ export function EnrichmentConfigModal({ leadIds, leads, onClose, defaults }: Pro
     } catch {
       setPhase("complete");
     }
-  }, [leadIds, config]);
+  }, [leadIds, config, showDetailFields, detailFields, serviceMode]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";

@@ -82,7 +82,7 @@ PHONEMONDO_API_BASE_URL=https://api.phonemondo.com
         <h3 className="font-semibold">PhoneMondo-Sources pro Nutzer</h3>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Jeder Nutzer braucht die UID seines PhoneMondo-Telefons/Geräts
-          („Source"). Sie ist im PhoneMondo-Dashboard sichtbar und wird beim
+          (&bdquo;Source&ldquo;). Sie ist im PhoneMondo-Dashboard sichtbar und wird beim
           Click-to-Call mitgegeben, damit PhoneMondo weiß, welches Telefon
           zuerst klingeln soll.
         </p>

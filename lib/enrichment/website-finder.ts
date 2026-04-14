@@ -171,9 +171,6 @@ function extractFirstRelevantDomain(html: string, query: string): string | null 
   // Deduplizieren
   const unique = [...new Set(candidates)];
 
-  // Erst nach Namens-Ähnlichkeit sortieren
-  const normalizedQuery = normalizeForComparison(query);
-
   for (const domain of unique) {
     if (isRelevantDomain(domain, query)) return domain;
   }

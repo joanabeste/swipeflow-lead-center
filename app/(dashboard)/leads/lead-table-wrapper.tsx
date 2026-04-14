@@ -31,7 +31,6 @@ export function LeadTableWrapper(props: Props) {
       {enrichModalIds && (
         <EnrichmentConfigModal
           leadIds={enrichModalIds}
-          leads={props.leads.filter((l) => enrichModalIds.includes(l.id))}
           onClose={() => setEnrichModalIds(null)}
           defaults={enrichmentDefaults}
         />

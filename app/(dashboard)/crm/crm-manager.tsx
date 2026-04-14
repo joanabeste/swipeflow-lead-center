@@ -396,7 +396,6 @@ function FilterSelect({
   activeColor?: string;
 }) {
   const isActive = value !== "";
-  const currentLabel = options.find((o) => o.value === value)?.label ?? label;
   return (
     <label className="relative inline-flex items-center">
       <select
@@ -418,8 +417,6 @@ function FilterSelect({
       <svg className="pointer-events-none absolute right-2 h-3 w-3 text-gray-400" viewBox="0 0 12 12" fill="currentColor">
         <path d="M6 8L2 4h8z" />
       </svg>
-      {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
-      {false && <span>{currentLabel}</span>}
     </label>
   );
 }

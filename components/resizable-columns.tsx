@@ -48,10 +48,13 @@ export function ResizableColumns({
   const startX = useRef(0);
   const startWidth = useRef(0);
 
+  // Mount-only: localStorage-Breite nachladen, danach setHydrated. setState im
+  // Effect ist hier bewusst — Alternative wäre Server/Client-Mismatch.
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
     if (saved) {
       const n = parseInt(saved, 10);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (Number.isFinite(n)) setWidth(Math.max(effectiveMin, Math.min(effectiveMax, n)));
     }
     setHydrated(true);

@@ -47,7 +47,7 @@ export function analyzeJobDescription(description: string): JobDescriptionData {
   if (!description) return emptyResult();
 
   // Encoding-Probleme bereinigen (Mojibake von UTF-8)
-  let text = description
+  const text = description
     .replace(/Ã¤/g, "ä").replace(/Ã¶/g, "ö").replace(/Ã¼/g, "ü")
     .replace(/Ã„/g, "Ä").replace(/Ã–/g, "Ö").replace(/Ãœ/g, "Ü")
     .replace(/ÃŸ/g, "ß").replace(/â€"/g, "–").replace(/â€¢/g, "•")

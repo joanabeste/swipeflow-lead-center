@@ -172,8 +172,8 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
               Spezifischer Fokus (optional)
             </h3>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Zusätzlicher Hinweis an die KI. Macht die Suche präziser — z.B. „Gründungsjahr aus
-              Impressum" oder „HR-Kontakt für Bewerbungen auf der Karriereseite".
+              Zusätzlicher Hinweis an die KI. Macht die Suche präziser — z.B. &bdquo;Gründungsjahr aus
+              Impressum&ldquo; oder &bdquo;HR-Kontakt für Bewerbungen auf der Karriereseite&ldquo;.
             </p>
 
             <div className="mt-2 flex flex-wrap gap-1.5">

@@ -5,6 +5,8 @@ import { WebexRecordingsManager } from "../_components/webex-recordings-manager"
 
 export default async function WebexRecordingsPage() {
   const supabase = await createClient();
+  // Server Component — einmalig pro Request, Date.now() pragmatisch OK.
+  // eslint-disable-next-line react-hooks/purity
   const last24h = new Date(Date.now() - 24 * 3600_000).toISOString();
 
   const [{ count: fetchedLast24h }, { count: pendingCount }] = await Promise.all([

@@ -96,7 +96,7 @@ function Modal({
             <ul className="mt-2 space-y-1.5">
               {active.length === 0 && (
                 <li className="rounded-md border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400 dark:border-[#2c2c2e]">
-                  Keine Widgets aktiv — füge unten welche hinzu oder nutze „Standard wiederherstellen".
+                  Keine Widgets aktiv — füge unten welche hinzu oder nutze &bdquo;Standard wiederherstellen&ldquo;.
                 </li>
               )}
               {active.map((key, i) => {

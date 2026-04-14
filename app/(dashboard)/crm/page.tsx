@@ -76,23 +76,26 @@ export default async function CrmPage({
     }
   }
 
-  // Letzter-Anruf-Filter (Zeitfenster)
+  // Letzter-Anruf-Filter (Zeitfenster). Server Component → einmalig pro Request
+  // gerendert, Date.now() hier pragmatisch OK.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   if (sp.last_call === "today") {
-    const since = new Date();
+    const since = new Date(nowMs);
     since.setHours(0, 0, 0, 0);
     const recent = await fetchRecentCallLeadIds(since.toISOString());
     query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
   } else if (sp.last_call === "7d") {
-    const since = new Date(Date.now() - 7 * 86400_000);
+    const since = new Date(nowMs - 7 * 86400_000);
     const recent = await fetchRecentCallLeadIds(since.toISOString());
     query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
   } else if (sp.last_call === "30d") {
-    const since = new Date(Date.now() - 30 * 86400_000);
+    const since = new Date(nowMs - 30 * 86400_000);
     const recent = await fetchRecentCallLeadIds(since.toISOString());
     query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
   } else if (sp.last_call === "older_30d") {
     // in calledLeadIds ABER nicht in recent(30d)
-    const recent = await fetchRecentCallLeadIds(new Date(Date.now() - 30 * 86400_000).toISOString());
+    const recent = await fetchRecentCallLeadIds(new Date(nowMs - 30 * 86400_000).toISOString());
     const recentSet = new Set(recent);
     const older = calledLeadIds.filter((id) => !recentSet.has(id));
     query = older.length > 0 ? query.in("id", older) : query.eq("id", "00000000-0000-0000-0000-000000000000");

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { updatePassword } from "@/app/login/actions";
 import { Lock, Check } from "lucide-react";
 import { SwipeflowLogo } from "@/app/(dashboard)/swipeflow-logo";
@@ -28,12 +29,12 @@ export default function UpdatePasswordPage() {
                 Passwort erfolgreich geändert!
               </p>
             </div>
-            <a
+            <Link
               href="/"
               className="inline-block rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             >
               Zum Lead Center
-            </a>
+            </Link>
           </div>
         ) : (
           <form action={formAction} className="space-y-4">

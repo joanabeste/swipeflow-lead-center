@@ -2,7 +2,7 @@
 
 import { useState, useActionState } from "react";
 import { loginWithPassword, sendMagicLink, sendPasswordReset } from "./actions";
-import { Mail, Lock, KeyRound, ArrowLeft, Check } from "lucide-react";
+import { Mail, Lock, KeyRound, ArrowLeft } from "lucide-react";
 import { SwipeflowLogo } from "../(dashboard)/swipeflow-logo";
 
 type Tab = "password" | "magic" | "reset";
