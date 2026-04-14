@@ -248,7 +248,7 @@ export interface EnrichmentConfig {
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {
   contacts_management: true,
-  contacts_all: false,
+  contacts_all: true,
   job_postings: true,
   career_page: true,
   company_details: true,

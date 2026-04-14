@@ -102,7 +102,14 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   if (config.contacts_management && !config.contacts_all) {
     rules.push("Kontakte: NUR Geschäftsführer/Inhaber/Management.");
   } else if (config.contacts_all) {
-    rules.push("Kontakte: Alle Personen. Prio: HR > GF > Vertrieb.");
+    rules.push(
+      "Kontakte: ALLE auf der Website auffindbaren Ansprechpartner — auch wenn nur Name + Rolle ohne E-Mail/Telefon. " +
+      "PFLICHT: HR-/Personal-Verantwortliche separat und einzeln erfassen — jede Person mit Personal-, HR-, Recruiting-, " +
+      "Talent-, Ausbildungs-, oder Bewerbungs-Bezug muss als eigener contacts-Eintrag mit präziser role stehen " +
+      "(z.B. 'Personalleitung', 'HR-Manager/in', 'Personalreferent/in', 'Recruiting', 'Talent Acquisition', " +
+      "'Ausbildungsleitung', 'Ansprechpartner Bewerbung'). Reihenfolge im Array: HR > GF > Vertrieb > Sonstige. " +
+      "Wenn auf der Karriereseite ein 'Ansprechpartner für Bewerbungen' o.ä. genannt wird, MUSS dieser im Array stehen.",
+    );
   }
   if (config.contacts_management || config.contacts_all) {
     rules.push("Telefon: +49-Format. Impressum auf Tel/Fon/+49/(0 prüfen.");

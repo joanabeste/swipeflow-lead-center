@@ -22,18 +22,5 @@ export async function getRecruitingScoringConfig(): Promise<RecruitingScoringCon
   }
 }
 
-const HR_ROLE_PATTERNS = [
-  /personal/i,
-  /\bhr\b/i,
-  /human\s*resources/i,
-  /recruit/i,
-  /talent/i,
-  /people/i,
-  /ausbildung/i,
-];
-
-/** Prüft ob ein Kontakt eine HR-Rolle hat */
-export function isHrContact(role: string | null | undefined): boolean {
-  if (!role) return false;
-  return HR_ROLE_PATTERNS.some((p) => p.test(role));
-}
+// Re-Export, damit bestehende Server-Aufrufer weiter funktionieren.
+export { isHrContact } from "@/lib/recruiting/hr-contact";
