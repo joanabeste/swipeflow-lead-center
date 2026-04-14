@@ -310,6 +310,103 @@ export async function createManualLead(input: {
   return { success: true, leadId: data.id as string };
 }
 
+// ─── Kontakte ────────────────────────────────────────────────
+
+export async function addContact(input: {
+  leadId: string;
+  name: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (!input.name.trim()) return { error: "Name fehlt." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_contacts").insert({
+    lead_id: input.leadId,
+    name: input.name.trim(),
+    role: input.role?.trim() || null,
+    email: input.email?.trim() || null,
+    phone: input.phone?.trim() || null,
+    source_url: null,
+  });
+  if (error) {
+    console.error("[addContact] failed:", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+  revalidatePath(`/crm/${input.leadId}`);
+  return { success: true };
+}
+
+export async function updateContact(contactId: string, leadId: string, input: {
+  name: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_contacts").update({
+    name: input.name.trim(),
+    role: input.role?.trim() || null,
+    email: input.email?.trim() || null,
+    phone: input.phone?.trim() || null,
+  }).eq("id", contactId);
+  if (error) return { error: error.message };
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
+export async function deleteContact(contactId: string, leadId: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_contacts").delete().eq("id", contactId);
+  if (error) return { error: error.message };
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
+// ─── Stellenanzeigen ──────────────────────────────────────────
+
+export async function addJobPosting(input: {
+  leadId: string;
+  title: string;
+  location?: string | null;
+  url?: string | null;
+}) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (!input.title.trim()) return { error: "Titel fehlt." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_job_postings").insert({
+    lead_id: input.leadId,
+    title: input.title.trim(),
+    location: input.location?.trim() || null,
+    url: input.url?.trim() || null,
+    posted_date: null,
+    source: "manual",
+  });
+  if (error) {
+    console.error("[addJobPosting] failed:", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+  revalidatePath(`/crm/${input.leadId}`);
+  return { success: true };
+}
+
+export async function deleteJobPosting(jobId: string, leadId: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_job_postings").delete().eq("id", jobId);
+  if (error) return { error: error.message };
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
 export async function updateCallNotes(callId: string, leadId: string, notes: string) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };

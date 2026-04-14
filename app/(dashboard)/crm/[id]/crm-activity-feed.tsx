@@ -132,12 +132,25 @@ export function CrmActivityFeed({
 
         <div className="mx-1 h-5 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
 
-        <FilterChip current={filter} value="all" onSet={setFilter}>Alle</FilterChip>
-        <FilterChip current={filter} value="note" onSet={setFilter}>Notizen</FilterChip>
-        <FilterChip current={filter} value="call" onSet={setFilter}>Anrufe</FilterChip>
-        <FilterChip current={filter} value="status" onSet={setFilter}>Status</FilterChip>
-        <FilterChip current={filter} value="enrichment" onSet={setFilter}>Anreicherung</FilterChip>
-        <FilterChip current={filter} value="change" onSet={setFilter}>Änderungen</FilterChip>
+        <label className="inline-flex items-center gap-1.5 text-xs">
+          <span className="text-gray-500 dark:text-gray-400">Anzeigen:</span>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as ActivityKind)}
+            className={`rounded-md border px-2 py-1 text-xs ${
+              filter !== "all"
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]"
+            }`}
+          >
+            <option value="all">Alle Aktivitäten</option>
+            <option value="note">Nur Notizen</option>
+            <option value="call">Nur Anrufe</option>
+            <option value="status">Nur Status-Wechsel</option>
+            <option value="enrichment">Nur Anreicherung</option>
+            <option value="change">Nur Feld-Änderungen</option>
+          </select>
+        </label>
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-gray-500 dark:text-gray-400">CRM-Status:</span>
@@ -189,14 +202,19 @@ export function CrmActivityFeed({
           filtered.map((item) => (
             <div key={item.id} className="flex gap-3 p-4 hover:bg-gray-50/50 dark:hover:bg-white/[0.02]">
               <div className="flex-shrink-0">
-                <ActivityAvatar kind={item.kind} />
+                <PersonAvatar name={item.author} kind={item.kind} />
               </div>
               <div className="min-w-0 flex-1">
-                {item.render()}
-              </div>
-              <div className="flex-shrink-0 text-right text-xs text-gray-400 dark:text-gray-500">
-                <p>{formatRelative(item.at)}</p>
-                {item.author && <p className="mt-0.5">{item.author}</p>}
+                <p className="text-sm">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
+                    {item.author ?? "System"}
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400"> · {actionVerb(item.kind)}</span>
+                  <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">
+                    · {formatRelative(item.at)}
+                  </span>
+                </p>
+                <div className="mt-1">{item.render()}</div>
               </div>
             </div>
           ))
@@ -204,6 +222,56 @@ export function CrmActivityFeed({
       </div>
     </div>
   );
+}
+
+function actionVerb(kind: ActivityKind): string {
+  switch (kind) {
+    case "note": return "hat eine Notiz hinzugefügt";
+    case "call": return "hat einen Anruf protokolliert";
+    case "status": return "hat den Status geändert";
+    case "enrichment": return "Lead wurde angereichert";
+    case "change": return "hat ein Feld aktualisiert";
+    default: return "";
+  }
+}
+
+function PersonAvatar({ name, kind }: { name: string | null; kind: ActivityKind }) {
+  const initials = name
+    ? name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?"
+    : "·";
+  const hue = name ? hashHue(name) : 210;
+  const config: Record<ActivityKind, { icon: React.ComponentType<{ className?: string }>; color: string }> = {
+    all: { icon: ActivityIcon, color: "#9ca3af" },
+    note: { icon: StickyNote, color: "#f59e0b" },
+    call: { icon: PhoneCall, color: "#10b981" },
+    status: { icon: ArrowRight, color: "#ec4899" },
+    enrichment: { icon: Sparkles, color: "#6366f1" },
+    change: { icon: ActivityIcon, color: "#6b7280" },
+  };
+  const c = config[kind] ?? config.all;
+  const Icon = c.icon;
+  return (
+    <div className="relative">
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+        style={{ backgroundColor: `hsl(${hue}, 50%, 45%)` }}
+      >
+        {initials}
+      </div>
+      <div
+        className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white dark:border-[#1c1c1e]"
+        style={{ backgroundColor: c.color }}
+      >
+        <Icon className="h-2.5 w-2.5 text-white" />
+      </div>
+    </div>
+  );
+}
+
+function hashHue(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) & 0xffffffff;
+  return Math.abs(h) % 360;
 }
 
 // ─── Toolbar-Teile ───────────────────────────────────────────
@@ -226,29 +294,6 @@ function ToolbarButton({
   );
 }
 
-function FilterChip({
-  current, value, onSet, children,
-}: {
-  current: ActivityKind;
-  value: ActivityKind;
-  onSet: (v: ActivityKind) => void;
-  children: React.ReactNode;
-}) {
-  const active = current === value;
-  return (
-    <button
-      onClick={() => onSet(value)}
-      className={`rounded-full px-2.5 py-0.5 text-xs transition ${
-        active
-          ? "bg-gray-200 font-medium text-gray-900 dark:bg-white/10 dark:text-gray-100"
-          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function filterLabel(kind: ActivityKind): string {
   switch (kind) {
     case "note": return "Notizen";
@@ -262,30 +307,9 @@ function filterLabel(kind: ActivityKind): string {
 
 // ─── Activity Items ──────────────────────────────────────────
 
-function ActivityAvatar({ kind }: { kind: ActivityKind }) {
-  const config: Record<ActivityKind, { bg: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-    all: { bg: "bg-gray-100 dark:bg-gray-800", color: "text-gray-500", icon: ActivityIcon },
-    note: { bg: "bg-amber-100 dark:bg-amber-900/30", color: "text-amber-600 dark:text-amber-400", icon: StickyNote },
-    call: { bg: "bg-emerald-100 dark:bg-emerald-900/30", color: "text-emerald-600 dark:text-emerald-400", icon: PhoneCall },
-    status: { bg: "bg-pink-100 dark:bg-pink-900/30", color: "text-pink-600 dark:text-pink-400", icon: ArrowRight },
-    enrichment: { bg: "bg-indigo-100 dark:bg-indigo-900/30", color: "text-indigo-600 dark:text-indigo-400", icon: Sparkles },
-    change: { bg: "bg-gray-100 dark:bg-gray-800", color: "text-gray-500 dark:text-gray-400", icon: ActivityIcon },
-  };
-  const c = config[kind] ?? config.all;
-  const Icon = c.icon;
-  return (
-    <div className={`flex h-8 w-8 items-center justify-center rounded-full ${c.bg}`}>
-      <Icon className={`h-4 w-4 ${c.color}`} />
-    </div>
-  );
-}
-
 function NoteItem({ note }: { note: NoteRow }) {
   return (
-    <div>
-      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Notiz</p>
-      <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400">{note.content}</p>
-    </div>
+    <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{note.content}</p>
   );
 }
 
@@ -299,25 +323,25 @@ function CallItem({ call }: { call: CallRow }) {
     missed: "nicht erreicht", failed: "fehlgeschlagen", ended: "beendet",
   };
   return (
-    <div>
-      <p className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+    <div className="text-sm">
+      <p className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
         {directionIcon}
-        {call.direction === "inbound" ? "Eingehender Anruf" : "Ausgehender Anruf"}
+        {call.direction === "inbound" ? "Eingehend" : "Ausgehend"}
         <span className="text-gray-500 dark:text-gray-400">· {statusLabel[call.status] ?? call.status}</span>
         {call.duration_seconds != null && (
           <span className="text-xs text-gray-500 dark:text-gray-400">· {formatDur(call.duration_seconds)}</span>
         )}
+        {call.phone_number && (
+          <span className="text-xs text-gray-500 dark:text-gray-400">· {call.phone_number}</span>
+        )}
       </p>
-      {call.phone_number && (
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Nummer: {call.phone_number}</p>
-      )}
       {call.notes && (
-        <p className="mt-1 whitespace-pre-wrap text-sm text-gray-600 dark:text-gray-400">{call.notes}</p>
+        <p className="mt-1 whitespace-pre-wrap text-gray-600 dark:text-gray-400">{call.notes}</p>
       )}
       {call.mondo_call_id && (
         <button className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline">
           <Play className="h-3 w-3" />
-          Aufzeichnung (wenn vorhanden)
+          Aufzeichnung
         </button>
       )}
     </div>
@@ -331,39 +355,31 @@ function StatusChangeItem({
     const newId = (log.details?.new_status as string | null) ?? null;
     const oldId = (log.details?.old_status as string | null) ?? null;
     return (
-      <div className="text-sm text-gray-600 dark:text-gray-400">
-        <span className="font-medium text-gray-700 dark:text-gray-300">CRM-Status geändert:</span>{" "}
+      <div className="inline-flex items-center gap-1.5 text-sm">
         <CrmStatusBadge statusId={oldId} statuses={statuses} fallback="—" />
-        <ArrowRight className="mx-1 inline-block h-3 w-3 text-gray-400" />
+        <ArrowRight className="h-3 w-3 text-gray-400" />
         <CrmStatusBadge statusId={newId} statuses={statuses} fallback="—" />
       </div>
     );
   }
   return (
     <p className="text-sm text-gray-600 dark:text-gray-400">
-      <span className="font-medium text-gray-700 dark:text-gray-300">Pipeline-Status:</span>{" "}
-      → {String(log.details?.new_status ?? "?")}
+      Pipeline → {String(log.details?.new_status ?? "?")}
     </p>
   );
 }
 
 function EnrichmentItem({ enrichment }: { enrichment: LeadEnrichment }) {
+  if (enrichment.status === "completed" && !enrichment.error_message) return null;
   return (
-    <p className="text-sm text-gray-600 dark:text-gray-400">
-      <span className="font-medium text-gray-700 dark:text-gray-300">
-        {enrichment.status === "completed" ? "Lead angereichert" : `Anreicherung: ${enrichment.status}`}
-      </span>
-      {enrichment.error_message && (
-        <span className="ml-1 text-xs text-red-600">· {enrichment.error_message}</span>
-      )}
-    </p>
+    <p className="text-xs text-red-600">{enrichment.error_message}</p>
   );
 }
 
 function ChangeItem({ change }: { change: LeadChange }) {
   return (
     <p className="text-sm text-gray-600 dark:text-gray-400">
-      <span className="font-medium text-gray-700 dark:text-gray-300">{change.field_name}:</span>{" "}
+      <span className="font-medium">{change.field_name}:</span>{" "}
       <span className="line-through opacity-60">{change.old_value ?? "–"}</span>
       <ArrowRight className="mx-1 inline-block h-3 w-3" />
       {change.new_value ?? "–"}

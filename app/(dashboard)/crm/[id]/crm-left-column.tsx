@@ -1,13 +1,21 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Briefcase, Mail, Phone, MapPin, User, ExternalLink, Save } from "lucide-react";
+import {
+  Briefcase, Mail, Phone, MapPin, User, ExternalLink, Save, Plus, X, Pencil, Trash2,
+} from "lucide-react";
 import type { Lead, LeadContact, LeadJobPosting, LeadEnrichment } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { haversineKm, distanceCategory } from "@/lib/geo/distance";
 import { updateLead } from "../../leads/actions";
+import { useToastContext } from "../../toast-provider";
+import {
+  addContact, updateContact, deleteContact,
+  addJobPosting, deleteJobPosting,
+} from "../actions";
 
 const LeadMap = dynamic(() => import("../../leads/lead-map"), {
   ssr: false,
@@ -63,10 +71,6 @@ export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq }: Pr
   }
   const [state, formAction, pending] = useActionState(handleSubmit, undefined);
 
-  const hrContacts = contacts.filter((c) => isHrContact(c.role));
-  const otherContacts = contacts.filter((c) => !isHrContact(c.role));
-  const orderedContacts = [...hrContacts, ...otherContacts];
-
   return (
     <>
       {/* Firmen-Briefing */}
@@ -109,97 +113,11 @@ export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq }: Pr
         )}
       </Card>
 
-      {/* Kontakte */}
-      <Card>
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-            Ansprechpartner ({contacts.length})
-          </h2>
-          {hrContacts.length > 0 && (
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-              {hrContacts.length} HR
-            </span>
-          )}
-        </div>
-        {contacts.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-400">Keine Kontakte.</p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {orderedContacts.map((c) => {
-              const isHr = isHrContact(c.role);
-              return (
-                <li
-                  key={c.id}
-                  className={`rounded-md border p-2 ${
-                    isHr
-                      ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10"
-                      : "border-gray-100 dark:border-[#2c2c2e]"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-medium">{c.name}</p>
-                    {isHr && (
-                      <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                        HR
-                      </span>
-                    )}
-                  </div>
-                  {c.role && <p className="text-xs text-gray-500 dark:text-gray-400">{c.role}</p>}
-                  <div className="mt-0.5 space-y-0.5 text-xs">
-                    {c.email && (
-                      <a className="block truncate text-primary hover:underline" href={`mailto:${c.email}`}>
-                        {c.email}
-                      </a>
-                    )}
-                    {c.phone && (
-                      <a className="block truncate text-primary hover:underline" href={`tel:${c.phone}`}>
-                        {c.phone}
-                      </a>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
+      {/* Kontakte — editierbar */}
+      <ContactsCard leadId={lead.id} contacts={contacts} />
 
-      {/* Offene Stellen */}
-      {jobs.length > 0 && (
-        <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Offene Stellen ({jobs.length})
-            </h2>
-            {latestEnrichment?.career_page_url && (
-              <a
-                href={latestEnrichment.career_page_url}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
-              >
-                Karriereseite
-                <ExternalLink className="h-2.5 w-2.5" />
-              </a>
-            )}
-          </div>
-          <ul className="mt-2 space-y-1.5">
-            {jobs.map((j) => (
-              <li key={j.id} className="rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
-                <div className="flex items-start justify-between gap-1">
-                  <p className="text-sm font-medium leading-tight">{j.title}</p>
-                  {j.url && (
-                    <a href={j.url} target="_blank" rel="noreferrer" className="shrink-0 text-primary">
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                </div>
-                {j.location && <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{j.location}</p>}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {/* Offene Stellen — editierbar */}
+      <JobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />
 
       {/* Standort */}
       {lead.latitude != null && lead.longitude != null && (
@@ -267,6 +185,382 @@ export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq }: Pr
     </>
   );
 }
+
+// ─── Kontakte-Card ────────────────────────────────────────────
+
+function ContactsCard({ leadId, contacts }: { leadId: string; contacts: LeadContact[] }) {
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const hrContacts = contacts.filter((c) => isHrContact(c.role));
+  const otherContacts = contacts.filter((c) => !isHrContact(c.role));
+  const ordered = [...hrContacts, ...otherContacts];
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          Ansprechpartner ({contacts.length})
+          {hrContacts.length > 0 && (
+            <span className="ml-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              · {hrContacts.length} HR
+            </span>
+          )}
+        </h2>
+        <button
+          onClick={() => { setAdding(true); setEditingId(null); }}
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          title="Ansprechpartner hinzufügen"
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {adding && (
+        <ContactForm
+          leadId={leadId}
+          onClose={() => setAdding(false)}
+        />
+      )}
+
+      {contacts.length === 0 && !adding ? (
+        <p className="mt-2 text-sm text-gray-400">Noch keine Kontakte.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {ordered.map((c) => {
+            if (editingId === c.id) {
+              return (
+                <li key={c.id}>
+                  <ContactForm
+                    leadId={leadId}
+                    contact={c}
+                    onClose={() => setEditingId(null)}
+                  />
+                </li>
+              );
+            }
+            return (
+              <li key={c.id}>
+                <ContactRow
+                  contact={c}
+                  leadId={leadId}
+                  onEdit={() => setEditingId(c.id)}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function ContactRow({
+  contact, leadId, onEdit,
+}: { contact: LeadContact; leadId: string; onEdit: () => void }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [pending, startTransition] = useTransition();
+  const isHr = isHrContact(contact.role);
+
+  function handleDelete() {
+    if (!confirm(`"${contact.name}" wirklich löschen?`)) return;
+    startTransition(async () => {
+      const res = await deleteContact(contact.id, leadId);
+      if (res.error) addToast(res.error, "error");
+      else {
+        addToast("Kontakt gelöscht", "success");
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div
+      className={`group relative rounded-md border p-2 ${
+        isHr
+          ? "border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/40 dark:bg-emerald-900/10"
+          : "border-gray-100 dark:border-[#2c2c2e]"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-medium">{contact.name}</p>
+            {isHr && (
+              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                HR
+              </span>
+            )}
+          </div>
+          {contact.role && <p className="truncate text-xs text-gray-500 dark:text-gray-400">{contact.role}</p>}
+          <div className="mt-0.5 space-y-0.5 text-xs">
+            {contact.email && (
+              <a className="block truncate text-primary hover:underline" href={`mailto:${contact.email}`}>
+                {contact.email}
+              </a>
+            )}
+            {contact.phone && (
+              <a className="block truncate text-primary hover:underline" href={`tel:${contact.phone}`}>
+                {contact.phone}
+              </a>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
+          <button
+            onClick={onEdit}
+            className="rounded p-1 text-gray-400 hover:bg-white hover:text-gray-700 dark:hover:bg-[#2c2c2e] dark:hover:text-gray-200"
+            title="Bearbeiten"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={pending}
+            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+            title="Löschen"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContactForm({
+  leadId, contact, onClose,
+}: { leadId: string; contact?: LeadContact; onClose: () => void }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [name, setName] = useState(contact?.name ?? "");
+  const [role, setRole] = useState(contact?.role ?? "");
+  const [email, setEmail] = useState(contact?.email ?? "");
+  const [phone, setPhone] = useState(contact?.phone ?? "");
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    if (!name.trim()) return;
+    startTransition(async () => {
+      const res = contact
+        ? await updateContact(contact.id, leadId, { name, role, email, phone })
+        : await addContact({ leadId, name, role, email, phone });
+      if (res.error) addToast(res.error, "error");
+      else {
+        addToast(contact ? "Kontakt aktualisiert" : "Kontakt angelegt", "success");
+        onClose();
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-primary/40 bg-primary/5 p-2 dark:bg-primary/10">
+      <div className="space-y-1.5">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name *"
+          autoFocus
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+        <input
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          placeholder="Rolle (z.B. HR-Manager)"
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+        <input
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="E-Mail"
+          type="email"
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Telefon"
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+      </div>
+      <div className="mt-2 flex justify-end gap-1">
+        <button
+          onClick={onClose}
+          className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+        >
+          <X className="h-3 w-3" />
+        </button>
+        <button
+          onClick={submit}
+          disabled={pending || !name.trim()}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+        >
+          <Save className="h-3 w-3" />
+          {pending ? "…" : contact ? "Aktualisieren" : "Anlegen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stellen-Card ─────────────────────────────────────────────
+
+function JobsCard({
+  leadId, jobs, careerPageUrl,
+}: { leadId: string; jobs: LeadJobPosting[]; careerPageUrl: string | null }) {
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          Offene Stellen ({jobs.length})
+        </h2>
+        <div className="flex items-center gap-1">
+          {careerPageUrl && (
+            <a
+              href={careerPageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+            >
+              Karriere
+              <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
+          <button
+            onClick={() => setAdding(true)}
+            className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+            title="Stelle hinzufügen"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {adding && <JobForm leadId={leadId} onClose={() => setAdding(false)} />}
+
+      {jobs.length === 0 && !adding ? (
+        <p className="mt-2 text-sm text-gray-400">Noch keine Stellen.</p>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {jobs.map((j) => <li key={j.id}><JobRow job={j} leadId={leadId} /></li>)}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function JobRow({ job, leadId }: { job: LeadJobPosting; leadId: string }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [pending, startTransition] = useTransition();
+
+  function handleDelete() {
+    if (!confirm(`Stelle "${job.title}" wirklich löschen?`)) return;
+    startTransition(async () => {
+      const res = await deleteJobPosting(job.id, leadId);
+      if (res.error) addToast(res.error, "error");
+      else {
+        addToast("Stelle gelöscht", "success");
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="group flex items-start justify-between gap-2 rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{job.title}</p>
+        {job.location && <p className="truncate text-xs text-gray-500 dark:text-gray-400">{job.location}</p>}
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5">
+        {job.url && (
+          <a href={job.url} target="_blank" rel="noreferrer" className="rounded p-1 text-primary hover:bg-primary/10" title="Öffnen">
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        <button
+          onClick={handleDelete}
+          disabled={pending}
+          className="rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-900/20"
+          title="Löschen"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function JobForm({ leadId, onClose }: { leadId: string; onClose: () => void }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [url, setUrl] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  function submit() {
+    if (!title.trim()) return;
+    startTransition(async () => {
+      const res = await addJobPosting({ leadId, title, location, url });
+      if (res.error) addToast(res.error, "error");
+      else {
+        addToast("Stelle angelegt", "success");
+        onClose();
+        router.refresh();
+      }
+    });
+  }
+
+  return (
+    <div className="mt-2 rounded-md border border-primary/40 bg-primary/5 p-2 dark:bg-primary/10">
+      <div className="space-y-1.5">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Titel (m/w/d) *"
+          autoFocus
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+        <input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Ort"
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="Link zur Stellenanzeige"
+          type="url"
+          className="w-full rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+        />
+      </div>
+      <div className="mt-2 flex justify-end gap-1">
+        <button
+          onClick={onClose}
+          className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+        >
+          <X className="h-3 w-3" />
+        </button>
+        <button
+          onClick={submit}
+          disabled={pending || !title.trim()}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+        >
+          <Save className="h-3 w-3" />
+          {pending ? "…" : "Anlegen"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared ────────────────────────────────────────────────────
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
