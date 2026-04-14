@@ -235,6 +235,34 @@ export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {
   company_details: true,
 };
 
+export type WebdevStrictness = "lax" | "normal" | "strict";
+
+export interface WebdevScoringConfig {
+  strictness: WebdevStrictness;
+  design_focus: string | null;
+  min_issues_to_qualify: number;
+  slow_load_threshold_ms: number;
+  very_slow_load_threshold_ms: number;
+  check_ssl: boolean;
+  check_responsive: boolean;
+  check_meta_tags: boolean;
+  check_alt_tags: boolean;
+  check_outdated_html: boolean;
+}
+
+export const DEFAULT_WEBDEV_SCORING: WebdevScoringConfig = {
+  strictness: "normal",
+  design_focus: null,
+  min_issues_to_qualify: 2,
+  slow_load_threshold_ms: 3000,
+  very_slow_load_threshold_ms: 5000,
+  check_ssl: true,
+  check_responsive: true,
+  check_meta_tags: true,
+  check_alt_tags: true,
+  check_outdated_html: true,
+};
+
 // ============================================================
 // Cancel-Rules (Ausschlussregeln)
 // ============================================================

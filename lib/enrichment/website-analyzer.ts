@@ -1,5 +1,7 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import type { WebdevScoringConfig } from "@/lib/types";
+import { DEFAULT_WEBDEV_SCORING } from "@/lib/types";
 
 export interface WebsiteAnalysis {
   hasSsl: boolean;
@@ -31,8 +33,35 @@ const TECH_PATTERNS: [RegExp, string][] = [
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
+/** Baut den Design-Prompt je nach Strenge-Level */
+function buildDesignPrompt(
+  scoring: WebdevScoringConfig,
+  htmlSnippet: string,
+  cssInfo: string,
+): string {
+  const strictnessGuide: Record<WebdevScoringConfig["strictness"], string> = {
+    lax: "Bewerte großzügig — nur bei offensichtlich veralteten Seiten (Tabellen-Layout, Flash, <font>-Tags, keine CSS-Dateien) 'veraltet' vergeben. Solide 2015er-Seiten sind 'durchschnittlich'. 'modern' für zeitgemäße Seiten.",
+    normal: "Bewerte ausgewogen. Kriterien: Modernes CSS (Flexbox/Grid), Whitespace, Typografie, Layout. Altes Design = 'veraltet'. Solide Standards = 'durchschnittlich'. Zeitgemäß = 'modern'.",
+    strict: "Bewerte streng — heutige Designstandards anlegen. Fehlende Flexbox/Grid, veraltete Typografie, wenig Whitespace, altmodische Farben → 'veraltet'. Nur wirklich zeitgemäß = 'modern'. Der Großteil des deutschen Mittelstands ist 'veraltet'.",
+  };
+
+  const parts: string[] = [
+    "Bewerte das Webdesign dieser Seite. Antwort NUR mit einem Wort: \"veraltet\", \"durchschnittlich\" oder \"modern\".",
+    strictnessGuide[scoring.strictness],
+  ];
+  if (scoring.design_focus?.trim()) {
+    parts.push(`Besonderer Fokus: ${scoring.design_focus.trim()}`);
+  }
+  parts.push(`HTML-Snippet:\n${htmlSnippet}`);
+  parts.push(`CSS-Links:\n${cssInfo || "—"}`);
+  return parts.join("\n\n");
+}
+
 /** Analysiert die technische Qualität einer Website */
-export async function analyzeWebsite(websiteOrDomain: string): Promise<WebsiteAnalysis> {
+export async function analyzeWebsite(
+  websiteOrDomain: string,
+  scoring: WebdevScoringConfig = DEFAULT_WEBDEV_SCORING,
+): Promise<WebsiteAnalysis> {
   const domain = websiteOrDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
 
   // 1. SSL-Check + Ladezeit + HTML holen
@@ -79,7 +108,6 @@ export async function analyzeWebsite(websiteOrDomain: string): Promise<WebsiteAn
 
       if (res.ok) {
         html = await res.text();
-        // Prüfen ob finale URL HTTPS ist (Redirect)
         hasSsl = res.url.startsWith("https://");
       }
     } catch {
@@ -108,35 +136,42 @@ export async function analyzeWebsite(websiteOrDomain: string): Promise<WebsiteAn
     }
   }
 
-  // 4. Issues sammeln (ohne LLM)
+  // 4. Issues sammeln — je nach aktivierten Checks
   const issues: string[] = [];
-  if (!hasSsl) issues.push("Kein SSL-Zertifikat");
-  if (!isMobileFriendly) issues.push("Nicht mobilfreundlich");
-  if (loadTimeMs > 5000) issues.push("Langsame Ladezeit (>5s)");
-  if (loadTimeMs > 3000 && loadTimeMs <= 5000) issues.push("Mäßige Ladezeit (>3s)");
 
-  // Meta-Tags prüfen
-  if (!/<meta[^>]*name=["']description["'][^>]*>/i.test(html)) issues.push("Keine Meta-Description");
-  if (!/<title[^>]*>[^<]+<\/title>/i.test(html)) issues.push("Kein Seiten-Titel");
-  if (/<img[^>]*(?!alt=)[^>]*>/i.test(html)) issues.push("Bilder ohne Alt-Text");
+  if (scoring.check_ssl && !hasSsl) issues.push("Kein SSL-Zertifikat");
+  if (scoring.check_responsive && !isMobileFriendly) issues.push("Nicht mobilfreundlich");
 
-  // Veraltete Technologien
-  if (/jquery-1\.|jquery\.min\.js.*1\./i.test(html)) issues.push("Veraltetes jQuery");
-  if (/flash|swfobject/i.test(html)) issues.push("Flash-Inhalte");
-  if (/<table[^>]*>[\s\S]*<table/i.test(html)) issues.push("Tabellen-basiertes Layout");
-  if (/<font[\s>]/i.test(html)) issues.push("Veraltete HTML-Tags (<font>)");
-  if (/<center[\s>]/i.test(html)) issues.push("Veraltete HTML-Tags (<center>)");
-  if (/<!DOCTYPE html/i.test(html) === false) issues.push("Kein HTML5 DOCTYPE");
+  if (loadTimeMs > scoring.very_slow_load_threshold_ms) {
+    issues.push(`Langsame Ladezeit (>${Math.round(scoring.very_slow_load_threshold_ms / 1000)}s)`);
+  } else if (loadTimeMs > scoring.slow_load_threshold_ms) {
+    issues.push(`Mäßige Ladezeit (>${Math.round(scoring.slow_load_threshold_ms / 1000)}s)`);
+  }
 
-  // 5. Design-Einschätzung via LLM (kompakter Prompt, nur kleine Teile senden)
+  if (scoring.check_meta_tags) {
+    if (!/<meta[^>]*name=["']description["'][^>]*>/i.test(html)) issues.push("Keine Meta-Description");
+    if (!/<title[^>]*>[^<]+<\/title>/i.test(html)) issues.push("Kein Seiten-Titel");
+  }
+
+  if (scoring.check_alt_tags) {
+    if (/<img[^>]*(?!alt=)[^>]*>/i.test(html)) issues.push("Bilder ohne Alt-Text");
+  }
+
+  if (scoring.check_outdated_html) {
+    if (/jquery-1\.|jquery\.min\.js.*1\./i.test(html)) issues.push("Veraltetes jQuery");
+    if (/flash|swfobject/i.test(html)) issues.push("Flash-Inhalte");
+    if (/<table[^>]*>[\s\S]*<table/i.test(html)) issues.push("Tabellen-basiertes Layout");
+    if (/<font[\s>]/i.test(html)) issues.push("Veraltete HTML-Tags (<font>)");
+    if (/<center[\s>]/i.test(html)) issues.push("Veraltete HTML-Tags (<center>)");
+    if (/<!DOCTYPE html/i.test(html) === false) issues.push("Kein HTML5 DOCTYPE");
+  }
+
+  // 5. Design-Einschätzung via LLM (abhängig von Strenge + Fokus)
   let designEstimate: WebsiteAnalysis["designEstimate"] = "durchschnittlich";
 
-  // Nur die ersten 3K chars + CSS-Referenzen für Design-Check
   const designSnippet = html.slice(0, 3000);
   const cssInfo = (html.match(/<link[^>]*stylesheet[^>]*>/gi) ?? []).join("\n");
-  const designPrompt = `Bewerte das Webdesign dieser Seite. Antwort NUR mit: "veraltet", "durchschnittlich" oder "modern"
-Kriterien: Modernes CSS (Flexbox/Grid)? Zeitgemäßes Layout? Professionell?
-HTML-Snippet:\n${designSnippet}\nCSS-Links:\n${cssInfo}`;
+  const designPrompt = buildDesignPrompt(scoring, designSnippet, cssInfo);
 
   try {
     if (process.env.OPENAI_API_KEY) {

@@ -4,6 +4,7 @@ import { fetchCompanyPages } from "./web-fetcher";
 import { extractFromPages } from "./extractor";
 import { findCompanyWebsite } from "./website-finder";
 import { analyzeWebsite } from "./website-analyzer";
+import { getWebdevScoringConfig } from "./webdev-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
@@ -90,8 +91,9 @@ export async function enrichLead(
   try {
     // Webdev-Modus: Website-Analyse durchführen
     let websiteAnalysis: Awaited<ReturnType<typeof analyzeWebsite>> | null = null;
-    if (serviceMode === "webdev") {
-      websiteAnalysis = await analyzeWebsite(websiteOrDomain);
+    const webdevScoring = serviceMode === "webdev" ? await getWebdevScoringConfig() : null;
+    if (serviceMode === "webdev" && webdevScoring) {
+      websiteAnalysis = await analyzeWebsite(websiteOrDomain, webdevScoring);
       // Ergebnisse im Lead speichern
       await db.from("leads").update({
         has_ssl: websiteAnalysis.hasSsl,
@@ -177,10 +179,11 @@ export async function enrichLead(
 
     // Auto-Qualifizierung je nach Service-Modus
     if (serviceMode === "webdev") {
-      // Webdev: Qualifiziert wenn Kontakt da + Website hat Issues
+      // Webdev: Qualifiziert wenn Kontakt da + genügend Issues laut Scoring-Schwellwert
       const hasContact = result.contacts.some((c) => !!c.email || !!c.phone);
-      const hasIssues = websiteAnalysis && websiteAnalysis.issues.length > 0;
-      if (hasContact && hasIssues) {
+      const minIssues = webdevScoring?.min_issues_to_qualify ?? 1;
+      const issueCount = websiteAnalysis?.issues.length ?? 0;
+      if (hasContact && issueCount >= minIssues) {
         leadUpdates.status = "qualified";
       }
     } else {
