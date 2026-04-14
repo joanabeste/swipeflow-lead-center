@@ -79,6 +79,17 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
     throw new Error(`PhoneMondo-Antwort nicht im JSON-Format: ${rawText.slice(0, 200)}`);
   }
 
+  // PhoneMondo signalisiert App-Level-Fehler per HTTP 200 mit {"state":"err", code, msg}.
+  if (parsed && typeof parsed === "object") {
+    const o = parsed as Record<string, unknown>;
+    if (o.state === "err" || o.status === "err" || o.success === false) {
+      const code = o.code ?? o.error_code ?? "ERR";
+      const msg = o.msg ?? o.message ?? o.error ?? "unbekannt";
+      console.error("[phonemondo] triggerCall — API-Error", { url, code, msg, body: rawText.slice(0, 300) });
+      throw new Error(`PhoneMondo-API-Fehler (${code}): ${msg}. Endpoint ${url} prüfen.`);
+    }
+  }
+
   const callId = extractCallId(parsed);
   if (!callId) {
     console.error("[phonemondo] triggerCall — no call_id in response", {
