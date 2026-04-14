@@ -29,7 +29,13 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
     .from("leads")
     .update({ crm_status_id: statusId, updated_at: new Date().toISOString() })
     .eq("id", leadId);
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("[updateCrmStatus] failed:", error);
+    if (/column.*crm_status_id.*does not exist/i.test(error.message)) {
+      return { error: "Spalte crm_status_id fehlt — Migration 017 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
 
   await logAudit({
     userId: user.id,
@@ -55,7 +61,13 @@ export async function addNote(leadId: string, content: string) {
     .insert({ lead_id: leadId, content: content.trim(), created_by: user.id })
     .select()
     .single();
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("[addNote] insert failed:", error);
+    if (error.code === "42P01" || /relation.*does not exist/i.test(error.message)) {
+      return { error: "Tabelle lead_notes fehlt — Migration 018 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
 
   await logAudit({
     userId: user.id,
@@ -119,7 +131,13 @@ export async function logCall(input: {
     })
     .select()
     .single();
-  if (error) return { error: error.message };
+  if (error) {
+    console.error("[logCall] insert failed:", error);
+    if (error.code === "42P01" || /relation.*does not exist/i.test(error.message)) {
+      return { error: "Tabelle lead_calls fehlt — Migration 019 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
 
   await logAudit({
     userId: user.id,

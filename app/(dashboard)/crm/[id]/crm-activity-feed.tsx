@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { CrmStatusBadge } from "../status-badge";
 import { addNote, logCall, startCall, updateCrmStatus } from "../actions";
+import { useToastContext } from "../../toast-provider";
 
 type NoteRow = LeadNote & { profiles: { name: string } | null };
 type CallRow = LeadCall & { profiles: { name: string } | null };
@@ -378,14 +379,21 @@ function ComposeNote({
   const [content, setContent] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { addToast } = useToastContext();
 
   function submit() {
     if (!content.trim()) return;
     setError(null);
     startTransition(async () => {
       const res = await addNote(leadId, content);
-      if (res.error) setError(res.error);
-      else { setContent(""); onSaved(); }
+      if (res.error) {
+        setError(res.error);
+        addToast(res.error, "error");
+      } else {
+        setContent("");
+        addToast("Notiz gespeichert", "success");
+        onSaved();
+      }
     });
   }
 
@@ -438,6 +446,7 @@ function ComposeCall({
   const [notes, setNotes] = useState("");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const { addToast } = useToastContext();
 
   const callable = [
     ...(leadPhone ? [{ label: "Firmennummer", phone: leadPhone, contactId: null as string | null }] : []),
@@ -452,8 +461,13 @@ function ComposeCall({
     setError(null);
     startTransition(async () => {
       const res = await startCall({ leadId, phoneNumber: p, contactId: cId });
-      if (res.error) setError(res.error);
-      else onSaved();
+      if (res.error) {
+        setError(res.error);
+        addToast(res.error, "error");
+      } else {
+        addToast("Anruf gestartet", "success");
+        onSaved();
+      }
     });
   }
 
@@ -469,8 +483,13 @@ function ComposeCall({
         notes: notes.trim() || null,
         phoneNumber: phone || null,
       });
-      if (res.error) setError(res.error);
-      else onSaved();
+      if (res.error) {
+        setError(res.error);
+        addToast(res.error, "error");
+      } else {
+        addToast("Anruf protokolliert", "success");
+        onSaved();
+      }
     });
   }
 
