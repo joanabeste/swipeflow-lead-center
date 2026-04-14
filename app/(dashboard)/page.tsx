@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { FileSpreadsheet, Upload, Send, Sparkles } from "lucide-react";
 
 import type { ServiceMode } from "@/lib/types";
+import { Greeting } from "./greeting";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -104,17 +105,9 @@ export default async function DashboardPage() {
     "import.directory": "Verzeichnis-Import",
   };
 
-  // Persönliche Begrüßung — Tageszeit in Berlin-Zeit (stabil, serverseitig)
-  const hourBerlin = Number(
-    new Intl.DateTimeFormat("de-DE", { hour: "2-digit", hour12: false, timeZone: "Europe/Berlin" }).format(new Date()),
-  );
-  const greeting =
-    hourBerlin < 5 ? "Nacht-Schicht"
-    : hourBerlin < 11 ? "Guten Morgen"
-    : hourBerlin < 14 ? "Moin"
-    : hourBerlin < 18 ? "Guten Tag"
-    : "Guten Abend";
-  // Vorname bevorzugt, sonst E-Mail-Prefix, sonst Fallback
+  // Vorname bevorzugt, sonst E-Mail-Prefix, sonst Fallback.
+  // Tageszeit-Gruß wird clientseitig berechnet (siehe <Greeting/>), sonst friert
+  // SSR die Uhrzeit beim ersten Render ein und zeigt z.B. "Guten Abend" mittags.
   const displayName = (userName?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "").trim();
 
   // Kontextuelle Motivation — am Status der Pipeline orientiert
@@ -135,9 +128,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight">
-        {greeting}{displayName ? `, ${displayName}` : ""} 👋
-      </h1>
+      <Greeting displayName={displayName} />
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{motivation}</p>
 
       {/* Pipeline-Balken */}
