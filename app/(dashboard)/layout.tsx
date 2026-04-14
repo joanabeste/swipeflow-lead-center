@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, UserCircle } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/server";
 import { SidebarNav } from "./sidebar-nav";
@@ -46,6 +46,13 @@ export default async function DashboardLayout({
 
         <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">
           <ThemeToggle />
+          <Link
+            href="/mein-konto"
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          >
+            <UserCircle className="h-4 w-4" />
+            Mein Konto
+          </Link>
           <form action={logout}>
             <button
               type="submit"
