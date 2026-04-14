@@ -63,18 +63,26 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
   return { callId };
 }
 
+export type WebhookVerifyResult =
+  | { ok: true; verified: true }
+  | { ok: true; verified: false; reason: "no_secret_configured" }
+  | { ok: false; reason: "missing_signature" | "bad_signature" };
+
 /**
- * Prüft die Webhook-Signatur. PhoneMondo sendet üblicherweise einen HMAC-SHA256
- * über den Raw-Body, signiert mit dem Webhook-Secret. Konkreter Header-Name
- * wird aus der API-Doku übernommen.
+ * Prüft die Webhook-Signatur (HMAC-SHA256 über den Raw-Body).
+ *
+ * Ohne konfiguriertes Secret: Anfrage wird akzeptiert, aber nicht verifiziert.
+ * Das ist eine pragmatische Einstellung — der User entscheidet, ob er Webhooks
+ * signiert annehmen will oder nicht (PhoneMondo unterstützt möglicherweise
+ * gar keine Signierung). Den Fall loggt der Endpoint deutlich.
  */
-export function verifyWebhookSignature(rawBody: string, signature: string | null): boolean {
+export function verifyWebhookSignature(rawBody: string, signature: string | null): WebhookVerifyResult {
   const secret = process.env.PHONEMONDO_WEBHOOK_SECRET;
   if (!secret) {
-    // Ohne konfiguriertes Secret verweigern wir die Annahme — sicherer als blind akzeptieren.
-    return false;
+    return { ok: true, verified: false, reason: "no_secret_configured" };
   }
-  if (!signature) return false;
+  if (!signature) return { ok: false, reason: "missing_signature" };
+
   const expected = crypto
     .createHmac("sha256", secret)
     .update(rawBody, "utf8")
@@ -82,10 +90,11 @@ export function verifyWebhookSignature(rawBody: string, signature: string | null
   try {
     const a = Buffer.from(expected, "hex");
     const b = Buffer.from(signature.replace(/^sha256=/, ""), "hex");
-    if (a.length !== b.length) return false;
-    return crypto.timingSafeEqual(a, b);
+    if (a.length !== b.length) return { ok: false, reason: "bad_signature" };
+    const matches = crypto.timingSafeEqual(a, b);
+    return matches ? { ok: true, verified: true } : { ok: false, reason: "bad_signature" };
   } catch {
-    return false;
+    return { ok: false, reason: "bad_signature" };
   }
 }
 

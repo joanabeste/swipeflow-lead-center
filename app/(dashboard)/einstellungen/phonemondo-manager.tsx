@@ -46,8 +46,9 @@ export function PhonemondoManager({
           <StatusRow
             label="Webhook-Secret (PHONEMONDO_WEBHOOK_SECRET)"
             ok={status.hasSecret}
-            okText="Gesetzt"
-            nokText="Fehlt — Call-Events werden verworfen"
+            okText="Gesetzt — Webhooks werden signaturgeprüft"
+            nokText="Optional — nur nötig, wenn PhoneMondo Webhooks signiert sendet"
+            neutral={!status.hasSecret}
           />
         </dl>
 
@@ -98,20 +99,26 @@ PHONEMONDO_API_BASE_URL=https://api.phonemondo.com
 }
 
 function StatusRow({
-  label, ok, okText, nokText,
-}: { label: string; ok: boolean; okText: string; nokText: string }) {
+  label, ok, okText, nokText, neutral = false,
+}: { label: string; ok: boolean; okText: string; nokText: string; neutral?: boolean }) {
+  const iconColor = ok ? "text-emerald-500" : neutral ? "text-gray-400" : "text-red-500";
+  const textColor = ok
+    ? "text-emerald-700 dark:text-emerald-300"
+    : neutral
+    ? "text-gray-600 dark:text-gray-400"
+    : "text-red-700 dark:text-red-300";
   return (
     <div className="flex items-start gap-2 rounded-md border border-gray-100 p-3 dark:border-[#2c2c2e]">
       {ok ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+        <CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
+      ) : neutral ? (
+        <AlertCircle className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
       ) : (
-        <X className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+        <X className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
       )}
       <div className="min-w-0">
         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
-        <p className={`text-sm font-medium ${ok ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}`}>
-          {ok ? okText : nokText}
-        </p>
+        <p className={`text-sm font-medium ${textColor}`}>{ok ? okText : nokText}</p>
       </div>
     </div>
   );

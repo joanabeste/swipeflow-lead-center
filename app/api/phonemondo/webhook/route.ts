@@ -18,9 +18,17 @@ export async function POST(request: Request) {
     request.headers.get("x-phonemondo-signature") ??
     request.headers.get("x-signature") ??
     null;
-  const signatureOk = verifyWebhookSignature(rawBody, signatureHeader);
-  if (!signatureOk) {
-    return new Response("Invalid signature", { status: 401 });
+  const verify = verifyWebhookSignature(rawBody, signatureHeader);
+  if (!verify.ok) {
+    return new Response(`Invalid signature: ${verify.reason}`, { status: 401 });
+  }
+  if (!verify.verified) {
+    // Kein Secret gesetzt — akzeptiere trotzdem, aber deutlich loggen.
+    // Der Endpoint ist damit offen für jeden, der die URL kennt. Secret empfohlen.
+    console.warn(
+      "[phonemondo:webhook] Event wird ohne Signatur-Prüfung akzeptiert " +
+      "(PHONEMONDO_WEBHOOK_SECRET nicht gesetzt).",
+    );
   }
 
   let event: PhoneMondoWebhookEvent;
