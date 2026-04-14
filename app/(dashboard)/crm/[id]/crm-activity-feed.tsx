@@ -51,7 +51,9 @@ export function CrmActivityFeed({
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<ActivityKind>("all");
-  const [composeMode, setComposeMode] = useState<"idle" | "note" | "call">("idle");
+  // Standardmäßig ist der Anruf-Bereich aufgeklappt, weil das die häufigste
+  // Aktion im CRM-Detail ist. User kann per Klick schließen oder auf "Notiz" wechseln.
+  const [composeMode, setComposeMode] = useState<"idle" | "note" | "call">("call");
   const [pending, startTransition] = useTransition();
   const activeStatuses = statuses.filter((s) => s.is_active);
 
@@ -117,16 +119,16 @@ export function CrmActivityFeed({
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 p-3 dark:border-[#2c2c2e]">
         <div className="flex items-center gap-1">
           <ToolbarButton
-            icon={StickyNote}
-            label="Notiz"
-            active={composeMode === "note"}
-            onClick={() => setComposeMode(composeMode === "note" ? "idle" : "note")}
-          />
-          <ToolbarButton
             icon={PhoneCall}
             label="Anruf"
             active={composeMode === "call"}
             onClick={() => setComposeMode(composeMode === "call" ? "idle" : "call")}
+          />
+          <ToolbarButton
+            icon={StickyNote}
+            label="Notiz"
+            active={composeMode === "note"}
+            onClick={() => setComposeMode(composeMode === "note" ? "idle" : "note")}
           />
         </div>
 
