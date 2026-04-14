@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, ChevronLeft, ChevronRight, Columns3, Sparkles, Filter, Trash2, ShieldBan, Send, Download } from "lucide-react";
+import { Sparkles, Trash2, ShieldBan, Send, Download } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, saveColumnPreferences } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
+import { SearchBox } from "@/components/table/search-box";
+import { TablePagination } from "@/components/table/pagination";
+import { ColumnPicker } from "@/components/table/column-picker";
+import { SortableHeader } from "@/components/table/sortable-header";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -74,25 +78,7 @@ export function LeadTable({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState("qualified");
   const [bulkPending, startBulkTransition] = useTransition();
-  const [showColumnPicker, setShowColumnPicker] = useState(false);
   const [visibleCols, setVisibleCols] = useState<string[]>(savedColumns ?? defaultVisible);
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const columnPickerRef = useRef<HTMLDivElement>(null);
-  const filterRef = useRef<HTMLDivElement>(null);
-
-  // Close popover on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (columnPickerRef.current && !columnPickerRef.current.contains(e.target as Node)) {
-        setShowColumnPicker(false);
-      }
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
-        setActiveFilter(null);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   const columns = modeColumns.filter((c) => visibleCols.includes(c.key));
 
@@ -165,16 +151,8 @@ export function LeadTable({
     updateParams({ sort: field, order: newOrder, page: "1" });
   }
 
-  function handleSearch(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const q = formData.get("q") as string;
-    updateParams({ q, page: "1" });
-  }
-
   function handleColumnFilter(col: string, value: string) {
     updateParams({ [`filter_${col}`]: value, page: "1" });
-    setActiveFilter(null);
   }
 
   function getCellValue(lead: Lead, key: string): string {
@@ -200,18 +178,11 @@ export function LeadTable({
     <div className="mt-4 space-y-4">
       {/* Suche, Filter & Spalten */}
       <div className="flex items-center gap-3">
-        <form onSubmit={handleSearch} className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              name="q"
-              type="text"
-              defaultValue={currentQuery}
-              placeholder="Suche nach Firmenname, Domain oder Ort…"
-              className="w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
-            />
-          </div>
-        </form>
+        <SearchBox
+          defaultValue={currentQuery}
+          placeholder="Suche nach Firmenname, Domain oder Ort…"
+          onSubmit={(v) => updateParams({ q: v, page: "1" })}
+        />
 
         <select
           value={currentStatus}
@@ -224,31 +195,11 @@ export function LeadTable({
           ))}
         </select>
 
-        {/* Spalten-Picker */}
-        <div className="relative" ref={columnPickerRef}>
-          <button
-            onClick={() => setShowColumnPicker(!showColumnPicker)}
-            className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-          >
-            <Columns3 className="h-4 w-4" />
-            Spalten
-          </button>
-          {showColumnPicker && (
-            <div className="absolute right-0 z-20 mt-1 w-56 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-              {modeColumns.map((col) => (
-                <label key={col.key} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={visibleCols.includes(col.key)}
-                    onChange={() => toggleColumn(col.key)}
-                    className="rounded border-gray-300 dark:border-gray-600"
-                  />
-                  {col.label}
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+        <ColumnPicker
+          columns={modeColumns.map((c) => ({ key: c.key, label: c.label }))}
+          visible={visibleCols}
+          onToggle={toggleColumn}
+        />
       </div>
 
       {/* Aktive Spalten-Filter anzeigen */}
@@ -393,70 +344,17 @@ export function LeadTable({
                 />
               </th>
               {columns.map((col) => (
-                <th
+                <SortableHeader
                   key={col.key}
-                  className="relative px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
-                >
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleSort(col.key)}
-                      className="hover:text-gray-700 dark:hover:text-gray-200"
-                    >
-                      {col.label}
-                      {currentSort === col.key && (
-                        <span className="ml-1">{currentOrder === "asc" ? "↑" : "↓"}</span>
-                      )}
-                    </button>
-                    {/* Spalten-Filter (nur für Textfelder) */}
-                    {!["created_at", "status"].includes(col.key) && (
-                      <div className="relative" ref={activeFilter === col.key ? filterRef : undefined}>
-                        <button
-                          onClick={() => setActiveFilter(activeFilter === col.key ? null : col.key)}
-                          className={`ml-0.5 rounded p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 ${
-                            currentFilters[col.key] ? "text-primary" : "text-gray-400"
-                          }`}
-                        >
-                          <Filter className="h-3 w-3" />
-                        </button>
-                        {activeFilter === col.key && (
-                          <div className="absolute left-0 z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-2 shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault();
-                                const fd = new FormData(e.currentTarget);
-                                handleColumnFilter(col.key, fd.get("value") as string);
-                              }}
-                            >
-                              <input
-                                name="value"
-                                type="text"
-                                defaultValue={currentFilters[col.key] ?? ""}
-                                placeholder={`${col.label} enthält…`}
-                                autoFocus
-                                className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-600 dark:bg-[#2c2c2e] dark:text-gray-100"
-                              />
-                              <div className="mt-1.5 flex gap-1">
-                                <button
-                                  type="submit"
-                                  className="rounded bg-primary px-2 py-0.5 text-xs text-white hover:bg-primary-dark"
-                                >
-                                  Filtern
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleColumnFilter(col.key, "")}
-                                  className="rounded px-2 py-0.5 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                  Löschen
-                                </button>
-                              </div>
-                            </form>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </th>
+                  label={col.label}
+                  sortKey={col.key}
+                  currentSort={currentSort}
+                  currentOrder={currentOrder}
+                  onSort={handleSort}
+                  filterable={!["created_at", "status"].includes(col.key)}
+                  currentFilter={currentFilters[col.key] ?? ""}
+                  onFilter={handleColumnFilter}
+                />
               ))}
             </tr>
           </thead>
@@ -521,30 +419,11 @@ export function LeadTable({
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Seite {currentPage} von {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button
-              disabled={currentPage <= 1}
-              onClick={() => updateParams({ page: String(currentPage - 1) })}
-              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <button
-              disabled={currentPage >= totalPages}
-              onClick={() => updateParams({ page: String(currentPage + 1) })}
-              className="inline-flex items-center rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <TablePagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={(p) => updateParams({ page: String(p) })}
+      />
     </div>
   );
 }
