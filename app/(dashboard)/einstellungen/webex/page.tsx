@@ -4,31 +4,73 @@ import { PageHeader } from "../_components/ui";
 import { WebexSettings } from "./_components/webex-settings";
 import { getWebexCredentials } from "@/lib/webex/auth";
 
+/**
+ * Zählt mit Filter — gibt 0 zurück, wenn die Filter-Spalte fehlt
+ * (z.B. vor Migration 025). So rutscht die Seite nicht in die Error-Boundary.
+ */
+async function safeCount(
+  q: PromiseLike<{ count: number | null; error: unknown }>,
+): Promise<number> {
+  try {
+    const { count, error } = await q;
+    if (error) return 0;
+    return count ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default async function WebexSettingsPage() {
   const supabase = await createClient();
   // Server Component — einmalig pro Request, Date.now() pragmatisch OK.
   // eslint-disable-next-line react-hooks/purity
   const last24h = new Date(Date.now() - 24 * 3600_000).toISOString();
 
-  const [{ count: fetchedLast24h }, { count: pendingCount }, { count: transcribedLast24h }, { count: pendingTranscripts }, { count: aiNotEnabledCount }, creds] =
-    await Promise.all([
-      supabase.from("lead_calls").select("*", { count: "exact", head: true })
+  const [
+    fetchedLast24h,
+    pendingCount,
+    transcribedLast24h,
+    pendingTranscripts,
+    aiNotEnabledCount,
+    creds,
+  ] = await Promise.all([
+    safeCount(
+      supabase
+        .from("lead_calls")
+        .select("*", { count: "exact", head: true })
         .gte("recording_fetched_at", last24h),
-      supabase.from("lead_calls").select("*", { count: "exact", head: true })
+    ),
+    safeCount(
+      supabase
+        .from("lead_calls")
+        .select("*", { count: "exact", head: true })
         .is("recording_url", null)
         .not("ended_at", "is", null)
         .gte("started_at", last24h),
-      supabase.from("lead_calls").select("*", { count: "exact", head: true })
+    ),
+    safeCount(
+      supabase
+        .from("lead_calls")
+        .select("*", { count: "exact", head: true })
         .gte("transcript_fetched_at", last24h),
-      supabase.from("lead_calls").select("*", { count: "exact", head: true })
+    ),
+    safeCount(
+      supabase
+        .from("lead_calls")
+        .select("*", { count: "exact", head: true })
         .is("transcript_id", null)
         .not("recording_url", "is", null)
         .gte("started_at", last24h),
-      supabase.from("lead_calls").select("*", { count: "exact", head: true })
+    ),
+    safeCount(
+      supabase
+        .from("lead_calls")
+        .select("*", { count: "exact", head: true })
         .ilike("transcript_fetch_error", "%AI Assistant%")
         .gte("started_at", last24h),
-      getWebexCredentials(),
-    ]);
+    ),
+    getWebexCredentials().catch(() => null),
+  ]);
 
   const connection = creds
     ? {
@@ -51,14 +93,11 @@ export default async function WebexSettingsPage() {
       />
       <WebexSettings
         connection={connection}
-        recordings={{
-          fetchedLast24h: fetchedLast24h ?? 0,
-          pendingCount: pendingCount ?? 0,
-        }}
+        recordings={{ fetchedLast24h, pendingCount }}
         transcripts={{
-          transcribedLast24h: transcribedLast24h ?? 0,
-          pendingTranscripts: pendingTranscripts ?? 0,
-          aiNotEnabledCount: aiNotEnabledCount ?? 0,
+          transcribedLast24h,
+          pendingTranscripts,
+          aiNotEnabledCount,
         }}
       />
     </div>
