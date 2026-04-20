@@ -2,16 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Pencil, Trash2, Save } from "lucide-react";
-import type { LeadContact } from "@/lib/types";
+import { Briefcase, ExternalLink, Plus, X, Pencil, Trash2, Save } from "lucide-react";
+import type { LeadContact, LeadJobPosting } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { addContact, updateContact, deleteContact } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import { Card } from "./crm-shared";
 
 export function CrmContactsCard({
-  leadId, contacts,
-}: { leadId: string; contacts: LeadContact[] }) {
+  leadId, contacts, jobs = [],
+}: { leadId: string; contacts: LeadContact[]; jobs?: LeadJobPosting[] }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -53,9 +53,17 @@ export function CrmContactsCard({
                 </li>
               );
             }
+            const sourceJob = c.source_url
+              ? jobs.find((j) => j.url === c.source_url) ?? null
+              : null;
             return (
               <li key={c.id}>
-                <ContactRow contact={c} leadId={leadId} onEdit={() => setEditingId(c.id)} />
+                <ContactRow
+                  contact={c}
+                  leadId={leadId}
+                  sourceJob={sourceJob}
+                  onEdit={() => setEditingId(c.id)}
+                />
               </li>
             );
           })}
@@ -66,8 +74,13 @@ export function CrmContactsCard({
 }
 
 function ContactRow({
-  contact, leadId, onEdit,
-}: { contact: LeadContact; leadId: string; onEdit: () => void }) {
+  contact, leadId, sourceJob, onEdit,
+}: {
+  contact: LeadContact;
+  leadId: string;
+  sourceJob: LeadJobPosting | null;
+  onEdit: () => void;
+}) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
@@ -116,6 +129,28 @@ function ContactRow({
               </a>
             )}
           </div>
+          {contact.source_url && (
+            <div className="mt-1.5 flex items-start gap-1 rounded border border-indigo-100 bg-indigo-50/60 px-1.5 py-1 text-[10px] text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300">
+              <Briefcase className="mt-0.5 h-3 w-3 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium uppercase tracking-wide">Aus Stellenanzeige</p>
+                {sourceJob?.title && (
+                  <p className="truncate text-indigo-900/80 dark:text-indigo-200">
+                    {sourceJob.title}
+                  </p>
+                )}
+                <a
+                  href={contact.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 underline hover:text-indigo-900 dark:hover:text-indigo-100"
+                >
+                  Anzeige öffnen
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <button

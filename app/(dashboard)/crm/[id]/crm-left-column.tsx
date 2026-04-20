@@ -20,7 +20,7 @@ export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq }: Pr
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
-      <CrmContactsCard leadId={lead.id} contacts={contacts} />
+      <CrmContactsCard leadId={lead.id} contacts={contacts} jobs={jobs} />
       <CrmJobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />
       {lead.latitude != null && lead.longitude != null && (
         <CrmLocationMiniCard lat={lead.latitude} lng={lead.longitude} hq={hq} />
