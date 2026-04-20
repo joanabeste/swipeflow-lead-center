@@ -4,6 +4,7 @@ import { Greeting } from "./greeting";
 import { loadDashboardData } from "./widgets/data";
 import { resolveUserWidgets } from "./widgets/registry";
 import { DashboardEditor } from "./widgets/dashboard-editor";
+import { SortableDashboard } from "./widgets/sortable-dashboard";
 import {
   PipelineWidget, StatsWidget, QuickActionsWidget,
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
@@ -32,31 +33,16 @@ export default async function DashboardPage() {
 
   // Zweispaltige Widgets (recent-leads / recent-activity / crm-queue / todays-calls)
   // vs. volle Breite (pipeline / stats / quick-actions). Gruppen für Layout-Paare.
-  const fullWidth = new Set([
+  const fullWidthKeys = [
     "pipeline", "stats", "quick-actions",
     "call-stats-7d", "enrichment-trend-7d", "crm-status-distribution",
-  ]);
+  ];
 
-  const rendered: React.ReactNode[] = [];
-  let i = 0;
-  while (i < widgets.length) {
-    const key = widgets[i];
-    if (fullWidth.has(key)) {
-      rendered.push(<div key={key}>{renderWidget(key, data)}</div>);
-      i++;
-    } else {
-      // Paar-Widget: falls das nächste auch „nicht full-width", nebeneinander rendern
-      const next = widgets[i + 1];
-      const pair = next && !fullWidth.has(next) ? next : null;
-      rendered.push(
-        <div key={key} className={pair ? "grid gap-6 lg:grid-cols-2" : ""}>
-          {renderWidget(key, data)}
-          {pair && renderWidget(pair, data)}
-        </div>
-      );
-      i += pair ? 2 : 1;
-    }
-  }
+  // Widgets auf dem Server rendern (Server Components mit DB-Zugriff) und
+  // als ReactNode-Map an die Client-Komponente übergeben, damit der Drag-
+  // and-Drop-Edit-Mode die gleichen Renderings umsortieren kann.
+  const widgetNodes: Record<string, React.ReactNode> = {};
+  for (const key of widgets) widgetNodes[key] = renderWidget(key, data);
 
   return (
     <div>
@@ -70,7 +56,13 @@ export default async function DashboardPage() {
         <DashboardEditor initialOrder={widgets} serviceMode={serviceMode} />
       </div>
 
-      <div className="mt-6 space-y-6">{rendered}</div>
+      <div className="mt-6">
+        <SortableDashboard
+          initialOrder={widgets}
+          widgetNodes={widgetNodes}
+          fullWidthKeys={fullWidthKeys}
+        />
+      </div>
     </div>
   );
 }
