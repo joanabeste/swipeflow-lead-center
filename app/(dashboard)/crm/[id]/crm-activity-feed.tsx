@@ -2,24 +2,28 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { StickyNote, PhoneCall } from "lucide-react";
+import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
 import { PersonAvatar } from "./_components/person-avatar";
-import { NoteItem, CallItem, StatusChangeItem, EnrichmentItem, ChangeItem } from "./_components/activity-items";
+import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem } from "./_components/activity-items";
 import { ComposeNote } from "./_components/compose-note";
 import { ComposeCall } from "./_components/compose-call";
+import { ComposeEmail } from "./_components/compose-email";
 import { actionVerb, filterLabel, formatRelative } from "./_components/activity-helpers";
-import type { ActivityKind, NoteRow, CallRow, AuditRow } from "./_components/types";
+import type { ActivityKind, NoteRow, CallRow, EmailRow, AuditRow } from "./_components/types";
 
 interface Props {
   leadId: string;
   leadPhone: string | null;
+  companyName: string;
+  senderName: string | null;
   currentStatusId: string | null;
   statuses: CustomLeadStatus[];
   contacts: LeadContact[];
   notes: NoteRow[];
   calls: CallRow[];
+  emails: EmailRow[];
   enrichments: LeadEnrichment[];
   changes: LeadChange[];
   auditLogs: AuditRow[];
@@ -36,13 +40,13 @@ interface UnifiedItem {
 }
 
 export function CrmActivityFeed({
-  leadId, leadPhone, currentStatusId, statuses, contacts, notes, calls, enrichments, changes, auditLogs, callProviders,
+  leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders,
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<ActivityKind>("all");
   // Standardmäßig ist der Anruf-Bereich aufgeklappt, weil das die häufigste
   // Aktion im CRM-Detail ist.
-  const [composeMode, setComposeMode] = useState<"idle" | "note" | "call">("call");
+  const [composeMode, setComposeMode] = useState<"idle" | "note" | "call" | "email">("call");
   const [pending, startTransition] = useTransition();
   const activeStatuses = statuses.filter((s) => s.is_active);
 
@@ -68,6 +72,14 @@ export function CrmActivityFeed({
       author: c.profiles?.name ?? null,
       authorAvatarUrl: c.profiles?.avatar_url ?? null,
       render: () => <CallItem call={c} />,
+    });
+  }
+  for (const e of emails) {
+    items.push({
+      id: `em-${e.id}`, kind: "email", at: e.sent_at,
+      author: e.profiles?.name ?? null,
+      authorAvatarUrl: e.profiles?.avatar_url ?? null,
+      render: () => <EmailItem email={e} />,
     });
   }
   for (const e of enrichments) {
@@ -123,6 +135,12 @@ export function CrmActivityFeed({
             active={composeMode === "note"}
             onClick={() => setComposeMode(composeMode === "note" ? "idle" : "note")}
           />
+          <ToolbarButton
+            icon={Mail}
+            label="E-Mail"
+            active={composeMode === "email"}
+            onClick={() => setComposeMode(composeMode === "email" ? "idle" : "email")}
+          />
         </div>
 
         <div className="mx-1 h-5 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
@@ -141,6 +159,7 @@ export function CrmActivityFeed({
             <option value="all">Alle Aktivitäten</option>
             <option value="note">Nur Notizen</option>
             <option value="call">Nur Anrufe</option>
+            <option value="email">Nur E-Mails</option>
             <option value="status">Nur Status-Wechsel</option>
             <option value="enrichment">Nur Anreicherung</option>
             <option value="change">Nur Feld-Änderungen</option>
@@ -182,6 +201,16 @@ export function CrmActivityFeed({
           leadPhone={leadPhone}
           contacts={contacts}
           callProviders={callProviders}
+          onClose={() => setComposeMode("idle")}
+          onSaved={() => { setComposeMode("idle"); router.refresh(); }}
+        />
+      )}
+      {composeMode === "email" && (
+        <ComposeEmail
+          leadId={leadId}
+          contacts={contacts}
+          companyName={companyName}
+          senderName={senderName}
           onClose={() => setComposeMode("idle")}
           onSaved={() => { setComposeMode("idle"); router.refresh(); }}
         />

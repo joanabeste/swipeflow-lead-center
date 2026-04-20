@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
+  EmailMessage,
 } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
@@ -18,6 +19,10 @@ import { useServiceMode } from "@/lib/service-mode";
 type AuthorProfile = { name: string; avatar_url: string | null };
 type NoteRow = LeadNote & { profiles: AuthorProfile | null };
 type CallRow = LeadCall & { profiles: AuthorProfile | null };
+type EmailRow = EmailMessage & {
+  profiles: AuthorProfile | null;
+  contact_name: string | null;
+};
 type AuditRow = {
   id: string;
   action: string;
@@ -32,6 +37,7 @@ interface Props {
   jobs: LeadJobPosting[];
   notes: NoteRow[];
   calls: CallRow[];
+  emails: EmailRow[];
   enrichments: LeadEnrichment[];
   changes: LeadChange[];
   auditLogs: AuditRow[];
@@ -45,7 +51,7 @@ interface Props {
 }
 
 export function CrmLeadDetail({
-  lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
+  lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team,
 }: Props) {
   const { mode: serviceMode } = useServiceMode();
@@ -132,11 +138,14 @@ export function CrmLeadDetail({
           <CrmActivityFeed
             leadId={lead.id}
             leadPhone={lead.phone}
+            companyName={lead.company_name}
+            senderName={senderName}
             currentStatusId={lead.crm_status_id}
             statuses={statuses}
             contacts={contacts}
             notes={notes}
             calls={calls}
+            emails={emails}
             enrichments={enrichments}
             changes={changes}
             auditLogs={auditLogs}

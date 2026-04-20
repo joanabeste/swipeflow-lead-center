@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
-  Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle,
+  Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange } from "@/lib/types";
 import { CrmStatusBadge } from "../../status-badge";
 import { deleteNote, updateNote } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
-import type { NoteRow, CallRow, AuditRow } from "./types";
+import type { NoteRow, CallRow, AuditRow, EmailRow } from "./types";
 import { formatDur } from "./activity-helpers";
 
 export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
@@ -216,6 +216,49 @@ export function StatusChangeItem({
 export function EnrichmentItem({ enrichment }: { enrichment: LeadEnrichment }) {
   if (enrichment.status === "completed" && !enrichment.error_message) return null;
   return <p className="text-xs text-red-600">{enrichment.error_message}</p>;
+}
+
+export function EmailItem({ email }: { email: EmailRow }) {
+  const [bodyOpen, setBodyOpen] = useState(false);
+  const failed = email.status === "failed";
+  const recipient = email.contact_name
+    ? `${email.contact_name} <${email.to_email}>`
+    : email.to_email;
+  return (
+    <div className="text-sm">
+      <p className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+        <Mail className="h-3 w-3 text-blue-500" />
+        <span className="font-medium">{email.subject}</span>
+        {failed && (
+          <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            <AlertCircle className="h-2.5 w-2.5" />
+            Versand fehlgeschlagen
+          </span>
+        )}
+      </p>
+      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+        An: {recipient}
+      </p>
+      {failed && email.error && (
+        <p className="mt-1 text-xs text-red-600 dark:text-red-400">{email.error}</p>
+      )}
+      <div className="mt-2">
+        <button
+          onClick={() => setBodyOpen((v) => !v)}
+          className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-white/5"
+        >
+          <FileText className="h-3 w-3" />
+          Nachricht
+          {bodyOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+        {bodyOpen && (
+          <pre className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border border-gray-100 bg-gray-50 p-2.5 text-xs text-gray-700 dark:border-[#2c2c2e] dark:bg-white/5 dark:text-gray-300">
+            {email.body}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function ChangeItem({ change }: { change: LeadChange }) {

@@ -241,6 +241,22 @@ export interface RequiredFieldProfile {
 
 export type ContactSalutation = "herr" | "frau";
 
+export type EmailStatus = "sent" | "failed";
+
+export interface EmailMessage {
+  id: string;
+  lead_id: string | null;
+  contact_id: string | null;
+  sent_by: string | null;
+  to_email: string;
+  from_email: string;
+  subject: string;
+  body: string;
+  status: EmailStatus;
+  error: string | null;
+  sent_at: string;
+}
+
 export interface LeadContact {
   id: string;
   lead_id: string;

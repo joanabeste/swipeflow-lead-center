@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Briefcase, ExternalLink, Plus, X, Pencil, Trash2, Save, Mail } from "lucide-react";
+import { Briefcase, ExternalLink, Globe, Plus, X, Pencil, Trash2, Save, Mail } from "lucide-react";
 import type { ContactSalutation, LeadContact, LeadJobPosting } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { addContact, updateContact, deleteContact } from "../../actions";
@@ -14,6 +14,16 @@ function salutationPrefix(s: ContactSalutation | null): string {
   if (s === "herr") return "Hr. ";
   if (s === "frau") return "Fr. ";
   return "";
+}
+
+function sourceUrlLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/$/, "");
+    return path && path !== "" ? `${u.hostname}${path}` : u.hostname;
+  } catch {
+    return url;
+  }
 }
 
 export function CrmContactsCard({
@@ -161,12 +171,12 @@ function ContactRow({
               </a>
             )}
           </div>
-          {contact.source_url && (
+          {contact.source_url && (sourceJob ? (
             <div className="mt-1.5 flex items-start gap-1 rounded border border-indigo-100 bg-indigo-50/60 px-1.5 py-1 text-[10px] text-indigo-700 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-300">
               <Briefcase className="mt-0.5 h-3 w-3 shrink-0" />
               <div className="min-w-0">
                 <p className="font-medium uppercase tracking-wide">Aus Stellenanzeige</p>
-                {sourceJob?.title && (
+                {sourceJob.title && (
                   <p className="truncate text-indigo-900/80 dark:text-indigo-200">
                     {sourceJob.title}
                   </p>
@@ -182,7 +192,26 @@ function ContactRow({
                 </a>
               </div>
             </div>
-          )}
+          ) : (
+            <div className="mt-1.5 flex items-start gap-1 rounded border border-slate-200 bg-slate-50 px-1.5 py-1 text-[10px] text-slate-700 dark:border-slate-700/50 dark:bg-slate-800/40 dark:text-slate-300">
+              <Globe className="mt-0.5 h-3 w-3 shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium uppercase tracking-wide">Aus Website</p>
+                <p className="truncate text-slate-700/80 dark:text-slate-300/80">
+                  {sourceUrlLabel(contact.source_url)}
+                </p>
+                <a
+                  href={contact.source_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-0.5 underline hover:text-slate-900 dark:hover:text-slate-100"
+                >
+                  Seite öffnen
+                  <ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              </div>
+            </div>
+          ))}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <button

@@ -1,6 +1,6 @@
 import Image from "next/image";
 import {
-  StickyNote, PhoneCall, Activity as ActivityIcon, Sparkles, ArrowRight,
+  StickyNote, PhoneCall, Mail, Activity as ActivityIcon, Sparkles, ArrowRight,
 } from "lucide-react";
 import type { ActivityKind } from "./types";
 import { hashHue } from "./activity-helpers";
@@ -22,6 +22,7 @@ export function PersonAvatar({
     all: { icon: ActivityIcon, color: "#9ca3af" },
     note: { icon: StickyNote, color: "#f59e0b" },
     call: { icon: PhoneCall, color: "#10b981" },
+    email: { icon: Mail, color: "#3b82f6" },
     status: { icon: ArrowRight, color: "#ec4899" },
     enrichment: { icon: Sparkles, color: "#6366f1" },
     change: { icon: ActivityIcon, color: "#6b7280" },

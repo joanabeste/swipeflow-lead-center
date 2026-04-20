@@ -4,6 +4,7 @@ export function actionVerb(kind: ActivityKind): string {
   switch (kind) {
     case "note": return "hat eine Notiz hinzugefügt";
     case "call": return "hat einen Anruf protokolliert";
+    case "email": return "hat eine E-Mail gesendet";
     case "status": return "hat den Status geändert";
     case "enrichment": return "Lead wurde angereichert";
     case "change": return "hat ein Feld aktualisiert";
@@ -15,6 +16,7 @@ export function filterLabel(kind: ActivityKind): string {
   switch (kind) {
     case "note": return "Notizen";
     case "call": return "Anrufe";
+    case "email": return "E-Mails";
     case "status": return "Status-Änderungen";
     case "enrichment": return "Anreicherungen";
     case "change": return "Änderungen";

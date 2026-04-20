@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
+  EmailMessage,
 } from "@/lib/types";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
@@ -23,6 +24,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     { data: jobs },
     { data: notes },
     { data: calls },
+    { data: emails },
     { data: enrichments },
     { data: changes },
     { data: auditLogs },
@@ -34,6 +36,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_notes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     db.from("lead_calls").select("*").eq("lead_id", id).order("started_at", { ascending: false }),
+    db.from("email_messages").select("*").eq("lead_id", id).order("sent_at", { ascending: false }).limit(200),
     db.from("lead_enrichments").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(10),
     db.from("lead_changes").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(200),
     db.from("audit_logs")
@@ -51,6 +54,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
   const userIds = new Set<string>();
   for (const n of notes ?? []) if (n.created_by) userIds.add(n.created_by as string);
   for (const c of calls ?? []) if (c.created_by) userIds.add(c.created_by as string);
+  for (const m of emails ?? []) if (m.sent_by) userIds.add(m.sent_by as string);
   for (const log of auditLogs ?? []) if (log.user_id) userIds.add(log.user_id as string);
 
   const { data: profileRows } = userIds.size > 0
@@ -183,6 +187,17 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       jobs={(jobs ?? []) as LeadJobPosting[]}
       notes={((notes ?? []) as LeadNote[]).map(withAuthor)}
       calls={((calls ?? []) as LeadCall[]).map(withAuthor)}
+      emails={((emails ?? []) as EmailMessage[]).map((m) => {
+        const p = m.sent_by ? profileById.get(m.sent_by) ?? null : null;
+        const c = m.contact_id
+          ? ((contacts ?? []) as LeadContact[]).find((x) => x.id === m.contact_id) ?? null
+          : null;
+        return {
+          ...m,
+          profiles: p ? { name: p.name, avatar_url: p.avatarUrl } : null,
+          contact_name: c?.name ?? null,
+        };
+      })}
       enrichments={(enrichments ?? []) as LeadEnrichment[]}
       changes={(changes ?? []) as LeadChange[]}
       auditLogs={(auditLogs ?? []).map((log) => {
