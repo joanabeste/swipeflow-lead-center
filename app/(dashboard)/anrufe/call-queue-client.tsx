@@ -2,22 +2,25 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  AlertCircle, Briefcase, CheckCircle2, ChevronRight, Mail, Pause, Phone,
-  PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play,
-  RotateCcw, Save, SkipForward, Square,
+  AlertCircle, Briefcase, CheckCircle2, ChevronRight, Globe, Info, Mail,
+  MapPin, Pause, Phone, PhoneCall, PhoneIncoming, PhoneMissed, PhoneOff,
+  PhoneOutgoing, Play, PowerOff, RotateCcw, Save, SkipForward, Square,
 } from "lucide-react";
 import type { CallProvider } from "../crm/actions";
 import {
   getCallStatus,
   queueStartCall,
   queueUpdateNotes,
+  saveCallQueueStatusIds,
   type CallStatus,
+  type CustomStatusOption,
   type QueueLead,
 } from "./actions";
 import { useToastContext } from "../toast-provider";
+import type { CallQueueSettings } from "@/lib/app-settings";
 
-const AUTO_ADVANCE_DELAY_MS = 3000; // nach missed/failed
 const POLL_INTERVAL_MS = 2000;
 
 type QueueMode = "idle" | "calling" | "paused" | "awaiting-next";
@@ -33,11 +36,20 @@ interface ActiveCall {
 export function CallQueueClient({
   initialQueue,
   providers,
+  settings,
+  customStatuses,
+  selectedStatusIds,
 }: {
   initialQueue: QueueLead[];
   providers: { phonemondo: boolean; webex: boolean };
+  settings: CallQueueSettings;
+  customStatuses: CustomStatusOption[];
+  selectedStatusIds: string[];
 }) {
   const { addToast } = useToastContext();
+  const router = useRouter();
+  const ringTimeoutMs = settings.ringTimeoutSeconds * 1000;
+  const advanceMs = settings.autoAdvanceDelaySeconds * 1000;
   const [queue, setQueue] = useState<QueueLead[]>(initialQueue);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [mode, setMode] = useState<QueueMode>("idle");
@@ -46,6 +58,7 @@ export function CallQueueClient({
   const [notes, setNotes] = useState("");
   const [savedNotes, setSavedNotes] = useState("");
   const [, startTransition] = useTransition();
+  const [statusSaving, startStatusTransition] = useTransition();
 
   const defaultProvider: CallProvider = providers.phonemondo ? "phonemondo" : "webex";
   const [provider, setProvider] = useState<CallProvider>(defaultProvider);
@@ -53,17 +66,11 @@ export function CallQueueClient({
   const currentLead = queue[currentIndex] ?? null;
   const canNext = currentIndex < queue.length - 1;
 
-  // Notizen werden in den Handlern zurückgesetzt, die den Index ändern
-  // (setState in useEffect wäre hier ein Cascade-Render und lint-verboten).
   const resetNotes = useCallback(() => {
     setNotes("");
     setSavedNotes("");
   }, []);
 
-  // Polling: sobald ein Call aktiv ist, alle 2s den Status prüfen.
-  // Status-Reaktionen (pause bei answered, Countdown bei missed) werden
-  // direkt im Polling-Callback ausgelöst — nicht in einem separaten useEffect,
-  // weil React 19 synchrones setState in Effects verbietet.
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (!activeCall) {
@@ -84,17 +91,34 @@ export function CallQueueClient({
         setAutoAdvanceSec(null);
       } else if (res.status === "missed" || res.status === "failed" || res.status === "ended") {
         setMode("awaiting-next");
-        setAutoAdvanceSec(Math.floor(AUTO_ADVANCE_DELAY_MS / 1000));
+        setAutoAdvanceSec(Math.floor(advanceMs / 1000));
       }
     }, POLL_INTERVAL_MS);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
     };
-    // Bewusst nur callId + initial-Status als Trigger — andere Felder von
-    // activeCall sollen den Poll nicht neu starten.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCall?.callId]);
+  }, [activeCall?.callId, advanceMs]);
+
+  // Ring-Timeout: Fallback, falls der Provider-Webhook keinen missed/failed-
+  // Status schickt. Nach `ringTimeoutMs` wird der Call manuell als verpasst
+  // markiert und der Auto-Advance-Countdown gestartet.
+  useEffect(() => {
+    if (!activeCall) return;
+    if (activeCall.status !== "initiated" && activeCall.status !== "ringing") return;
+    const callId = activeCall.callId;
+    const timer = setTimeout(() => {
+      setActiveCall((prev) => {
+        if (!prev || prev.callId !== callId) return prev;
+        if (prev.status === "answered" || prev.status === "ended") return prev;
+        return { ...prev, status: "missed" };
+      });
+      setMode("awaiting-next");
+      setAutoAdvanceSec(Math.floor(advanceMs / 1000));
+    }, ringTimeoutMs);
+    return () => clearTimeout(timer);
+  }, [activeCall, ringTimeoutMs, advanceMs]);
 
   const startCurrentLead = useCallback(
     async (indexOverride?: number) => {
@@ -148,8 +172,6 @@ export function CallQueueClient({
     }
   }, [currentIndex, queue.length, mode, startCurrentLead, addToast, resetNotes]);
 
-  // Countdown für Auto-Advance. State-Setter werden in setTimeout gewrappt,
-  // damit sie nicht synchron im Effect-Body laufen (React 19 Regel).
   useEffect(() => {
     if (autoAdvanceSec == null) return;
     if (autoAdvanceSec <= 0) {
@@ -187,8 +209,15 @@ export function CallQueueClient({
     setMode("idle");
   }
 
+  function handleHardStop() {
+    setActiveCall(null);
+    setAutoAdvanceSec(null);
+    setMode("idle");
+    resetNotes();
+    addToast("Auto-Dialer gestoppt.", "success");
+  }
+
   function handleContinueAfterAnswered() {
-    // Nach „answered" hat der User gesprochen. Jetzt manuell weiter.
     setActiveCall(null);
     resetNotes();
     if (canNext) {
@@ -218,294 +247,508 @@ export function CallQueueClient({
     setCurrentIndex((i) => Math.min(i, queue.length - 2));
   }
 
-  if (queue.length === 0) {
-    return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-        <PhoneOutgoing className="mx-auto h-8 w-8 text-gray-300" />
-        <p className="mt-3 text-sm font-medium">Keine Kandidaten in der Queue</p>
-        <p className="mt-1 text-xs text-gray-500">
-          Qualifizierte Leads mit Telefonnummer, die in der letzten Stunde nicht schon angerufen wurden,
-          erscheinen hier automatisch.
-        </p>
-      </div>
-    );
+  function toggleStatus(id: string) {
+    const next = selectedStatusIds.includes(id)
+      ? selectedStatusIds.filter((s) => s !== id)
+      : [...selectedStatusIds, id];
+    startStatusTransition(async () => {
+      const res = await saveCallQueueStatusIds(next);
+      if ("error" in res) {
+        addToast(res.error, "error");
+      } else {
+        router.refresh();
+      }
+    });
   }
 
-  const progress = queue.length > 0 ? Math.round(((currentIndex + (mode === "calling" ? 0 : 1)) / queue.length) * 100) : 0;
+  const hasSelection = selectedStatusIds.length > 0;
+  const queueRunning = mode !== "idle" || activeCall !== null;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-      {/* Queue-Liste */}
-      <aside className="space-y-3">
-        <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-              Queue
-            </p>
-            <p className="text-xs text-gray-400">
-              {currentIndex + 1} / {queue.length}
-            </p>
-          </div>
-          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-[#2c2c2e]">
-            <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-          {providers.phonemondo && providers.webex && (
-            <div className="mt-3 flex items-center gap-2 text-xs">
-              <span className="text-gray-500 dark:text-gray-400">Provider:</span>
-              <div className="flex rounded-md border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
-                <button
-                  type="button"
-                  onClick={() => setProvider("phonemondo")}
-                  className={`rounded px-2 py-0.5 ${
-                    provider === "phonemondo" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
-                  }`}
-                >
-                  PhoneMondo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setProvider("webex")}
-                  className={`rounded px-2 py-0.5 ${
-                    provider === "webex" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
-                  }`}
-                >
-                  Webex
-                </button>
+    <div className="space-y-5">
+      <TopBar
+        customStatuses={customStatuses}
+        selectedStatusIds={selectedStatusIds}
+        statusSaving={statusSaving}
+        onToggleStatus={toggleStatus}
+        onHardStop={handleHardStop}
+        queueRunning={queueRunning}
+      />
+
+      {!hasSelection ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+          <PhoneOutgoing className="mx-auto h-8 w-8 text-gray-300" />
+          <p className="mt-3 text-sm font-medium">Noch kein CRM-Status ausgewählt</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Wähle oben mindestens einen CRM-Status aus — Leads mit diesem Status und einer Telefonnummer landen automatisch in der Queue.
+          </p>
+          {customStatuses.length === 0 && (
+            <Link href="/einstellungen/crm-status" className="mt-4 inline-block text-xs font-medium text-primary hover:underline">
+              CRM-Status anlegen →
+            </Link>
+          )}
+        </div>
+      ) : queue.length === 0 ? (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+          <PhoneOutgoing className="mx-auto h-8 w-8 text-gray-300" />
+          <p className="mt-3 text-sm font-medium">Keine Kandidaten in der Queue</p>
+          <p className="mt-1 text-xs text-gray-500">
+            Leads mit Telefonnummer im gewählten Status, die in der letzten Stunde nicht schon angerufen wurden, erscheinen hier automatisch.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+          {/* Queue-Liste */}
+          <aside className="space-y-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  Queue
+                </p>
+                <p className="text-xs text-gray-400">
+                  {currentIndex + 1} / {queue.length}
+                </p>
               </div>
+              <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-[#2c2c2e]">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${queue.length > 0 ? Math.round(((currentIndex + (mode === "calling" ? 0 : 1)) / queue.length) * 100) : 0}%` }}
+                />
+              </div>
+              {providers.phonemondo && providers.webex && (
+                <div className="mt-3 flex items-center gap-2 text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">Provider:</span>
+                  <div className="flex rounded-md border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
+                    <button
+                      type="button"
+                      onClick={() => setProvider("phonemondo")}
+                      className={`rounded px-2 py-0.5 ${
+                        provider === "phonemondo" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
+                      }`}
+                    >
+                      PhoneMondo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProvider("webex")}
+                      className={`rounded px-2 py-0.5 ${
+                        provider === "webex" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
+                      }`}
+                    >
+                      Webex
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <ul className="max-h-[calc(100vh-320px)] space-y-1.5 overflow-y-auto pr-1">
+              {queue.map((lead, i) => {
+                const active = i === currentIndex;
+                const past = i < currentIndex;
+                return (
+                  <li key={lead.id}>
+                    <button
+                      onClick={() => {
+                        if (mode === "calling") return;
+                        if (i !== currentIndex) resetNotes();
+                        setCurrentIndex(i);
+                      }}
+                      disabled={mode === "calling"}
+                      className={`group w-full rounded-lg border p-2.5 text-left text-sm transition ${
+                        active
+                          ? "border-primary bg-primary/5"
+                          : past
+                          ? "border-gray-100 bg-gray-50/50 opacity-60 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]/40"
+                          : "border-gray-100 hover:border-gray-300 dark:border-[#2c2c2e] dark:hover:border-[#3a3a3c]"
+                      } disabled:cursor-not-allowed`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className={`truncate ${active ? "font-semibold" : "font-medium"}`}>
+                          {lead.company_name}
+                        </p>
+                        {past && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />}
+                        {active && mode === "calling" && (
+                          <span className="inline-flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" />
+                        )}
+                      </div>
+                      {lead.contact_name && (
+                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                          {lead.contact_name}
+                          {lead.contact_role && <span className="text-gray-400"> · {lead.contact_role}</span>}
+                        </p>
+                      )}
+                      {(lead.contact_phone ?? lead.phone) && (
+                        <p className="truncate text-[11px] text-gray-400">
+                          {lead.contact_phone ?? lead.phone}
+                        </p>
+                      )}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {lead.crm_status_label && (
+                          <StatusDot label={lead.crm_status_label} color={lead.crm_status_color} />
+                        )}
+                        {lead.industry && (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
+                            {lead.industry}
+                          </span>
+                        )}
+                        {lead.job_postings_count > 0 && (
+                          <span className="inline-flex items-center gap-0.5 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                            <Briefcase className="h-2.5 w-2.5" />
+                            {lead.job_postings_count}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </aside>
+
+          {/* Current Lead */}
+          <section className="space-y-4">
+            {currentLead && (
+              <>
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <Link
+                        href={`/crm/${currentLead.id}`}
+                        className="text-xs font-medium text-primary hover:underline"
+                      >
+                        Im CRM öffnen →
+                      </Link>
+                      <h2 className="mt-1 text-xl font-bold">{currentLead.company_name}</h2>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        {currentLead.city && (
+                          <span className="inline-flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {currentLead.city}
+                            {currentLead.distance_km != null && (
+                              <span className="text-gray-400"> · {currentLead.distance_km} km</span>
+                            )}
+                          </span>
+                        )}
+                        {currentLead.domain && <span>{currentLead.domain}</span>}
+                      </div>
+                    </div>
+                    <CallStatusBadge activeCall={activeCall} />
+                  </div>
+
+                  {/* Info-Pills */}
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {currentLead.crm_status_label && (
+                      <StatusDot label={currentLead.crm_status_label} color={currentLead.crm_status_color} />
+                    )}
+                    {currentLead.industry && (
+                      <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
+                        {currentLead.industry}
+                      </span>
+                    )}
+                    {currentLead.job_postings_count > 0 && (
+                      <span className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                        <Briefcase className="h-3 w-3" />
+                        {currentLead.job_postings_count} {currentLead.job_postings_count === 1 ? "Stellenanzeige" : "Stellenanzeigen"}
+                      </span>
+                    )}
+                    {currentLead.website && (
+                      <a
+                        href={currentLead.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300"
+                      >
+                        <Globe className="h-3 w-3" />
+                        Website
+                      </a>
+                    )}
+                    {currentLead.career_page_url && (
+                      <a
+                        href={currentLead.career_page_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-indigo-50 px-2 py-0.5 text-[11px] text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300"
+                      >
+                        <Briefcase className="h-3 w-3" />
+                        Karriereseite
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Letzter Kontakt */}
+                  {currentLead.last_call_at && (
+                    <div className="mt-3 rounded-md border border-gray-100 bg-gray-50/60 p-2.5 text-xs dark:border-[#2c2c2e] dark:bg-white/[0.02]">
+                      <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                        <Info className="h-3.5 w-3.5" />
+                        <span className="font-medium">Letzter Kontakt:</span>
+                        <span>{new Date(currentLead.last_call_at).toLocaleString("de-DE")}</span>
+                        {currentLead.last_call_status && (
+                          <LastCallStatusPill status={currentLead.last_call_status} />
+                        )}
+                      </div>
+                      {currentLead.last_call_notes && (
+                        <p className="mt-1 line-clamp-2 text-gray-500 dark:text-gray-400">
+                          {currentLead.last_call_notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Kontakt */}
+                  {currentLead.contact_name && (
+                    <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-[#2c2c2e] dark:bg-white/[0.02]">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        Ansprechpartner
+                      </p>
+                      <p className="mt-1 font-medium">{currentLead.contact_name}</p>
+                      {currentLead.contact_role && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{currentLead.contact_role}</p>
+                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                        {(currentLead.contact_phone ?? currentLead.phone) && (
+                          <a
+                            href={`tel:${currentLead.contact_phone ?? currentLead.phone}`}
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <Phone className="h-3.5 w-3.5" />
+                            {currentLead.contact_phone ?? currentLead.phone}
+                          </a>
+                        )}
+                        {currentLead.contact_email && (
+                          <a
+                            href={`mailto:${currentLead.contact_email}`}
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            {currentLead.contact_email}
+                          </a>
+                        )}
+                      </div>
+                      {currentLead.contact_source_url && (
+                        <a
+                          href={currentLead.contact_source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                        >
+                          <Briefcase className="h-3 w-3" />
+                          Aus Stellenanzeige
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Controls */}
+                  <div className="mt-5 flex flex-wrap items-center gap-2">
+                    {mode === "idle" && (
+                      <button
+                        onClick={handleStart}
+                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                      >
+                        <PhoneCall className="h-4 w-4" />
+                        Anruf starten
+                      </button>
+                    )}
+                    {mode === "calling" && (
+                      <>
+                        <button
+                          onClick={handleStop}
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
+                        >
+                          <Square className="h-4 w-4" />
+                          Stop
+                        </button>
+                        {canNext && (
+                          <button
+                            onClick={handleNext}
+                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
+                          >
+                            <SkipForward className="h-4 w-4" />
+                            Überspringen
+                          </button>
+                        )}
+                      </>
+                    )}
+                    {mode === "paused" && (
+                      <>
+                        <button
+                          onClick={handleContinueAfterAnswered}
+                          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                          Gespräch beendet — nächster Lead
+                        </button>
+                        <button
+                          onClick={handleStop}
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
+                        >
+                          <Pause className="h-4 w-4" />
+                          Queue pausieren
+                        </button>
+                      </>
+                    )}
+                    {mode === "awaiting-next" && autoAdvanceSec != null && (
+                      <>
+                        <div className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                          <RotateCcw className="h-4 w-4 animate-spin" />
+                          Nächster Lead in {autoAdvanceSec}s…
+                        </div>
+                        <button
+                          onClick={() => {
+                            setAutoAdvanceSec(null);
+                            setMode("idle");
+                          }}
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
+                        >
+                          <Pause className="h-4 w-4" />
+                          Abbrechen
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => handleRemoveFromQueue(currentLead.id)}
+                      disabled={mode === "calling" || mode === "paused"}
+                      className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
+                    >
+                      <PhoneOff className="h-3.5 w-3.5" />
+                      Aus Queue entfernen
+                    </button>
+                  </div>
+                </div>
+
+                {/* Inline-Notiz (nur während oder nach aktivem Call) */}
+                {activeCall && (
+                  <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                        Gesprächsnotiz
+                      </p>
+                      <button
+                        onClick={handleSaveNotes}
+                        disabled={!notes || notes === savedNotes}
+                        className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-40"
+                      >
+                        <Save className="h-3 w-3" />
+                        Speichern
+                      </button>
+                    </div>
+                    <textarea
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={4}
+                      placeholder="Was wurde besprochen? Nächste Schritte?"
+                      className="mt-2 w-full resize-none rounded-md border border-gray-200 bg-white p-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-[#2c2c2e] dark:bg-[#161618]"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopBar({
+  customStatuses,
+  selectedStatusIds,
+  statusSaving,
+  onToggleStatus,
+  onHardStop,
+  queueRunning,
+}: {
+  customStatuses: CustomStatusOption[];
+  selectedStatusIds: string[];
+  statusSaving: boolean;
+  onToggleStatus: (id: string) => void;
+  onHardStop: () => void;
+  queueRunning: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            In der Queue: CRM-Status
+          </p>
+          {customStatuses.length === 0 ? (
+            <p className="mt-2 text-sm text-gray-500">
+              Noch keine custom CRM-Status angelegt.{" "}
+              <Link href="/einstellungen/crm-status" className="font-medium text-primary hover:underline">
+                Jetzt erstellen →
+              </Link>
+            </p>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {customStatuses.map((s) => {
+                const selected = selectedStatusIds.includes(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onToggleStatus(s.id)}
+                    disabled={statusSaving}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                      selected
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-300"
+                    } disabled:opacity-50`}
+                    title={selected ? "Aus Queue entfernen" : "Zur Queue hinzufügen"}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full"
+                      style={{ backgroundColor: s.color || "#6b7280" }}
+                    />
+                    {s.label}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
-
-        <ul className="max-h-[calc(100vh-280px)] space-y-1.5 overflow-y-auto pr-1">
-          {queue.map((lead, i) => {
-            const active = i === currentIndex;
-            const past = i < currentIndex;
-            return (
-              <li key={lead.id}>
-                <button
-                  onClick={() => {
-                    if (mode === "calling") return;
-                    if (i !== currentIndex) resetNotes();
-                    setCurrentIndex(i);
-                  }}
-                  disabled={mode === "calling"}
-                  className={`group w-full rounded-lg border p-2.5 text-left text-sm transition ${
-                    active
-                      ? "border-primary bg-primary/5"
-                      : past
-                      ? "border-gray-100 bg-gray-50/50 opacity-60 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]/40"
-                      : "border-gray-100 hover:border-gray-300 dark:border-[#2c2c2e] dark:hover:border-[#3a3a3c]"
-                  } disabled:cursor-not-allowed`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={`truncate ${active ? "font-semibold" : "font-medium"}`}>
-                      {lead.company_name}
-                    </p>
-                    {past && <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />}
-                    {active && mode === "calling" && (
-                      <span className="inline-flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" />
-                    )}
-                  </div>
-                  {lead.contact_name && (
-                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                      {lead.contact_name}
-                    </p>
-                  )}
-                  {(lead.contact_phone ?? lead.phone) && (
-                    <p className="truncate text-[11px] text-gray-400">
-                      {lead.contact_phone ?? lead.phone}
-                    </p>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </aside>
-
-      {/* Current Lead */}
-      <section className="space-y-4">
-        {currentLead && (
-          <>
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <Link
-                    href={`/crm/${currentLead.id}`}
-                    className="text-xs font-medium text-primary hover:underline"
-                  >
-                    Im CRM öffnen →
-                  </Link>
-                  <h2 className="mt-1 text-xl font-bold">{currentLead.company_name}</h2>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
-                    {currentLead.city && <span>{currentLead.city}</span>}
-                    {currentLead.domain && <span>{currentLead.domain}</span>}
-                    {currentLead.last_call_at && (
-                      <span>
-                        Letzter Kontakt: {new Date(currentLead.last_call_at).toLocaleString("de-DE")}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <CallStatusBadge activeCall={activeCall} />
-              </div>
-
-              {/* Kontakt */}
-              {currentLead.contact_name && (
-                <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-[#2c2c2e] dark:bg-white/[0.02]">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Ansprechpartner
-                  </p>
-                  <p className="mt-1 font-medium">{currentLead.contact_name}</p>
-                  {currentLead.contact_role && (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{currentLead.contact_role}</p>
-                  )}
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    {(currentLead.contact_phone ?? currentLead.phone) && (
-                      <a
-                        href={`tel:${currentLead.contact_phone ?? currentLead.phone}`}
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        <Phone className="h-3.5 w-3.5" />
-                        {currentLead.contact_phone ?? currentLead.phone}
-                      </a>
-                    )}
-                    {currentLead.contact_email && (
-                      <a
-                        href={`mailto:${currentLead.contact_email}`}
-                        className="inline-flex items-center gap-1 text-primary hover:underline"
-                      >
-                        <Mail className="h-3.5 w-3.5" />
-                        {currentLead.contact_email}
-                      </a>
-                    )}
-                  </div>
-                  {currentLead.contact_source_url && (
-                    <a
-                      href={currentLead.contact_source_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                    >
-                      <Briefcase className="h-3 w-3" />
-                      Aus Stellenanzeige
-                    </a>
-                  )}
-                </div>
-              )}
-
-              {/* Controls */}
-              <div className="mt-5 flex flex-wrap items-center gap-2">
-                {mode === "idle" && (
-                  <button
-                    onClick={handleStart}
-                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
-                  >
-                    <PhoneCall className="h-4 w-4" />
-                    Anruf starten
-                  </button>
-                )}
-                {mode === "calling" && (
-                  <>
-                    <button
-                      onClick={handleStop}
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
-                    >
-                      <Square className="h-4 w-4" />
-                      Stop
-                    </button>
-                    {canNext && (
-                      <button
-                        onClick={handleNext}
-                        className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
-                      >
-                        <SkipForward className="h-4 w-4" />
-                        Überspringen
-                      </button>
-                    )}
-                  </>
-                )}
-                {mode === "paused" && (
-                  <>
-                    <button
-                      onClick={handleContinueAfterAnswered}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                      Gespräch beendet — nächster Lead
-                    </button>
-                    <button
-                      onClick={handleStop}
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
-                    >
-                      <Pause className="h-4 w-4" />
-                      Queue pausieren
-                    </button>
-                  </>
-                )}
-                {mode === "awaiting-next" && autoAdvanceSec != null && (
-                  <>
-                    <div className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-                      <RotateCcw className="h-4 w-4 animate-spin" />
-                      Nächster Lead in {autoAdvanceSec}s…
-                    </div>
-                    <button
-                      onClick={() => {
-                        setAutoAdvanceSec(null);
-                        setMode("idle");
-                      }}
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"
-                    >
-                      <Pause className="h-4 w-4" />
-                      Abbrechen
-                    </button>
-                  </>
-                )}
-
-                <button
-                  onClick={() => handleRemoveFromQueue(currentLead.id)}
-                  disabled={mode === "calling" || mode === "paused"}
-                  className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
-                >
-                  <PhoneOff className="h-3.5 w-3.5" />
-                  Aus Queue entfernen
-                </button>
-              </div>
-            </div>
-
-            {/* Inline-Notiz (nur während oder nach aktivem Call) */}
-            {activeCall && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Gesprächsnotiz
-                  </p>
-                  <button
-                    onClick={handleSaveNotes}
-                    disabled={!notes || notes === savedNotes}
-                    className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-40"
-                  >
-                    <Save className="h-3 w-3" />
-                    Speichern
-                  </button>
-                </div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={4}
-                  placeholder="Was wurde besprochen? Nächste Schritte?"
-                  className="mt-2 w-full resize-none rounded-md border border-gray-200 bg-white p-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-[#2c2c2e] dark:bg-[#161618]"
-                />
-              </div>
-            )}
-          </>
-        )}
-      </section>
+        <button
+          type="button"
+          onClick={onHardStop}
+          disabled={!queueRunning}
+          className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            queueRunning
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "bg-gray-100 text-gray-400 dark:bg-white/5 dark:text-gray-600"
+          } disabled:cursor-not-allowed`}
+          title={queueRunning ? "Aktiven Call abbrechen und Queue anhalten" : "Queue läuft nicht"}
+        >
+          <PowerOff className="h-4 w-4" />
+          Queue beenden
+        </button>
+      </div>
     </div>
   );
+}
+
+function StatusDot({ label, color }: { label: string; color: string | null }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-white/5 dark:text-gray-300">
+      <span
+        className="inline-block h-1.5 w-1.5 rounded-full"
+        style={{ backgroundColor: color || "#6b7280" }}
+      />
+      {label}
+    </span>
+  );
+}
+
+function LastCallStatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    answered: { label: "angenommen", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
+    missed: { label: "verpasst", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+    failed: { label: "fehlgeschlagen", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+    ended: { label: "beendet", cls: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" },
+  };
+  const m = map[status] ?? { label: status, cls: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" };
+  return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${m.cls}`}>{m.label}</span>;
 }
 
 function CallStatusBadge({ activeCall }: { activeCall: ActiveCall | null }) {
