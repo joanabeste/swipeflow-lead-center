@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Lokale Vercel-Prebuilt-Artefakte (via `vercel build`) — gitignored,
+    // sollen auch vom Lint übersprungen werden.
+    ".vercel/**",
   ]),
 ]);
 
