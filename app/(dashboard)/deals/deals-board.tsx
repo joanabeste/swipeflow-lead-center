@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  Plus, LayoutGrid, List, TrendingUp, Trophy, Percent, Euro,
+  Plus, LayoutGrid, List, TrendingUp, Trophy, Percent, Euro, Sparkles,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -31,7 +31,7 @@ export function DealsBoard({
   stages: DealStage[];
   team: { id: string; name: string; avatarUrl: string | null }[];
 }) {
-  const [view, setView] = useState<ViewMode>("kanban");
+  const [view, setView] = useState<ViewMode>("table");
   const [filterAssignee, setFilterAssignee] = useState<string>("");
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -45,50 +45,70 @@ export function DealsBoard({
 
   return (
     <div className="space-y-5">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
-          icon={Euro}
-          label="Offenes Volumen"
-          value={formatAmount(kpis.openVolume)}
-          tone="primary"
-        />
-        <KpiCard
-          icon={Trophy}
-          label="Gewonnen (30 Tage)"
-          value={formatAmount(kpis.wonLast30d)}
-          tone="success"
-        />
-        <KpiCard
-          icon={Percent}
-          label="Gewinn-Quote"
-          value={`${Math.round(kpis.winRate * 100)}%`}
-          subtitle={`${kpis.wonCount} / ${kpis.wonCount + kpis.lostCount} abgeschlossen`}
-          tone="neutral"
-        />
-        <KpiCard
-          icon={TrendingUp}
-          label="Ø Deal-Größe"
-          value={formatAmount(kpis.avgDealSize)}
-          tone="neutral"
-        />
+      {/* Hero-KPI + Neben-KPIs */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        {/* Hero: Offenes Volumen — groß, primary-Farbig, motivierend */}
+        <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 p-6 dark:border-primary/20">
+          <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
+          <div className="relative">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+              <Euro className="h-3.5 w-3.5" />
+              Offenes Volumen
+            </div>
+            <p className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl">
+              {formatAmount(kpis.openVolume)}
+            </p>
+            <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">
+              {kpis.openCount} {kpis.openCount === 1 ? "offener Deal" : "offene Deals"}
+              {kpis.weightedForecastCents > 0 && (
+                <>
+                  <span className="mx-1.5">·</span>
+                  <span>
+                    Forecast{" "}
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      {formatAmount(kpis.weightedForecastCents)}
+                    </span>
+                  </span>
+                </>
+              )}
+            </p>
+            {kpis.motivationalMessage && (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-primary dark:bg-white/5">
+                <Sparkles className="h-3 w-3" />
+                {kpis.motivationalMessage}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Neben-KPIs */}
+        <div className="grid grid-cols-3 gap-3 lg:col-span-2">
+          <KpiCard
+            icon={Trophy}
+            label="Gewonnen (30 Tage)"
+            value={formatAmount(kpis.wonLast30d)}
+            subtitle={`${kpis.wonCount30d} Abschlüsse`}
+            tone="success"
+          />
+          <KpiCard
+            icon={Percent}
+            label="Gewinn-Quote"
+            value={`${Math.round(kpis.winRate * 100)}%`}
+            subtitle={`${kpis.wonCount} / ${kpis.wonCount + kpis.lostCount} abgeschlossen`}
+            tone="neutral"
+          />
+          <KpiCard
+            icon={TrendingUp}
+            label="Ø Deal-Größe"
+            value={formatAmount(kpis.avgDealSize)}
+            tone="neutral"
+          />
+        </div>
       </div>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
         <div className="flex rounded-md border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
-          <button
-            type="button"
-            onClick={() => setView("kanban")}
-            className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs ${
-              view === "kanban"
-                ? "bg-gray-200 font-medium dark:bg-white/10"
-                : "text-gray-500"
-            }`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Kanban
-          </button>
           <button
             type="button"
             onClick={() => setView("table")}
@@ -100,6 +120,18 @@ export function DealsBoard({
           >
             <List className="h-3.5 w-3.5" />
             Tabelle
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("kanban")}
+            className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs ${
+              view === "kanban"
+                ? "bg-gray-200 font-medium dark:bg-white/10"
+                : "text-gray-500"
+            }`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+            Kanban
           </button>
         </div>
 
@@ -124,15 +156,15 @@ export function DealsBoard({
         </button>
       </div>
 
-      {/* Charts */}
-      <PipelineCharts deals={filtered} stages={stages} />
-
-      {/* View */}
+      {/* View — direkt nach Toolbar, Charts rutschen nach unten */}
       {view === "kanban" ? (
         <KanbanView deals={filtered} stages={activeStages} />
       ) : (
         <TableView deals={filtered} stages={activeStages} />
       )}
+
+      {/* Charts zur Übersicht unten */}
+      <PipelineCharts deals={filtered} stages={stages} />
 
       {createOpen && (
         <NewDealDialog
@@ -153,7 +185,10 @@ function computeKpis(deals: DealWithRelations[], stages: DealStage[]) {
   const stageById = new Map(stages.map((s) => [s.id, s]));
 
   let openVolume = 0;
+  let openCount = 0;
+  let weightedForecastCents = 0;
   let wonLast30d = 0;
+  let wonCount30d = 0;
   let wonTotal = 0;
   let lostTotal = 0;
   let wonCount = 0;
@@ -166,12 +201,20 @@ function computeKpis(deals: DealWithRelations[], stages: DealStage[]) {
     const kind = stage?.kind ?? "open";
     dealCount++;
     totalVolumeAll += d.amountCents;
-    if (kind === "open") openVolume += d.amountCents;
-    else if (kind === "won") {
+    if (kind === "open") {
+      openVolume += d.amountCents;
+      openCount++;
+      // Gewichteter Forecast: amount × probability/100 (oder 0 wenn null).
+      const p = d.probability ?? 0;
+      weightedForecastCents += Math.round((d.amountCents * p) / 100);
+    } else if (kind === "won") {
       wonCount++;
       wonTotal += d.amountCents;
       const closedAt = d.actualCloseDate ? new Date(d.actualCloseDate).getTime() : new Date(d.updatedAt).getTime();
-      if (now - closedAt <= thirtyDays) wonLast30d += d.amountCents;
+      if (now - closedAt <= thirtyDays) {
+        wonLast30d += d.amountCents;
+        wonCount30d++;
+      }
     } else if (kind === "lost") {
       lostCount++;
       lostTotal += d.amountCents;
@@ -182,7 +225,26 @@ function computeKpis(deals: DealWithRelations[], stages: DealStage[]) {
   const winRate = closedCount > 0 ? wonCount / closedCount : 0;
   const avgDealSize = dealCount > 0 ? Math.round(totalVolumeAll / dealCount) : 0;
 
-  return { openVolume, wonLast30d, winRate, wonCount, lostCount, avgDealSize, wonTotal, lostTotal };
+  // Motivierende Mini-Message — fokus auf das Positive.
+  let motivationalMessage = "";
+  if (openCount === 0 && wonCount === 0) {
+    motivationalMessage = "Bereit für deinen ersten Deal — leg los.";
+  } else if (wonCount30d > 0 && wonCount30d >= 3) {
+    motivationalMessage = `🔥 ${wonCount30d} Abschlüsse im letzten Monat — weiter so.`;
+  } else if (winRate >= 0.5 && closedCount >= 3) {
+    motivationalMessage = `Starke ${Math.round(winRate * 100)}% Gewinn-Quote — dran bleiben.`;
+  } else if (openCount >= 5) {
+    motivationalMessage = `${openCount} offene Deals — ein Closing-Call pro Tag macht den Unterschied.`;
+  } else if (openCount > 0) {
+    motivationalMessage = "Jeder Follow-Up zählt. Nächster Schritt?";
+  }
+
+  return {
+    openVolume, openCount, weightedForecastCents,
+    wonLast30d, wonCount30d, wonTotal,
+    winRate, wonCount, lostCount, lostTotal,
+    avgDealSize, motivationalMessage,
+  };
 }
 
 function KpiCard({
@@ -424,8 +486,7 @@ function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: Deal
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-[#2c2c2e] dark:text-gray-400">
-            <th className="px-3 py-2.5">Titel</th>
-            <th className="px-3 py-2.5">Firma</th>
+            <th className="px-3 py-2.5">Deal / Firma</th>
             <th className="px-3 py-2.5">Stage</th>
             <th className="px-3 py-2.5 text-right">Volumen</th>
             <th className="px-3 py-2.5 text-right">Closing-%</th>
@@ -437,66 +498,71 @@ function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: Deal
         <tbody>
           {deals.length === 0 && (
             <tr>
-              <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
+              <td colSpan={7} className="px-3 py-8 text-center text-gray-400">
                 Noch keine Deals.
               </td>
             </tr>
           )}
-          {deals.map((d) => (
-            <tr
-              key={d.id}
-              className="cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/[0.02]"
-              onClick={(e) => {
-                if (e.target instanceof HTMLAnchorElement) return;
-                window.location.href = `/deals/${d.id}`;
-              }}
-            >
-              <td className="px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <Link href={`/deals/${d.id}`} className="font-medium hover:underline">
-                    {d.title}
-                  </Link>
-                  {isStale(d, stages) && (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                      stale
-                    </span>
+          {deals.map((d) => {
+            // Titel und Firmenname sind oft identisch (z.B. "Clemens" / "Clemens").
+            // In dem Fall lohnt sich die zweite Zeile nicht.
+            const titleMatchesCompany = d.title.trim().toLowerCase() === d.company_name.trim().toLowerCase();
+            return (
+              <tr
+                key={d.id}
+                className="cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/[0.02]"
+                onClick={(e) => {
+                  if (e.target instanceof HTMLAnchorElement) return;
+                  window.location.href = `/deals/${d.id}`;
+                }}
+              >
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Link href={`/deals/${d.id}`} className="font-medium hover:underline">
+                      {d.title}
+                    </Link>
+                    {isStale(d, stages) && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                        stale
+                      </span>
+                    )}
+                  </div>
+                  {!titleMatchesCompany && (
+                    <Link
+                      href={`/crm/${d.leadId}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-gray-500 hover:underline dark:text-gray-400"
+                    >
+                      {d.company_name}
+                    </Link>
                   )}
-                </div>
-              </td>
-              <td className="px-3 py-2">
-                <Link
-                  href={`/crm/${d.leadId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-gray-600 hover:underline dark:text-gray-300"
-                >
-                  {d.company_name}
-                </Link>
-              </td>
-              <td className="px-3 py-2">
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                  style={{ backgroundColor: `${d.stage_color}20`, color: d.stage_color }}
-                >
-                  {d.stage_label}
-                </span>
-              </td>
-              <td className="px-3 py-2 text-right font-medium text-primary">
-                {formatAmount(d.amountCents, d.currency)}
-              </td>
-              <td className="px-3 py-2 text-right text-xs text-gray-500 dark:text-gray-400">
-                {d.probability != null ? `${d.probability}%` : "—"}
-              </td>
-              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                {d.assignee_name ?? "—"}
-              </td>
-              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400" title={d.nextStep ?? undefined}>
-                <span className="line-clamp-1">{d.nextStep ?? "—"}</span>
-              </td>
-              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                {d.lastFollowupAt ? new Date(d.lastFollowupAt).toLocaleDateString("de-DE") : "—"}
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-3 py-2">
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                    style={{ backgroundColor: `${d.stage_color}20`, color: d.stage_color }}
+                  >
+                    {d.stage_label}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-right font-medium text-primary">
+                  {formatAmount(d.amountCents, d.currency)}
+                </td>
+                <td className="px-3 py-2 text-right text-xs text-gray-500 dark:text-gray-400">
+                  {d.probability != null ? `${d.probability}%` : "—"}
+                </td>
+                <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                  {d.assignee_name ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400" title={d.nextStep ?? undefined}>
+                  <span className="line-clamp-1">{d.nextStep ?? "—"}</span>
+                </td>
+                <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                  {d.lastFollowupAt ? new Date(d.lastFollowupAt).toLocaleDateString("de-DE") : "—"}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

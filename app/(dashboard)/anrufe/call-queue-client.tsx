@@ -56,6 +56,12 @@ export function CallQueueClient({
   const advanceMs = settings.autoAdvanceDelaySeconds * 1000;
   const [queue, setQueue] = useState<QueueLead[]>(initialQueue);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Nach router.refresh() (z. B. CRM-Status-Toggle oben) kommt eine frische
+  // initialQueue-Prop rein — sonst bliebe die Liste ohne Hard-Reload stale.
+  useEffect(() => {
+    setQueue(initialQueue);
+    setCurrentIndex(0);
+  }, [initialQueue]);
   const [mode, setMode] = useState<QueueMode>("idle");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [autoAdvanceSec, setAutoAdvanceSec] = useState<number | null>(null);

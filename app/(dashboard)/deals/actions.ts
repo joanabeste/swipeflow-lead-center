@@ -9,9 +9,11 @@ import {
   deleteDeal as deleteDealHelper,
   saveStage as saveStageHelper,
   deleteStage as deleteStageHelper,
+  addDealNote as addDealNoteHelper,
+  deleteDealNote as deleteDealNoteHelper,
 } from "@/lib/deals/server";
 import { parseAmountToCents } from "@/lib/deals/types";
-import type { DealStageKind } from "@/lib/deals/types";
+import type { DealActivityType, DealStageKind } from "@/lib/deals/types";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -172,6 +174,56 @@ export async function deleteDealAction(dealId: string): Promise<{ success: true 
     entityId: dealId,
   });
   revalidatePath("/deals");
+  return { success: true };
+}
+
+// ─── Deal-Notes / Activities ──────────────────────────────────
+
+export async function addDealNoteAction(input: {
+  dealId: string;
+  content: string;
+  activityType: DealActivityType;
+}): Promise<{ success: true; noteId: string } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const content = input.content.trim();
+  if (!content) return { error: "Notiz darf nicht leer sein." };
+
+  const res = await addDealNoteHelper({
+    dealId: input.dealId,
+    content,
+    activityType: input.activityType,
+    createdBy: user.id,
+  });
+  if ("error" in res) return { error: res.error };
+
+  await logAudit({
+    userId: user.id,
+    action: "deal.note_added",
+    entityType: "deal",
+    entityId: input.dealId,
+    details: { activity_type: input.activityType, note_id: res.id },
+  });
+
+  revalidatePath(`/deals/${input.dealId}`);
+  return { success: true, noteId: res.id };
+}
+
+export async function deleteDealNoteAction(
+  noteId: string,
+  dealId: string,
+): Promise<{ success: true } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  await deleteDealNoteHelper(noteId);
+  await logAudit({
+    userId: user.id,
+    action: "deal.note_deleted",
+    entityType: "deal",
+    entityId: dealId,
+    details: { note_id: noteId },
+  });
+  revalidatePath(`/deals/${dealId}`);
   return { success: true };
 }
 

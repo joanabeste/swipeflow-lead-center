@@ -1,17 +1,18 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getDeal, listStages, listDealChanges } from "@/lib/deals/server";
+import { getDeal, listStages, listDealChanges, listDealNotes } from "@/lib/deals/server";
 import { listTeamMembers } from "../actions";
 import { DealDetail } from "./deal-detail";
 
 export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [deal, stages, team, changes] = await Promise.all([
+  const [deal, stages, team, changes, notes] = await Promise.all([
     getDeal(id),
     listStages(),
     listTeamMembers(),
     listDealChanges(id),
+    listDealNotes(id),
   ]);
 
   if (!deal) notFound();
@@ -26,7 +27,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         Zurück zur Pipeline
       </Link>
 
-      <DealDetail deal={deal} stages={stages} team={team} changes={changes} />
+      <DealDetail deal={deal} stages={stages} team={team} changes={changes} notes={notes} />
     </div>
   );
 }

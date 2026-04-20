@@ -7,6 +7,8 @@ import type {
   DealWithRelations,
   DealChange,
   DealStageKind,
+  DealNote,
+  DealActivityType,
 } from "./types";
 
 // ─── Stages ───────────────────────────────────────────────────
@@ -237,6 +239,62 @@ export async function updateDeal(
 export async function deleteDeal(id: string): Promise<void> {
   const db = createServiceClient();
   await db.from("deals").delete().eq("id", id);
+}
+
+// ─── Deal-Notes / Activities ──────────────────────────────────
+
+export async function listDealNotes(dealId: string): Promise<DealNote[]> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("deal_notes")
+    .select(`
+      id, deal_id, content, activity_type, created_by, created_at,
+      profiles:created_by(name, avatar_url)
+    `)
+    .eq("deal_id", dealId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((r) => {
+    const profile = firstOrNull(
+      (r as unknown as { profiles?: JoinRow<{ name: string | null; avatar_url: string | null }> })
+        .profiles ?? null,
+    );
+    return {
+      id: r.id as string,
+      dealId: r.deal_id as string,
+      content: r.content as string,
+      activityType: r.activity_type as DealActivityType,
+      createdBy: (r.created_by as string | null) ?? null,
+      createdByName: profile?.name ?? null,
+      createdByAvatarUrl: profile?.avatar_url ?? null,
+      createdAt: r.created_at as string,
+    };
+  });
+}
+
+export async function addDealNote(input: {
+  dealId: string;
+  content: string;
+  activityType: DealActivityType;
+  createdBy: string;
+}): Promise<{ id: string } | { error: string }> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("deal_notes")
+    .insert({
+      deal_id: input.dealId,
+      content: input.content,
+      activity_type: input.activityType,
+      created_by: input.createdBy,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { error: error?.message ?? "Konnte Notiz nicht speichern." };
+  return { id: data.id as string };
+}
+
+export async function deleteDealNote(noteId: string): Promise<void> {
+  const db = createServiceClient();
+  await db.from("deal_notes").delete().eq("id", noteId);
 }
 
 export async function listDealChanges(dealId: string): Promise<DealChange[]> {

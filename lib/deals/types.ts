@@ -56,6 +56,27 @@ export interface DealChange {
   createdAt: string;
 }
 
+export type DealActivityType = "note" | "call" | "meeting" | "email" | "closing";
+
+export interface DealNote {
+  id: string;
+  dealId: string;
+  content: string;
+  activityType: DealActivityType;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdByAvatarUrl: string | null;
+  createdAt: string;
+}
+
+export const DEAL_ACTIVITY_LABELS: Record<DealActivityType, string> = {
+  note: "Notiz",
+  call: "Anruf / Erstgespräch",
+  meeting: "Meeting",
+  email: "E-Mail",
+  closing: "Closing-Gespräch",
+};
+
 /** Formatiert Cent → "€3.000,00" */
 export function formatAmount(cents: number, currency = "EUR"): string {
   return new Intl.NumberFormat("de-DE", {

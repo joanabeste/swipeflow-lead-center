@@ -1,12 +1,19 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Calendar, User, Trash2, Save, Pencil, Activity, Percent, Footprints, Clock } from "lucide-react";
-import type { DealChange, DealStage, DealWithRelations } from "@/lib/deals/types";
-import { formatAmount, weightedForecastCents } from "@/lib/deals/types";
-import { updateDealAction, deleteDealAction } from "../actions";
+import {
+  Building2, Calendar, User, Trash2, Save, Pencil, Activity, Percent,
+  Footprints, Clock, StickyNote, Phone, Users as UsersIcon, Mail as MailIcon,
+  Trophy, Send, X,
+} from "lucide-react";
+import type {
+  DealChange, DealStage, DealWithRelations, DealNote, DealActivityType,
+} from "@/lib/deals/types";
+import { formatAmount, weightedForecastCents, DEAL_ACTIVITY_LABELS } from "@/lib/deals/types";
+import { updateDealAction, deleteDealAction, addDealNoteAction, deleteDealNoteAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
 
 interface Props {
@@ -14,9 +21,20 @@ interface Props {
   stages: DealStage[];
   team: { id: string; name: string; avatarUrl: string | null }[];
   changes: DealChange[];
+  notes: DealNote[];
 }
 
-export function DealDetail({ deal, stages, team, changes }: Props) {
+const ACTIVITY_ICON: Record<DealActivityType, typeof StickyNote> = {
+  note: StickyNote,
+  call: Phone,
+  meeting: UsersIcon,
+  email: MailIcon,
+  closing: Trophy,
+};
+
+const ACTIVITY_ORDER: DealActivityType[] = ["call", "meeting", "email", "closing", "note"];
+
+export function DealDetail({ deal, stages, team, changes, notes }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const [editing, setEditing] = useState(false);
@@ -346,6 +364,9 @@ export function DealDetail({ deal, stages, team, changes }: Props) {
             </p>
           )}
         </div>
+
+        {/* Aktivitäten / Notizen — wer hat was wann gemacht */}
+        <DealNotesCard dealId={deal.id} notes={notes} />
       </div>
 
       {/* Historie */}
@@ -397,6 +418,159 @@ function MetaRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-2">
       <dt className="text-gray-500 dark:text-gray-400">{label}</dt>
       <dd className="font-medium">{value}</dd>
+    </div>
+  );
+}
+
+// ─── Notizen / Aktivitäten ──────────────────────────────────
+
+function DealNotesCard({ dealId, notes }: { dealId: string; notes: DealNote[] }) {
+  const router = useRouter();
+  const { addToast } = useToastContext();
+  const [pending, startTransition] = useTransition();
+  const [content, setContent] = useState("");
+  const [activityType, setActivityType] = useState<DealActivityType>("note");
+
+  function submit() {
+    const text = content.trim();
+    if (!text) return;
+    startTransition(async () => {
+      const res = await addDealNoteAction({ dealId, content: text, activityType });
+      if ("error" in res) {
+        addToast(res.error, "error");
+      } else {
+        setContent("");
+        setActivityType("note");
+        router.refresh();
+      }
+    });
+  }
+
+  function handleDelete(noteId: string) {
+    if (!confirm("Notiz wirklich löschen?")) return;
+    startTransition(async () => {
+      const res = await deleteDealNoteAction(noteId, dealId);
+      if ("error" in res) addToast(res.error, "error");
+      else router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+      <div className="flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <StickyNote className="h-3.5 w-3.5" />
+          Aktivitäten & Notizen
+        </p>
+        <span className="text-[11px] text-gray-400">{notes.length}</span>
+      </div>
+
+      {/* Eingabe-Formular */}
+      <div className="mt-3 space-y-2">
+        <div className="flex flex-wrap gap-1">
+          {ACTIVITY_ORDER.map((type) => {
+            const Icon = ACTIVITY_ICON[type];
+            const active = activityType === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setActivityType(type)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-300"
+                }`}
+              >
+                <Icon className="h-3 w-3" />
+                {DEAL_ACTIVITY_LABELS[type]}
+              </button>
+            );
+          })}
+        </div>
+        <div className="relative">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onKeyDown={(e) => {
+              // Ctrl/Cmd+Enter: abschicken
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") submit();
+            }}
+            rows={3}
+            placeholder={`${DEAL_ACTIVITY_LABELS[activityType]} notieren… (Cmd+Enter zum Speichern)`}
+            className="w-full resize-none rounded-lg border border-gray-200 bg-white px-3 py-2 pr-20 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
+          />
+          <button
+            type="button"
+            onClick={submit}
+            disabled={pending || !content.trim()}
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-40"
+          >
+            <Send className="h-3 w-3" />
+            Speichern
+          </button>
+        </div>
+      </div>
+
+      {/* Liste */}
+      {notes.length > 0 && (
+        <ul className="mt-4 space-y-3 border-t border-gray-100 pt-4 dark:border-[#2c2c2e]">
+          {notes.map((n) => {
+            const Icon = ACTIVITY_ICON[n.activityType];
+            return (
+              <li key={n.id} className="flex gap-3 text-sm">
+                <div className="shrink-0">
+                  {n.createdByAvatarUrl ? (
+                    <div className="relative h-7 w-7 overflow-hidden rounded-full">
+                      <Image
+                        src={n.createdByAvatarUrl}
+                        alt={n.createdByName ?? ""}
+                        fill
+                        sizes="28px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <span
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-600 dark:bg-white/5 dark:text-gray-300"
+                      title={n.createdByName ?? ""}
+                    >
+                      {(n.createdByName ?? "?")
+                        .split(/\s+/).filter(Boolean).slice(0, 2)
+                        .map((w) => w[0]?.toUpperCase() ?? "").join("")}
+                    </span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 font-medium text-gray-700 dark:bg-white/5 dark:text-gray-300">
+                      <Icon className="h-3 w-3" />
+                      {DEAL_ACTIVITY_LABELS[n.activityType]}
+                    </span>
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {n.createdByName ?? "Unbekannt"}
+                    </span>
+                    <span>·</span>
+                    <span>{new Date(n.createdAt).toLocaleString("de-DE")}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+                    {n.content}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(n.id)}
+                  className="shrink-0 self-start rounded p-1 text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100 dark:hover:bg-red-900/20"
+                  title="Notiz löschen"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
