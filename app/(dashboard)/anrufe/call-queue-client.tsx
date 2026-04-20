@@ -66,6 +66,18 @@ export function CallQueueClient({
   const currentLead = queue[currentIndex] ?? null;
   const canNext = currentIndex < queue.length - 1;
 
+  // Aktiver Kontakt pro Lead (HR-Default). Wechselt mit dem Lead automatisch.
+  const [activeContactIdByLead, setActiveContactIdByLead] = useState<Record<string, string>>({});
+  const activeContactId = currentLead
+    ? activeContactIdByLead[currentLead.id] ?? currentLead.default_contact_id
+    : null;
+  const activeContact = currentLead?.contacts.find((c) => c.id === activeContactId) ?? null;
+
+  function selectContact(contactId: string) {
+    if (!currentLead) return;
+    setActiveContactIdByLead((m) => ({ ...m, [currentLead.id]: contactId }));
+  }
+
   const resetNotes = useCallback(() => {
     setNotes("");
     setSavedNotes("");
@@ -125,7 +137,9 @@ export function CallQueueClient({
       const index = indexOverride ?? currentIndex;
       const lead = queue[index];
       if (!lead) return;
-      const phoneToDial = lead.contact_phone ?? lead.phone;
+      const selectedId = activeContactIdByLead[lead.id] ?? lead.default_contact_id;
+      const selectedContact = lead.contacts.find((c) => c.id === selectedId) ?? null;
+      const phoneToDial = selectedContact?.phone ?? lead.phone;
       if (!phoneToDial) {
         addToast("Keine Telefonnummer vorhanden — überspringe.", "error");
         setCurrentIndex((i) => Math.min(i + 1, queue.length - 1));
@@ -135,7 +149,7 @@ export function CallQueueClient({
       const res = await queueStartCall({
         leadId: lead.id,
         phoneNumber: phoneToDial,
-        contactId: null,
+        contactId: selectedContact?.id ?? null,
         provider,
       });
       if ("error" in res) {
@@ -152,7 +166,7 @@ export function CallQueueClient({
       });
       setMode("calling");
     },
-    [currentIndex, queue, provider, addToast],
+    [currentIndex, queue, provider, addToast, activeContactIdByLead],
   );
 
   const advance = useCallback(() => {
@@ -372,17 +386,27 @@ export function CallQueueClient({
                           <span className="inline-flex h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" />
                         )}
                       </div>
-                      {lead.contact_name && (
-                        <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                          {lead.contact_name}
-                          {lead.contact_role && <span className="text-gray-400"> · {lead.contact_role}</span>}
-                        </p>
-                      )}
-                      {(lead.contact_phone ?? lead.phone) && (
-                        <p className="truncate text-[11px] text-gray-400">
-                          {lead.contact_phone ?? lead.phone}
-                        </p>
-                      )}
+                      {(() => {
+                        const defaultC = lead.contacts.find((c) => c.id === lead.default_contact_id) ?? lead.contacts[0] ?? null;
+                        if (!defaultC) return null;
+                        return (
+                          <>
+                            <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                              {defaultC.name}
+                              {defaultC.is_hr && <span className="ml-1 rounded bg-emerald-100 px-1 py-0 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">HR</span>}
+                              {defaultC.role && <span className="text-gray-400"> · {defaultC.role}</span>}
+                            </p>
+                            {(defaultC.phone ?? lead.phone) && (
+                              <p className="truncate text-[11px] text-gray-400">
+                                {defaultC.phone ?? lead.phone}
+                              </p>
+                            )}
+                            {lead.contacts.length > 1 && (
+                              <p className="text-[10px] text-gray-400">+{lead.contacts.length - 1} weitere</p>
+                            )}
+                          </>
+                        );
+                      })()}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1">
                         {lead.crm_status_label && (
                           <StatusDot label={lead.crm_status_label} color={lead.crm_status_color} />
@@ -495,46 +519,96 @@ export function CallQueueClient({
                     </div>
                   )}
 
-                  {/* Kontakt */}
-                  {currentLead.contact_name && (
+                  {/* Kontakt-Auswahl + Details */}
+                  {currentLead.contacts.length > 0 && (
                     <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50/50 p-3 dark:border-[#2c2c2e] dark:bg-white/[0.02]">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        Ansprechpartner
-                      </p>
-                      <p className="mt-1 font-medium">{currentLead.contact_name}</p>
-                      {currentLead.contact_role && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{currentLead.contact_role}</p>
-                      )}
-                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                        {(currentLead.contact_phone ?? currentLead.phone) && (
-                          <a
-                            href={`tel:${currentLead.contact_phone ?? currentLead.phone}`}
-                            className="inline-flex items-center gap-1 text-primary hover:underline"
-                          >
-                            <Phone className="h-3.5 w-3.5" />
-                            {currentLead.contact_phone ?? currentLead.phone}
-                          </a>
-                        )}
-                        {currentLead.contact_email && (
-                          <a
-                            href={`mailto:${currentLead.contact_email}`}
-                            className="inline-flex items-center gap-1 text-primary hover:underline"
-                          >
-                            <Mail className="h-3.5 w-3.5" />
-                            {currentLead.contact_email}
-                          </a>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                          Ansprechpartner
+                        </p>
+                        {currentLead.contacts.length > 1 && (
+                          <span className="text-[10px] text-gray-400">
+                            {currentLead.contacts.length} Kontakte
+                          </span>
                         )}
                       </div>
-                      {currentLead.contact_source_url && (
-                        <a
-                          href={currentLead.contact_source_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
-                        >
-                          <Briefcase className="h-3 w-3" />
-                          Aus Stellenanzeige
-                        </a>
+
+                      {/* Picker-Row bei > 1 Kontakt */}
+                      {currentLead.contacts.length > 1 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {currentLead.contacts.map((c) => {
+                            const selected = c.id === activeContactId;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => selectContact(c.id)}
+                                disabled={mode === "calling"}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
+                                  selected
+                                    ? "border-primary bg-primary/10 text-primary"
+                                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-300"
+                                } disabled:opacity-50`}
+                                title={c.phone ? `Anrufen: ${c.phone}` : "Keine Telefonnummer"}
+                              >
+                                {c.is_hr && (
+                                  <span className="rounded bg-emerald-100 px-1 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                    HR
+                                  </span>
+                                )}
+                                <span className="truncate max-w-[160px]">{c.name}</span>
+                                {!c.phone && <span className="text-gray-400">(ohne Tel)</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {activeContact && (
+                        <>
+                          <p className="mt-2 font-medium">
+                            {activeContact.name}
+                            {activeContact.is_hr && (
+                              <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                HR
+                              </span>
+                            )}
+                          </p>
+                          {activeContact.role && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">{activeContact.role}</p>
+                          )}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                            {(activeContact.phone ?? currentLead.phone) && (
+                              <a
+                                href={`tel:${activeContact.phone ?? currentLead.phone}`}
+                                className="inline-flex items-center gap-1 text-primary hover:underline"
+                              >
+                                <Phone className="h-3.5 w-3.5" />
+                                {activeContact.phone ?? currentLead.phone}
+                              </a>
+                            )}
+                            {activeContact.email && (
+                              <a
+                                href={`mailto:${activeContact.email}`}
+                                className="inline-flex items-center gap-1 text-primary hover:underline"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                                {activeContact.email}
+                              </a>
+                            )}
+                          </div>
+                          {activeContact.source_url && (
+                            <a
+                              href={activeContact.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                            >
+                              <Briefcase className="h-3 w-3" />
+                              Aus Stellenanzeige
+                            </a>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

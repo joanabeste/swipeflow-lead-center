@@ -6,6 +6,7 @@ import type { CallProvider } from "../crm/actions";
 import { startCall as startCrmCall, updateCallNotes as updateCrmCallNotes } from "../crm/actions";
 import { getHqLocation } from "@/lib/app-settings";
 import { haversineKm } from "@/lib/geo/distance";
+import { isHrContact } from "@/lib/recruiting/hr-contact";
 
 export type CallStatus =
   | "idle"
@@ -15,6 +16,16 @@ export type CallStatus =
   | "missed"
   | "failed"
   | "ended";
+
+export interface QueueContact {
+  id: string;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  source_url: string | null;
+  is_hr: boolean;
+}
 
 export interface QueueLead {
   id: string;
@@ -33,11 +44,10 @@ export interface QueueLead {
   crm_status_id: string | null;
   crm_status_label: string | null;
   crm_status_color: string | null;
-  contact_name: string | null;
-  contact_role: string | null;
-  contact_phone: string | null;
-  contact_email: string | null;
-  contact_source_url: string | null;
+  /** Alle Kontakte des Leads, HR-Kontakte sortiert zuerst. */
+  contacts: QueueContact[];
+  /** HR-Kontakt mit Telefonnummer, sonst erster mit Telefon, sonst null. */
+  default_contact_id: string | null;
 }
 
 export interface CustomStatusOption {
@@ -141,7 +151,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
       .gte("started_at", oneHourAgo),
     db
       .from("lead_contacts")
-      .select("lead_id, name, role, phone, email, source_url, created_at")
+      .select("id, lead_id, name, role, phone, email, source_url, created_at")
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true }),
     db
@@ -162,23 +172,26 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
 
   const recentlyCalled = new Set((recentCallsRes.data ?? []).map((c) => c.lead_id as string));
 
-  const contactByLead = new Map<string, {
-    name: string;
-    role: string | null;
-    phone: string | null;
-    email: string | null;
-    source_url: string | null;
-  }>();
+  // Alle Kontakte pro Lead sammeln, HR-Kontakte zuerst.
+  const contactsByLead = new Map<string, QueueContact[]>();
   for (const c of contactsRes.data ?? []) {
-    if (!contactByLead.has(c.lead_id as string)) {
-      contactByLead.set(c.lead_id as string, {
-        name: c.name as string,
-        role: (c.role as string | null) ?? null,
-        phone: (c.phone as string | null) ?? null,
-        email: (c.email as string | null) ?? null,
-        source_url: (c.source_url as string | null) ?? null,
-      });
-    }
+    const leadId = c.lead_id as string;
+    const entry: QueueContact = {
+      id: c.id as string,
+      name: c.name as string,
+      role: (c.role as string | null) ?? null,
+      phone: (c.phone as string | null) ?? null,
+      email: (c.email as string | null) ?? null,
+      source_url: (c.source_url as string | null) ?? null,
+      is_hr: isHrContact((c.role as string | null) ?? null),
+    };
+    const arr = contactsByLead.get(leadId);
+    if (arr) arr.push(entry);
+    else contactsByLead.set(leadId, [entry]);
+  }
+  // HR-First-Sort pro Lead.
+  for (const arr of contactsByLead.values()) {
+    arr.sort((a, b) => Number(b.is_hr) - Number(a.is_hr));
   }
 
   const lastCallByLead = new Map<string, {
@@ -213,7 +226,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
   return leads
     .filter((l) => !recentlyCalled.has(l.id as string))
     .map((l): QueueLead => {
-      const contact = contactByLead.get(l.id as string);
+      const contacts = contactsByLead.get(l.id as string) ?? [];
       const lastCall = lastCallByLead.get(l.id as string);
       const meta = l.crm_status_id ? statusMeta.get(l.crm_status_id as string) ?? null : null;
       let distance: number | null = null;
@@ -222,6 +235,11 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
           haversineKm({ lat: hq.lat, lng: hq.lng }, { lat: l.latitude, lng: l.longitude }) * 10,
         ) / 10;
       }
+      // Default-Kontakt: HR mit Phone, sonst erster mit Phone, sonst null.
+      const defaultContact =
+        contacts.find((c) => c.is_hr && c.phone) ??
+        contacts.find((c) => c.phone) ??
+        null;
       return {
         id: l.id as string,
         company_name: l.company_name as string,
@@ -239,11 +257,8 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
         crm_status_id: (l.crm_status_id as string | null) ?? null,
         crm_status_label: meta?.label ?? null,
         crm_status_color: meta?.color ?? null,
-        contact_name: contact?.name ?? null,
-        contact_role: contact?.role ?? null,
-        contact_phone: contact?.phone ?? null,
-        contact_email: contact?.email ?? null,
-        contact_source_url: contact?.source_url ?? null,
+        contacts,
+        default_contact_id: defaultContact?.id ?? null,
       };
     });
 }
