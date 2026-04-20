@@ -42,7 +42,7 @@ export function WebexRecordingsManager({ status }: { status: WebexRecordingStatu
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Call-Recordings werden 1× täglich automatisch aus Webex abgeholt und den Calls
               im CRM zugeordnet. Für sofortige Zuordnung nach einem Gespräch den Button
-              „Jetzt synchronisieren" nutzen. Voraussetzung: Aufzeichnung in Webex/Placetel aktiviert und ein
+              „Jetzt synchronisieren“ nutzen. Voraussetzung: Aufzeichnung in Webex/Placetel aktiviert und ein
               Personal Access Token in der Env-Var <code className="rounded bg-gray-100 px-1 dark:bg-gray-800">WEBEX_CALLING_TOKEN</code>.
             </p>
           </div>
