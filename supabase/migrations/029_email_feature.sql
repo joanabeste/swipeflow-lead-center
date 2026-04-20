@@ -23,6 +23,7 @@ create table if not exists user_smtp_credentials (
 alter table user_smtp_credentials enable row level security;
 
 -- User sieht nur eigene Credentials.
+drop policy if exists "user_smtp_credentials_own_select" on user_smtp_credentials;
 create policy "user_smtp_credentials_own_select" on user_smtp_credentials
   for select using (auth.uid() = user_id);
 
@@ -52,5 +53,6 @@ create index if not exists email_messages_sent_by_idx on email_messages(sent_by,
 alter table email_messages enable row level security;
 
 -- User sieht nur eigene Sendungen.
+drop policy if exists "email_messages_own_select" on email_messages;
 create policy "email_messages_own_select" on email_messages
   for select using (auth.uid() = sent_by);
