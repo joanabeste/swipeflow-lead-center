@@ -129,9 +129,25 @@ export function SortableDashboard({
           >
             <Pencil className="h-3 w-3" />
             Bearbeiten
+            {inactiveWidgets.length > 0 && (
+              <span
+                className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                title={`${inactiveWidgets.length} zusätzliche Widgets verfügbar`}
+              >
+                +{inactiveWidgets.length}
+              </span>
+            )}
           </button>
         )}
       </div>
+
+      {/* Add-Panel im Edit-Mode nach oben gezogen — Widgets sind hier einfacher
+          zu entdecken als am Seiten-Ende, wo man sie ggf. nie zu Gesicht bekommt. */}
+      {editMode && inactiveWidgets.length > 0 && (
+        <div className="mt-4">
+          <AddWidgetPanel widgets={inactiveWidgets} onAdd={addWidget} />
+        </div>
+      )}
 
       <div className="mt-4">
         {editMode ? (
@@ -172,10 +188,6 @@ export function SortableDashboard({
           </div>
         )}
       </div>
-
-      {editMode && inactiveWidgets.length > 0 && (
-        <AddWidgetPanel widgets={inactiveWidgets} onAdd={addWidget} />
-      )}
     </div>
   );
 }
@@ -246,29 +258,38 @@ function WidthPicker({
   current: WidgetWidth;
   onChange: (w: WidgetWidth) => void;
 }) {
-  const labels: Record<WidgetWidth, string> = {
-    third: "⅓",
-    half: "½",
-    "two-thirds": "⅔",
-    full: "1",
+  // Visuelle Balken statt ⅓½⅔1 — auf einen Blick klar, welche Breite was bedeutet.
+  const meta: Record<WidgetWidth, { pct: number; title: string }> = {
+    third: { pct: 33, title: "Ein Drittel der Breite" },
+    half: { pct: 50, title: "Halbe Breite" },
+    "two-thirds": { pct: 66, title: "Zwei Drittel der Breite" },
+    full: { pct: 100, title: "Volle Breite" },
   };
   return (
-    <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 shadow-sm dark:border-[#2c2c2e] dark:bg-[#161618]">
+    <div className="inline-flex items-center gap-0.5 rounded-md border border-gray-200 bg-white p-1 shadow-sm dark:border-[#2c2c2e] dark:bg-[#161618]">
       {WIDGET_WIDTHS.map((w) => {
         const active = current === w;
+        const { pct, title } = meta[w];
         return (
           <button
             key={w}
             type="button"
             onClick={() => onChange(w)}
-            className={`min-w-[26px] rounded px-1.5 py-0.5 text-[11px] leading-none transition ${
+            title={title}
+            aria-label={title}
+            aria-pressed={active}
+            className={`flex h-5 w-8 items-center rounded px-1 transition ${
               active
-                ? "bg-primary/15 font-semibold text-primary"
-                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                ? "bg-primary/15"
+                : "hover:bg-gray-100 dark:hover:bg-white/5"
             }`}
-            title={`Breite: ${w}`}
           >
-            {labels[w]}
+            <span className="block h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
+              <span
+                className={`block h-full rounded-full ${active ? "bg-primary" : "bg-gray-400 dark:bg-gray-500"}`}
+                style={{ width: `${pct}%` }}
+              />
+            </span>
           </button>
         );
       })}
@@ -286,11 +307,16 @@ function AddWidgetPanel({
   onAdd: (key: string) => void;
 }) {
   return (
-    <div className="mt-6 rounded-xl border border-dashed border-gray-300 bg-gray-50/50 p-4 dark:border-[#2c2c2e] dark:bg-white/[0.02]">
-      <p className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-        <Plus className="h-3.5 w-3.5" />
-        Widget hinzufügen
-      </p>
+    <div className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-4 dark:border-primary/30 dark:bg-primary/5">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
+          <Plus className="h-3.5 w-3.5" />
+          Weitere Widgets verfügbar
+        </p>
+        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+          {widgets.length} {widgets.length === 1 ? "Widget" : "Widgets"}
+        </span>
+      </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {widgets.map((w) => (
           <button

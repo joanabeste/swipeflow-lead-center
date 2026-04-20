@@ -9,6 +9,7 @@ import {
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
   MyDayWidget, CallStats7dWidget, EnrichmentTrend7dWidget, CrmStatusDistributionWidget,
   FollowUpReminderWidget, TeamLeaderboardWidget, DealSummaryWidget, EmailStats7dWidget,
+  MotivationalQuoteWidget,
 } from "./widgets/widgets";
 
 export default async function DashboardPage() {
@@ -73,6 +74,7 @@ function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboard
     case "team-leaderboard": return <TeamLeaderboardWidget data={data} />;
     case "deal-summary": return <DealSummaryWidget data={data} />;
     case "email-stats-7d": return <EmailStats7dWidget data={data} />;
+    case "motivational-quote": return <MotivationalQuoteWidget />;
     default: return null;
   }
 }

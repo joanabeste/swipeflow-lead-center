@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun, Clock, Trophy, Briefcase, Mail } from "lucide-react";
+import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun, Clock, Trophy, Briefcase, Mail, Quote } from "lucide-react";
 import type { DashboardData } from "./data";
+import { getQuoteOfDay } from "@/lib/quotes/sales-quotes";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -458,6 +459,37 @@ export function CrmStatusDistributionWidget({ data }: { data: DashboardData }) {
         </div>
       )}
     </Card>
+  );
+}
+
+// ─── Spruch des Tages ────────────────────────────────────────────
+
+export function MotivationalQuoteWidget() {
+  const quote = getQuoteOfDay();
+  // Farb-Akzent je Tonalität — subtil, aber der Spruch wechselt visuell.
+  const toneClass =
+    quote.tone === "humor"
+      ? "from-amber-100 to-orange-50 text-amber-900 dark:from-amber-900/20 dark:to-orange-900/10 dark:text-amber-100"
+      : quote.tone === "classic"
+      ? "from-indigo-100 to-purple-50 text-indigo-900 dark:from-indigo-900/20 dark:to-purple-900/10 dark:text-indigo-100"
+      : quote.tone === "wisdom"
+      ? "from-emerald-100 to-teal-50 text-emerald-900 dark:from-emerald-900/20 dark:to-teal-900/10 dark:text-emerald-100"
+      : "from-primary/15 to-primary/5 text-gray-900 dark:text-gray-100";
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br ${toneClass} p-5 dark:border-[#2c2c2e]/50`}>
+      <Quote className="absolute right-4 top-4 h-8 w-8 opacity-20" />
+      <div className="relative">
+        <p className="text-xs font-semibold uppercase tracking-wider opacity-70">
+          Spruch des Tages
+        </p>
+        <p className="mt-2 text-lg font-medium leading-snug sm:text-xl">
+          &bdquo;{quote.text}&ldquo;
+        </p>
+        {quote.author && (
+          <p className="mt-2 text-xs opacity-75">— {quote.author}</p>
+        )}
+      </div>
+    </div>
   );
 }
 
