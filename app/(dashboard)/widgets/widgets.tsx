@@ -29,8 +29,11 @@ const actionLabels: Record<string, string> = {
 };
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  // h-full default: damit Widgets, die nebeneinander im selben Grid-Row stehen,
+  // automatisch dieselbe Höhe haben (CSS-Grid stretcht die Zelle, nur der
+  // Widget-Inhalt muss dann auch ausfüllen).
   return (
-    <div className={`rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] ${className}`}>
+    <div className={`h-full rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] ${className}`}>
       {children}
     </div>
   );
@@ -462,6 +465,85 @@ export function CrmStatusDistributionWidget({ data }: { data: DashboardData }) {
   );
 }
 
+// ─── Deal-Trends (12 Monate) ─────────────────────────────────────
+
+export function DealTrendsWidget({ data }: { data: DashboardData }) {
+  const months = data.dealsByMonth12;
+  const wonTotal = months.reduce((s, m) => s + m.won, 0);
+  const lostTotal = months.reduce((s, m) => s + m.lost, 0);
+  const wonAmount = months.reduce((s, m) => s + m.wonAmountCents, 0);
+  const closed = wonTotal + lostTotal;
+  const winRate = closed > 0 ? Math.round((wonTotal / closed) * 100) : 0;
+  const maxMonth = Math.max(1, ...months.map((m) => m.won + m.lost));
+
+  const formatEur = (cents: number) =>
+    new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(cents / 100);
+
+  const monthShort = (yyyyMM: string): string => {
+    const [y, m] = yyyyMM.split("-");
+    const d = new Date(Number(y), Number(m) - 1, 1);
+    return d.toLocaleDateString("de-DE", { month: "short" });
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <Trophy className="h-3.5 w-3.5 text-amber-500" />
+            Deal-Abschlüsse (12 Monate)
+          </p>
+          <p className="mt-0.5 text-lg font-bold">
+            {formatEur(wonAmount)}
+            <span className="ml-2 text-sm font-normal text-gray-500">
+              {wonTotal} gewonnen · {winRate}% Win-Rate
+            </span>
+          </p>
+        </div>
+        <div className="flex gap-3 text-xs">
+          <LegendDot color="bg-emerald-500" label={`Won ${wonTotal}`} />
+          <LegendDot color="bg-red-400" label={`Lost ${lostTotal}`} />
+        </div>
+      </div>
+      {closed === 0 ? (
+        <p className="mt-6 text-center text-sm text-gray-400">
+          Noch keine Abschlüsse im letzten Jahr — der erste Deal kommt.
+        </p>
+      ) : (
+        <div className="mt-5 flex h-32 items-end gap-1.5">
+          {months.map((m) => {
+            const sum = m.won + m.lost;
+            const h = (sum / maxMonth) * 100;
+            return (
+              <div key={m.month} className="flex flex-1 flex-col items-center gap-1">
+                <div className="flex w-full flex-col justify-end" style={{ height: "7rem" }}>
+                  <div className="flex w-full flex-col overflow-hidden rounded-t-md" style={{ height: `${h}%` }}>
+                    {m.won > 0 && (
+                      <div
+                        className="bg-emerald-500"
+                        style={{ flexGrow: m.won }}
+                        title={`${monthShort(m.month)}: ${m.won} gewonnen · ${formatEur(m.wonAmountCents)}`}
+                      />
+                    )}
+                    {m.lost > 0 && (
+                      <div
+                        className="bg-red-400"
+                        style={{ flexGrow: m.lost }}
+                        title={`${monthShort(m.month)}: ${m.lost} verloren`}
+                      />
+                    )}
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400">{monthShort(m.month)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Spruch des Tages ────────────────────────────────────────────
 
 export function MotivationalQuoteWidget() {
@@ -476,9 +558,12 @@ export function MotivationalQuoteWidget() {
       ? "from-emerald-100 to-teal-50 text-emerald-900 dark:from-emerald-900/20 dark:to-teal-900/10 dark:text-emerald-100"
       : "from-primary/15 to-primary/5 text-gray-900 dark:text-gray-100";
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br ${toneClass} p-5 dark:border-[#2c2c2e]/50`}>
+    <div className={`relative flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br ${toneClass} p-5 dark:border-[#2c2c2e]/50`}>
       <Quote className="absolute right-4 top-4 h-8 w-8 opacity-20" />
-      <div className="relative">
+      {/* flex-1 + justify-center: wenn daneben eine höhere Kachel steht
+          (z.B. Deal-Summary), zentriert sich der Spruch vertikal mittig
+          statt oben zu kleben. */}
+      <div className="relative flex flex-1 flex-col justify-center">
         <p className="text-xs font-semibold uppercase tracking-wider opacity-70">
           Spruch des Tages
         </p>

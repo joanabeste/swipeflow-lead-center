@@ -8,7 +8,7 @@ import {
   Inbox,
   Users,
   PhoneOutgoing,
-  Target,
+  Banknote,
   ShieldBan,
   Settings,
 } from "lucide-react";
@@ -34,7 +34,7 @@ const akquiseNav: NavItem[] = [
 const vertriebNav: NavItem[] = [
   { href: "/crm", label: "CRM", icon: Users },
   { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
-  { href: "/deals", label: "Deals", icon: Target },
+  { href: "/deals", label: "Deals", icon: Banknote },
 ];
 
 const verwaltungNav: NavItem[] = [

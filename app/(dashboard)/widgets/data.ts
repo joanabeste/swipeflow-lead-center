@@ -56,6 +56,12 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   }
 
   const sevenDaysAgoIsoForFollowup = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+  const ninetyDaysAgoIso = new Date(Date.now() - 90 * 24 * 3600_000).toISOString();
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+  twelveMonthsAgo.setDate(1);
+  twelveMonthsAgo.setHours(0, 0, 0, 0);
+  const twelveMonthsAgoIso = twelveMonthsAgo.toISOString().slice(0, 10);
 
   // Zusatz-Daten für neue Widgets (parallel, nur einmal)
   const [
@@ -63,6 +69,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     calls7d, enrichments7d, crmStatusDistRaw, customStatuses,
     // Neue Widgets:
     followupCandidates, teamCallsToday, openDealsRaw, dealStages, emails7d,
+    calls90d, dealsClosed12m,
   ] = await Promise.all([
     db.from("lead_calls").select("*", { count: "exact", head: true })
       .eq("created_by", userId).gte("started_at", todayIso),
@@ -94,6 +101,13 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     // E-Mails 7 Tage: sent/failed pro Tag.
     db.from("email_messages").select("status, sent_at")
       .gte("sent_at", sevenDaysIso),
+    // Anrufe 90 Tage (für filterbares Trend-Widget).
+    db.from("lead_calls").select("direction, status, started_at")
+      .gte("started_at", ninetyDaysAgoIso),
+    // Abgeschlossene Deals der letzten 12 Monate (für Trend-Widget).
+    db.from("deals").select("stage_id, amount_cents, actual_close_date")
+      .gte("actual_close_date", twelveMonthsAgoIso)
+      .not("actual_close_date", "is", null),
   ]);
 
   // Namen für Call-Ersteller
@@ -242,6 +256,53 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     { count: 0, amountCents: 0 },
   );
 
+  // Anrufe 90 Tage — tägliche Aggregation.
+  // Ergibt 90 Einträge mit direction-Breakdown; der Client filtert/aggregiert
+  // später auf 7/30/90 Tage bzw. wöchentliche Bündel.
+  const callsByDay90Buckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
+  for (let i = 89; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 3600_000);
+    d.setHours(0, 0, 0, 0);
+    callsByDay90Buckets[d.toISOString().slice(0, 10)] = { outbound: 0, inbound: 0, missed: 0 };
+  }
+  for (const c of (calls90d.data ?? []) as Array<{ direction: string; status: string; started_at: string }>) {
+    const key = c.started_at.slice(0, 10);
+    const bucket = callsByDay90Buckets[key];
+    if (!bucket) continue;
+    if (c.status === "missed") bucket.missed++;
+    else if (c.direction === "inbound") bucket.inbound++;
+    else bucket.outbound++;
+  }
+  const callsByDay90 = Object.entries(callsByDay90Buckets).map(([date, v]) => ({ date, ...v }));
+
+  // Deal-Abschlüsse 12 Monate — monatliche Aggregation.
+  const dealsByMonth12Buckets: Record<string, { won: number; lost: number; wonAmountCents: number; lostAmountCents: number }> = {};
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    d.setDate(1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    dealsByMonth12Buckets[key] = { won: 0, lost: 0, wonAmountCents: 0, lostAmountCents: 0 };
+  }
+  // stageKindById schnell nachschlagen für "won"/"lost".
+  const stageKindById = new Map<string, string>();
+  for (const s of stagesRows) stageKindById.set(s.id, s.kind);
+  for (const d of (dealsClosed12m.data ?? []) as Array<{ stage_id: string; amount_cents: number; actual_close_date: string | null }>) {
+    if (!d.actual_close_date) continue;
+    const key = d.actual_close_date.slice(0, 7); // YYYY-MM
+    const bucket = dealsByMonth12Buckets[key];
+    if (!bucket) continue;
+    const kind = stageKindById.get(d.stage_id);
+    if (kind === "won") {
+      bucket.won++;
+      bucket.wonAmountCents += d.amount_cents ?? 0;
+    } else if (kind === "lost") {
+      bucket.lost++;
+      bucket.lostAmountCents += d.amount_cents ?? 0;
+    }
+  }
+  const dealsByMonth12 = Object.entries(dealsByMonth12Buckets).map(([month, v]) => ({ month, ...v }));
+
   // E-Mail-Performance 7d: sent/failed pro Tag.
   const emailBuckets: Record<string, { sent: number; failed: number }> = {};
   for (let i = 6; i >= 0; i--) {
@@ -303,6 +364,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     emailsByDay,
     emailsSent7d,
     emailsFailed7d,
+    callsByDay90,
+    dealsByMonth12,
     userId,
     serviceMode,
   };

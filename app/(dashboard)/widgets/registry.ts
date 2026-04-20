@@ -36,10 +36,14 @@ export interface WidgetMeta {
 //  50  Zuletzt bearb. Leads
 //  60  Letzte Aktivitäten
 export const WIDGET_REGISTRY: WidgetMeta[] = [
-  { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: true, defaultOrder: 1, defaultWidth: "full" },
+  // Hero-Row: Deals + Spruch nebeneinander (2/3 + 1/3), gleiche Höhe durch h-full.
+  { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: true, defaultOrder: 1, defaultWidth: "two-thirds" },
+  { key: "motivational-quote", label: "Spruch des Tages", description: "Täglich wechselnder Sales-Spruch", defaultVisible: true, defaultOrder: 2, defaultWidth: "third" },
+  // Status-Übersicht + visuelle Trend-Charts
   { key: "pipeline", label: "Pipeline-Balken", description: "Lead-Verteilung über alle Status", defaultVisible: true, defaultOrder: 5, defaultWidth: "full" },
-  { key: "motivational-quote", label: "Spruch des Tages", description: "Täglich wechselnder Sales-Spruch", defaultVisible: true, defaultOrder: 10, defaultWidth: "full" },
-  { key: "call-stats-7d", label: "Anrufe (7 Tage)", description: "Tägliche Anruf-Statistik aller Nutzer", defaultVisible: true, defaultOrder: 15, defaultWidth: "full" },
+  { key: "deal-trends", label: "Deal-Abschlüsse (12 Monate)", description: "Monatliche Won/Lost-Entwicklung", defaultVisible: true, defaultOrder: 8, defaultWidth: "full" },
+  { key: "call-trends", label: "Anrufe-Trend (filterbar)", description: "Anrufe pro Tag/Woche, umschaltbar 7/30/90 Tage", defaultVisible: true, defaultOrder: 12, defaultWidth: "full" },
+  // Daily Work
   { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 20, defaultWidth: "half" },
   { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 22, defaultWidth: "half" },
   { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 30, defaultWidth: "full" },
@@ -47,6 +51,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   { key: "recent-leads", label: "Zuletzt bearbeitete Leads", description: "Die acht aktuellsten Leads", defaultVisible: true, defaultOrder: 50, defaultWidth: "half" },
   { key: "recent-activity", label: "Letzte Aktivitäten", description: "Audit-Log der letzten Schritte", defaultVisible: true, defaultOrder: 60, defaultWidth: "half" },
   // Nicht default-sichtbar, aber über Edit-Mode hinzufügbar:
+  { key: "call-stats-7d", label: "Anrufe (7 Tage, simpel)", description: "Tägliche Anruf-Statistik ohne Filter", defaultVisible: false, defaultOrder: 32, defaultWidth: "full" },
   { key: "crm-status-distribution", label: "CRM-Status-Verteilung", description: "Qualifizierte Leads nach Vertriebsphase", defaultVisible: false, defaultOrder: 27, defaultWidth: "full" },
   { key: "todays-calls", label: "Heutige Anrufe", description: "Calls aller Nutzer seit 00:00", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
   { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 45, defaultWidth: "full" },

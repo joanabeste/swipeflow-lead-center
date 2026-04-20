@@ -9,8 +9,9 @@ import {
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
   MyDayWidget, CallStats7dWidget, EnrichmentTrend7dWidget, CrmStatusDistributionWidget,
   FollowUpReminderWidget, TeamLeaderboardWidget, DealSummaryWidget, EmailStats7dWidget,
-  MotivationalQuoteWidget,
+  MotivationalQuoteWidget, DealTrendsWidget,
 } from "./widgets/widgets";
+import { CallTrendsWidget } from "./widgets/call-trends-widget";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -75,6 +76,8 @@ function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboard
     case "deal-summary": return <DealSummaryWidget data={data} />;
     case "email-stats-7d": return <EmailStats7dWidget data={data} />;
     case "motivational-quote": return <MotivationalQuoteWidget />;
+    case "call-trends": return <CallTrendsWidget data={data} />;
+    case "deal-trends": return <DealTrendsWidget data={data} />;
     default: return null;
   }
 }

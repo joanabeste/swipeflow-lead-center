@@ -179,7 +179,7 @@ export function SortableDashboard({
             {layout.map((item) => (
               <div
                 key={item.k}
-                className="col-span-1"
+                className="col-span-1 h-full"
                 style={{ gridColumn: `span ${widgetColSpan(item.w)} / span ${widgetColSpan(item.w)}` }}
               >
                 {widgetNodes[item.k]}

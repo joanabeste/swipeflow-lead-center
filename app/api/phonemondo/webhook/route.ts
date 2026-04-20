@@ -46,8 +46,17 @@ export async function POST(request: Request) {
   try {
     event = JSON.parse(rawBody) as PhoneMondoWebhookEvent;
   } catch {
+    console.error("[phonemondo:webhook:payload] Invalid JSON", { rawBody: rawBody.slice(0, 1000) });
     return new Response("Invalid JSON", { status: 400 });
   }
+
+  // TEMP: Payload-Sichtung — loggt rohe Keys + Werte, damit wir die tatsächliche
+  // Event-Shape von PhoneMondo mit unserem PhoneMondoWebhookEvent-Interface
+  // abgleichen können. Nach ein paar echten Events wieder entfernen.
+  console.log("[phonemondo:webhook:payload]", {
+    keys: Object.keys(event as Record<string, unknown>),
+    event,
+  });
 
   if (!event.call_id) {
     return new Response("Missing call_id", { status: 400 });

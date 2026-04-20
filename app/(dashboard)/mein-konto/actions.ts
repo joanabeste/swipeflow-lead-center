@@ -138,3 +138,35 @@ export async function backfillContactSalutations(): Promise<{
   revalidatePath("/mein-konto");
   return { success: true, scanned: rows.length, updated: updates.length };
 }
+
+// ─── Dashboard-Layout zurücksetzen ───────────────────────────
+
+/**
+ * Setzt das Dashboard-Layout des aktuellen Users auf NULL zurück, sodass
+ * beim nächsten Render der aktuelle Default aus der Registry greift. Praktisch,
+ * wenn wir das Default-Layout ändern und der User es ohne SQL-Eingriff
+ * übernehmen will.
+ */
+export async function resetDashboardLayout(): Promise<{ success: true } | { error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("profiles")
+    .update({ dashboard_widgets: null, updated_at: new Date().toISOString() })
+    .eq("id", user.id);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: user.id,
+    action: "dashboard.layout_reset",
+    entityType: "profile",
+    entityId: user.id,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/mein-konto");
+  return { success: true };
+}
