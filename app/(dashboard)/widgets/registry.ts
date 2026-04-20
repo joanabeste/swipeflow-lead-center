@@ -35,6 +35,10 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 40, defaultWidth: "full" },
   { key: "recent-leads", label: "Zuletzt bearbeitete Leads", description: "Die acht aktuellsten Leads", defaultVisible: true, defaultOrder: 50, defaultWidth: "half" },
   { key: "recent-activity", label: "Letzte Aktivitäten", description: "Audit-Log der letzten Schritte", defaultVisible: true, defaultOrder: 60, defaultWidth: "half" },
+  { key: "follow-up-reminder", label: "Überfällige Follow-Ups", description: "Todo-Leads ohne Kontakt seit > 7 Tagen", defaultVisible: false, defaultOrder: 26, defaultWidth: "half" },
+  { key: "team-leaderboard", label: "Team-Leaderboard heute", description: "Anrufe pro Nutzer als Scoreboard", defaultVisible: false, defaultOrder: 33, defaultWidth: "half" },
+  { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
+  { key: "email-stats-7d", label: "E-Mail-Performance (7 Tage)", description: "Versand-Stats seit SMTP aktiv ist", defaultVisible: false, defaultOrder: 36, defaultWidth: "full" },
 ];
 
 const WIDGET_KEYS = new Set(WIDGET_REGISTRY.map((w) => w.key));

@@ -8,6 +8,7 @@ import {
   PipelineWidget, StatsWidget, QuickActionsWidget,
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
   MyDayWidget, CallStats7dWidget, EnrichmentTrend7dWidget, CrmStatusDistributionWidget,
+  FollowUpReminderWidget, TeamLeaderboardWidget, DealSummaryWidget, EmailStats7dWidget,
 } from "./widgets/widgets";
 
 export default async function DashboardPage() {
@@ -68,6 +69,10 @@ function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboard
     case "todays-calls": return <TodaysCallsWidget data={data} />;
     case "call-stats-7d": return <CallStats7dWidget data={data} />;
     case "enrichment-trend-7d": return <EnrichmentTrend7dWidget data={data} />;
+    case "follow-up-reminder": return <FollowUpReminderWidget data={data} />;
+    case "team-leaderboard": return <TeamLeaderboardWidget data={data} />;
+    case "deal-summary": return <DealSummaryWidget data={data} />;
+    case "email-stats-7d": return <EmailStats7dWidget data={data} />;
     default: return null;
   }
 }

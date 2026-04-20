@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun } from "lucide-react";
+import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun, Clock, Trophy, Briefcase, Mail } from "lucide-react";
 import type { DashboardData } from "./data";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -456,6 +456,214 @@ export function CrmStatusDistributionWidget({ data }: { data: DashboardData }) {
             );
           })}
         </div>
+      )}
+    </Card>
+  );
+}
+
+// ─── Follow-Up-Reminder ──────────────────────────────────────────
+
+export function FollowUpReminderWidget({ data }: { data: DashboardData }) {
+  const items = data.followUpReminders;
+  return (
+    <Card className="p-0">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-[#2c2c2e]/50">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium">
+          <Clock className="h-3.5 w-3.5 text-amber-500" />
+          Überfällige Follow-Ups
+          <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            {items.length}
+          </span>
+        </h2>
+        <Link href="/crm?crm_status=todo" className="text-xs text-primary hover:underline">Alle</Link>
+      </div>
+      <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">
+        {items.length === 0 && (
+          <p className="px-5 py-6 text-center text-sm text-gray-400">Keine Follow-Ups fällig — alles aktuell.</p>
+        )}
+        {items.map((lead) => (
+          <Link
+            key={lead.id}
+            href={`/crm/${lead.id}`}
+            className="flex items-center justify-between px-5 py-3 transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium">{lead.company_name}</p>
+              <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                {lead.city ?? "—"}
+                {lead.phone && <span className="ml-2 text-gray-400">· {lead.phone}</span>}
+              </p>
+            </div>
+            <span className="ml-2 shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+              {lead.daysSince != null ? `${lead.daysSince} Tage` : "nie"}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Team-Leaderboard heute ──────────────────────────────────────
+
+export function TeamLeaderboardWidget({ data }: { data: DashboardData }) {
+  const rows = data.teamLeaderboard;
+  const maxTotal = Math.max(1, ...rows.map((r) => r.total));
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium">
+          <Trophy className="h-3.5 w-3.5 text-amber-500" />
+          Team — Anrufe heute
+        </h2>
+        <p className="text-xs text-gray-400">{rows.reduce((s, r) => s + r.total, 0)} gesamt</p>
+      </div>
+      <div className="mt-4 space-y-2.5">
+        {rows.length === 0 && (
+          <p className="py-4 text-center text-sm text-gray-400">Heute noch keine Anrufe protokolliert.</p>
+        )}
+        {rows.map((r, i) => {
+          const pct = (r.total / maxTotal) * 100;
+          const rate = r.total > 0 ? Math.round((r.answered / r.total) * 100) : 0;
+          const medals = ["🥇", "🥈", "🥉"];
+          const medal = i < 3 ? medals[i] : null;
+          return (
+            <div key={r.userId} className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {medal ? (
+                    <span className="text-sm leading-none">{medal}</span>
+                  ) : (
+                    <span className="w-4 text-right text-gray-400">{i + 1}.</span>
+                  )}
+                  <span className="truncate font-medium">{r.name}</span>
+                </span>
+                <span className="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">{r.total}</span>
+                  <span className="ml-2 text-gray-400">{rate}% angenommen</span>
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-[#2c2c2e]">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Deal-Summary ────────────────────────────────────────────────
+
+function formatEur(cents: number): string {
+  const eur = cents / 100;
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(eur);
+}
+
+export function DealSummaryWidget({ data }: { data: DashboardData }) {
+  const rows = data.dealSummary;
+  const totalAmount = data.dealTotals.amountCents;
+  const totalCount = data.dealTotals.count;
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium">
+          <Briefcase className="h-3.5 w-3.5 text-indigo-500" />
+          Offene Deals
+        </h2>
+        <Link href="/deals" className="text-xs text-primary hover:underline">Öffnen</Link>
+      </div>
+      <div className="mt-3 flex items-baseline gap-2">
+        <p className="text-2xl font-bold tabular-nums">{formatEur(totalAmount)}</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {totalCount} {totalCount === 1 ? "Deal" : "Deals"}
+        </p>
+      </div>
+      <div className="mt-4 space-y-1.5">
+        {rows.length === 0 && (
+          <p className="py-2 text-center text-sm text-gray-400">Noch keine offenen Deals.</p>
+        )}
+        {rows.map((s) => {
+          const pct = totalCount > 0 ? (s.count / totalCount) * 100 : 0;
+          return (
+            <div key={s.id} className="flex items-center gap-2">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: s.color }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="truncate">{s.label}</span>
+                  <span className="shrink-0 tabular-nums text-gray-500 dark:text-gray-400">
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{s.count}</span>
+                    <span className="ml-2 text-gray-400">{formatEur(s.amountCents)}</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-[#2c2c2e]">
+                  <div
+                    className="h-full transition-all"
+                    style={{ width: `${pct}%`, backgroundColor: s.color }}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─── E-Mail-Performance (7 Tage) ─────────────────────────────────
+
+export function EmailStats7dWidget({ data }: { data: DashboardData }) {
+  const maxDaily = Math.max(1, ...data.emailsByDay.map((d) => d.sent + d.failed));
+  const total = data.emailsSent7d + data.emailsFailed7d;
+  const rate = total > 0 ? Math.round((data.emailsSent7d / total) * 100) : 0;
+  return (
+    <Card>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <Mail className="h-3.5 w-3.5 text-blue-500" />
+            E-Mails (7 Tage)
+          </p>
+          <p className="mt-0.5 text-lg font-bold">
+            {total} gesamt
+            {total > 0 && <span className="ml-2 text-sm font-normal text-gray-500">· {rate}% erfolgreich</span>}
+          </p>
+        </div>
+        <div className="flex gap-3 text-xs">
+          <LegendDot color="bg-blue-500" label={`Gesendet ${data.emailsSent7d}`} />
+          <LegendDot color="bg-red-400" label={`Fehler ${data.emailsFailed7d}`} />
+        </div>
+      </div>
+      <div className="mt-5 flex h-24 items-end gap-1.5">
+        {data.emailsByDay.map((d) => {
+          const dayTotal = d.sent + d.failed;
+          const h = (dayTotal / maxDaily) * 100;
+          return (
+            <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-col justify-end" style={{ height: "5rem" }}>
+                <div className="flex w-full flex-col overflow-hidden rounded-t-md" style={{ height: `${h}%` }}>
+                  {d.sent > 0 && <div className="bg-blue-500" style={{ flexGrow: d.sent }} title={`Gesendet: ${d.sent}`} />}
+                  {d.failed > 0 && <div className="bg-red-400" style={{ flexGrow: d.failed }} title={`Fehler: ${d.failed}`} />}
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-400">{weekdayShort(d.date)}</p>
+            </div>
+          );
+        })}
+      </div>
+      {total === 0 && (
+        <p className="mt-4 text-center text-xs text-gray-400">
+          Noch keine E-Mails versendet — SMTP unter <Link href="/mein-konto" className="text-primary hover:underline">Mein Konto</Link> einrichten.
+        </p>
       )}
     </Card>
   );

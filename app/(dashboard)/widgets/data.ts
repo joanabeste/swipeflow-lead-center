@@ -55,10 +55,14 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     outdatedDesignCount = outdated ?? 0;
   }
 
+  const sevenDaysAgoIsoForFollowup = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+
   // Zusatz-Daten für neue Widgets (parallel, nur einmal)
   const [
     myCallsToday, myNotesToday, myCrmTodos,
     calls7d, enrichments7d, crmStatusDistRaw, customStatuses,
+    // Neue Widgets:
+    followupCandidates, teamCallsToday, openDealsRaw, dealStages, emails7d,
   ] = await Promise.all([
     db.from("lead_calls").select("*", { count: "exact", head: true })
       .eq("created_by", userId).gte("started_at", todayIso),
@@ -74,6 +78,22 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .eq("status", "qualified"),
     db.from("custom_lead_statuses").select("id, label, color, display_order")
       .eq("is_active", true).order("display_order", { ascending: true }),
+    // Follow-Up: qualifizierte Leads mit CRM-Status "todo", die länger als
+    // 7 Tage nicht angerufen wurden (oder noch nie). Wir holen einen größeren
+    // Pool und filtern clientseitig mit der Call-Historie.
+    db.from("leads").select("id, company_name, city, phone, updated_at")
+      .eq("status", "qualified").eq("crm_status_id", "todo")
+      .order("updated_at", { ascending: true }).limit(50),
+    // Team-Leaderboard heute: alle Calls heute mit Ersteller.
+    db.from("lead_calls").select("created_by, direction, status, started_at")
+      .gte("started_at", todayIso),
+    // Offene Deals gruppiert nach Stage (open kind), mit Amount.
+    db.from("deals").select("stage_id, amount_cents"),
+    db.from("deal_stages").select("id, label, color, kind, display_order")
+      .eq("is_active", true).order("display_order", { ascending: true }),
+    // E-Mails 7 Tage: sent/failed pro Tag.
+    db.from("email_messages").select("status, sent_at")
+      .gte("sent_at", sevenDaysIso),
   ]);
 
   // Namen für Call-Ersteller
@@ -134,6 +154,111 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     id: string; label: string; color: string; display_order: number;
   }>).map((s) => ({ id: s.id, label: s.label, color: s.color, count: crmDistCounts.get(s.id) ?? 0 }));
 
+  // Follow-Up-Reminder: aus den Kandidaten die aussortieren, die in den
+  // letzten 7 Tagen angerufen wurden. Dazu letzten Call pro Lead holen.
+  const followupLeadIds = ((followupCandidates.data ?? []) as Array<{ id: string }>).map((l) => l.id);
+  const followupLastCallByLead = new Map<string, string>();
+  if (followupLeadIds.length > 0) {
+    const { data: callsForFollowup } = await db
+      .from("lead_calls")
+      .select("lead_id, started_at")
+      .in("lead_id", followupLeadIds)
+      .order("started_at", { ascending: false });
+    for (const c of (callsForFollowup ?? []) as Array<{ lead_id: string; started_at: string }>) {
+      if (!followupLastCallByLead.has(c.lead_id)) {
+        followupLastCallByLead.set(c.lead_id, c.started_at);
+      }
+    }
+  }
+  const nowMs = Date.now();
+  const followUpReminders = ((followupCandidates.data ?? []) as Array<{
+    id: string; company_name: string; city: string | null;
+    phone: string | null; updated_at: string;
+  }>)
+    .map((l) => {
+      const lastCallAt = followupLastCallByLead.get(l.id) ?? null;
+      const daysSince = lastCallAt
+        ? Math.floor((nowMs - new Date(lastCallAt).getTime()) / (24 * 3600_000))
+        : null;
+      return { ...l, lastCallAt, daysSince };
+    })
+    .filter((l) => !l.lastCallAt || l.lastCallAt < sevenDaysAgoIsoForFollowup)
+    .slice(0, 8);
+
+  // Team-Leaderboard heute: Anrufe pro User.
+  const teamCallsRows = (teamCallsToday.data ?? []) as Array<{
+    created_by: string | null; direction: string; status: string; started_at: string;
+  }>;
+  const leaderboardAgg = new Map<string, { total: number; answered: number }>();
+  for (const c of teamCallsRows) {
+    if (!c.created_by) continue;
+    const cur = leaderboardAgg.get(c.created_by) ?? { total: 0, answered: 0 };
+    cur.total++;
+    if (c.status === "answered") cur.answered++;
+    leaderboardAgg.set(c.created_by, cur);
+  }
+  const leaderboardUserIds = Array.from(leaderboardAgg.keys());
+  const leaderboardNames = new Map<string, string>();
+  if (leaderboardUserIds.length > 0) {
+    const { data: lbProfiles } = await db
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", leaderboardUserIds);
+    for (const p of (lbProfiles ?? []) as Array<{ id: string; name: string | null; email: string | null }>) {
+      leaderboardNames.set(p.id, p.name ?? p.email ?? "Unbekannt");
+    }
+  }
+  const teamLeaderboard = leaderboardUserIds
+    .map((id) => ({
+      userId: id,
+      name: leaderboardNames.get(id) ?? "Unbekannt",
+      total: leaderboardAgg.get(id)!.total,
+      answered: leaderboardAgg.get(id)!.answered,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+
+  // Deal-Summary: nur open-stages zählen + Amount summieren.
+  const stagesRows = (dealStages.data ?? []) as Array<{
+    id: string; label: string; color: string; kind: string; display_order: number;
+  }>;
+  const openStages = stagesRows.filter((s) => s.kind === "open");
+  const dealsAggByStage = new Map<string, { count: number; amountCents: number }>();
+  for (const d of (openDealsRaw.data ?? []) as Array<{ stage_id: string; amount_cents: number }>) {
+    const cur = dealsAggByStage.get(d.stage_id) ?? { count: 0, amountCents: 0 };
+    cur.count++;
+    cur.amountCents += d.amount_cents ?? 0;
+    dealsAggByStage.set(d.stage_id, cur);
+  }
+  const dealSummary = openStages.map((s) => ({
+    id: s.id,
+    label: s.label,
+    color: s.color,
+    count: dealsAggByStage.get(s.id)?.count ?? 0,
+    amountCents: dealsAggByStage.get(s.id)?.amountCents ?? 0,
+  }));
+  const dealTotals = dealSummary.reduce(
+    (acc, s) => ({ count: acc.count + s.count, amountCents: acc.amountCents + s.amountCents }),
+    { count: 0, amountCents: 0 },
+  );
+
+  // E-Mail-Performance 7d: sent/failed pro Tag.
+  const emailBuckets: Record<string, { sent: number; failed: number }> = {};
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 3600_000);
+    d.setHours(0, 0, 0, 0);
+    emailBuckets[d.toISOString().slice(0, 10)] = { sent: 0, failed: 0 };
+  }
+  let emailsSent7d = 0;
+  let emailsFailed7d = 0;
+  for (const e of (emails7d.data ?? []) as Array<{ status: string; sent_at: string }>) {
+    const key = e.sent_at.slice(0, 10);
+    if (!emailBuckets[key]) continue;
+    if (e.status === "sent") { emailBuckets[key].sent++; emailsSent7d++; }
+    else if (e.status === "failed") { emailBuckets[key].failed++; emailsFailed7d++; }
+  }
+  const emailsByDay = Object.entries(emailBuckets).map(([date, v]) => ({ date, ...v }));
+
   return {
     counts: {
       total: totals.count ?? 0,
@@ -171,6 +296,13 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     callsTotal7d,
     enrichmentsByDay,
     crmStatusDistribution,
+    followUpReminders,
+    teamLeaderboard,
+    dealSummary,
+    dealTotals,
+    emailsByDay,
+    emailsSent7d,
+    emailsFailed7d,
     userId,
     serviceMode,
   };
