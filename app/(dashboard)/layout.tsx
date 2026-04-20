@@ -9,6 +9,7 @@ import { SwipeflowLogo } from "./swipeflow-logo";
 import { ToastProvider } from "./toast-provider";
 import { ServiceModeProvider } from "@/lib/service-mode";
 import { ServiceModeSwitch } from "./service-mode-switch";
+import { ActiveEnrichmentBadge } from "./active-enrichment-badge";
 import type { ServiceMode } from "@/lib/types";
 
 export default async function DashboardLayout({
@@ -69,9 +70,12 @@ export default async function DashboardLayout({
       {/* min-h-0 + min-w-0: ohne das bläht langer Content das flex-Child über
           100vh auf, body scrollt selbst und die Sidebar wandert aus dem Viewport. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
+        <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
           <ServiceModeSwitch />
-          <GlobalSearch />
+          <div className="flex items-center gap-3">
+            <ActiveEnrichmentBadge />
+            <GlobalSearch />
+          </div>
         </header>
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
       </div>
