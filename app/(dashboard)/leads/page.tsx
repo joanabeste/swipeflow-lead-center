@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus } from "@/lib/types";
 import { LeadTableWrapper } from "./lead-table-wrapper";
@@ -15,6 +16,7 @@ export default async function LeadsPage({ searchParams }: Props) {
   const offset = (page - 1) * PAGE_SIZE;
   const sort = params.sort ?? "updated_at";
   const order = (params.order ?? "desc") as "asc" | "desc";
+  const includeCrm = params.include_crm === "1";
 
   const supabase = await createClient();
 
@@ -42,6 +44,15 @@ export default async function LeadsPage({ searchParams }: Props) {
     query = query.eq("status", params.status as LeadStatus);
   }
 
+  // Standardmäßig keine CRM-Leads zeigen (die sind im CRM-Bereich zuhause).
+  // Kriterium "im CRM": crm_status_id gesetzt ODER status in (qualified, exported).
+  // Override via URL-Param: ?include_crm=1
+  if (!includeCrm) {
+    query = query
+      .is("crm_status_id", null)
+      .not("status", "in", '("qualified","exported")');
+  }
+
   // Spalten-Filter anwenden
   const columnFilters: Record<string, string> = {};
   for (const [key, value] of Object.entries(params)) {
@@ -60,12 +71,33 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   const enrichmentDefaults = await getAllEnrichmentDefaults();
 
+  // Toggle-Link baut URL mit gedrehtem include_crm-Param.
+  const toggleParams = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v && k !== "include_crm" && k !== "page") toggleParams.set(k, v);
+  }
+  if (!includeCrm) toggleParams.set("include_crm", "1");
+  const toggleHref = `/leads${toggleParams.toString() ? `?${toggleParams.toString()}` : ""}`;
+
   return (
     <div>
-      <h1 className="text-2xl font-bold tracking-tight">Leads</h1>
-      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-        {count ?? 0} Leads insgesamt
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {includeCrm ? "Alle Leads" : "Neue Leads"}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {count ?? 0} Leads
+            {!includeCrm && " — im CRM liegende sind ausgeblendet"}
+          </p>
+        </div>
+        <Link
+          href={toggleHref}
+          className="text-xs font-medium text-primary hover:underline"
+        >
+          {includeCrm ? "Nur neue Leads zeigen" : "Auch CRM-Leads zeigen"}
+        </Link>
+      </div>
 
       <LeadTableWrapper
         leads={(leads as Lead[]) ?? []}

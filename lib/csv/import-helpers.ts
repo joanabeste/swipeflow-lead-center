@@ -68,12 +68,15 @@ export async function loadImportContext(
 export interface LeadIndex {
   byDomain: Map<string, string>;       // normalisierte Domain → leadId
   byName: { id: string; name: string }[]; // Liste für Fuzzy-Match
+  crmStatusById: Map<string, { status: string | null; crmStatusId: string | null }>;
 }
 
 export interface ExistingLeadRow {
   id: string;
   company_name: string;
   domain: string | null;
+  status?: string | null;
+  crm_status_id?: string | null;
 }
 
 /**
@@ -84,14 +87,30 @@ export interface ExistingLeadRow {
 export function buildLeadIndex(leads: ExistingLeadRow[]): LeadIndex {
   const byDomain = new Map<string, string>();
   const byName: { id: string; name: string }[] = [];
+  const crmStatusById = new Map<string, { status: string | null; crmStatusId: string | null }>();
   for (const l of leads) {
     if (l.domain) {
       const norm = normalizeDomain(l.domain);
       if (norm && !byDomain.has(norm)) byDomain.set(norm, l.id);
     }
     byName.push({ id: l.id, name: l.company_name });
+    crmStatusById.set(l.id, {
+      status: l.status ?? null,
+      crmStatusId: l.crm_status_id ?? null,
+    });
   }
-  return { byDomain, byName };
+  return { byDomain, byName, crmStatusById };
+}
+
+/**
+ * Prüft, ob ein bekannter Lead bereits im CRM zuhause ist.
+ * Kriterium: crm_status_id gesetzt ODER status ∈ {qualified, exported}.
+ */
+export function isLeadInCrm(index: LeadIndex, leadId: string): boolean {
+  const info = index.crmStatusById.get(leadId);
+  if (!info) return false;
+  if (info.crmStatusId != null) return true;
+  return info.status === "qualified" || info.status === "exported";
 }
 
 /**

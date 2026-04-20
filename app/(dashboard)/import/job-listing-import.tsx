@@ -22,6 +22,7 @@ export function JobListingImport() {
   const [result, setResult] = useState<{
     imported: number;
     updated: number;
+    alreadyInCrm: number;
     contacts: number;
     jobs: number;
     skipped: number;
@@ -184,7 +185,7 @@ export function JobListingImport() {
                 <Check className="h-4 w-4" />
                 Import abgeschlossen
               </div>
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
                 <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.imported}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Neue Leads</p>
@@ -192,6 +193,13 @@ export function JobListingImport() {
                 <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.updated}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Aktualisiert</p>
+                </div>
+                <div
+                  className="rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-center dark:border-indigo-900/40 dark:bg-indigo-900/20"
+                  title="Schon im CRM — Stammdaten unverändert, neue Kontakte/Stellen wurden angehängt"
+                >
+                  <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">{result.alreadyInCrm}</p>
+                  <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">Bereits im CRM</p>
                 </div>
                 <div className="rounded-lg border border-gray-200 p-3 text-center dark:border-[#2c2c2e]">
                   <p className="text-2xl font-bold">{result.contacts}</p>

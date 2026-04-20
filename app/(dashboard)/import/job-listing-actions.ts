@@ -14,6 +14,7 @@ import {
   loadImportContext,
   buildLeadIndex,
   findMatchingLead,
+  isLeadInCrm,
   createImportLog,
   finalizeImportLog,
   batchInsert,
@@ -102,6 +103,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   success: boolean;
   imported: number;
   updated: number;
+  alreadyInCrm: number;
   contacts: number;
   jobs: number;
   skipped: number;
@@ -110,7 +112,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: "Nicht authentifiziert." };
+  if (!user) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: "Nicht authentifiziert." };
 
   // CSV parsen
   const delimiter = detectDelimiter(fileContent);
@@ -118,7 +120,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
 
   // Limit-Check
   const sizeError = validateCsvSize(rows.length);
-  if (sizeError) return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: sizeError.error };
+  if (sizeError) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: sizeError.error };
 
   // Spalten-Mapping
   const colIndex: Record<string, number> = {};
@@ -129,7 +131,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   });
 
   if (colIndex.company_name === undefined) {
-    return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: "Spalte 'Kontakt' (Firmenname) nicht gefunden." };
+    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: "Spalte 'Kontakt' (Firmenname) nicht gefunden." };
   }
 
   // Zeilen parsen + sanitizen
@@ -167,18 +169,19 @@ export async function processJobListingImport(fileContent: string): Promise<{
       userId: user.id,
     });
   } catch (e) {
-    return { success: false, imported: 0, updated: 0, contacts: 0, jobs: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
   // Blacklist + Cancel-Rules + bestehende Leads — einmal laden
   const ctx = await loadImportContext(db);
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, domain");
+    .select("id, company_name, domain, status, crm_status_id");
   const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
   let updated = 0;
+  let alreadyInCrm = 0;
   let contactsCreated = 0;
   let jobsCreated = 0;
   let skipped = 0;
@@ -225,28 +228,38 @@ export async function processJobListingImport(fileContent: string): Promise<{
     const existingLeadId = findMatchingLead(leadIndex, domain, first.companyName);
 
     if (existingLeadId) {
-      // Update bestehender Lead — nur leere Felder ergänzen
-      const { data: existingLead } = await db.from("leads").select("*").eq("id", existingLeadId).single();
-      if (existingLead) {
-        const updates: Record<string, unknown> = {};
-        if (!existingLead.email && first.email) updates.email = first.email;
-        if (!existingLead.phone && first.phone) updates.phone = first.phone;
-        if (!existingLead.domain && domain) updates.domain = domain;
-        if (!existingLead.website && domain) updates.website = `https://${domain}`;
-        if (!existingLead.career_page_url && first.careerPage) updates.career_page_url = first.careerPage;
-        if (!existingLead.city && descData.city) updates.city = descData.city;
-        if (!existingLead.zip && descData.zip) updates.zip = descData.zip;
-        if (!existingLead.street && descData.street) updates.street = descData.street;
-        if (!existingLead.company_size && descData.companySize) updates.company_size = descData.companySize;
+      // Lead ist schon da. Wenn er bereits im CRM liegt: Stammdaten NICHT
+      // überschreiben (dort pflegt der Vertrieb manuell). Kontakte + Stellen
+      // aus der neuen CSV werden trotzdem angehängt, damit keine Info verloren
+      // geht — Dedup via Unique-Index bzw. Name/E-Mail-Check.
+      const inCrm = isLeadInCrm(leadIndex, existingLeadId);
 
-        if (Object.keys(updates).length > 0) {
-          updates.updated_at = new Date().toISOString();
-          await db.from("leads").update(updates).eq("id", existingLeadId);
-          updated++;
+      if (inCrm) {
+        alreadyInCrm++;
+      } else {
+        const { data: existingLead } = await db.from("leads").select("*").eq("id", existingLeadId).single();
+        if (existingLead) {
+          const updates: Record<string, unknown> = {};
+          if (!existingLead.email && first.email) updates.email = first.email;
+          if (!existingLead.phone && first.phone) updates.phone = first.phone;
+          if (!existingLead.domain && domain) updates.domain = domain;
+          if (!existingLead.website && domain) updates.website = `https://${domain}`;
+          if (!existingLead.career_page_url && first.careerPage) updates.career_page_url = first.careerPage;
+          if (!existingLead.city && descData.city) updates.city = descData.city;
+          if (!existingLead.zip && descData.zip) updates.zip = descData.zip;
+          if (!existingLead.street && descData.street) updates.street = descData.street;
+          if (!existingLead.company_size && descData.companySize) updates.company_size = descData.companySize;
+
+          if (Object.keys(updates).length > 0) {
+            updates.updated_at = new Date().toISOString();
+            await db.from("leads").update(updates).eq("id", existingLeadId);
+            updated++;
+          }
         }
       }
 
-      // Kontakte + Jobs für bestehenden Lead direkt einfügen (mit DB-Dedup).
+      // Kontakte + Jobs für bestehenden Lead direkt einfügen (mit DB-Dedup) —
+      // gilt für CRM- und Nicht-CRM-Leads gleichermaßen.
       const { contacts: addedContacts, jobs: addedJobs } = await upsertContactsAndJobs(
         db,
         existingLeadId,
@@ -354,14 +367,14 @@ export async function processJobListingImport(fileContent: string): Promise<{
     action: "import.job_listings",
     entityType: "import_log",
     entityId: importLog.id,
-    details: { total: listings.length, imported, updated, contacts: contactsCreated, jobs: jobsCreated, skipped },
+    details: { total: listings.length, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped },
   });
 
   revalidatePath("/leads");
   revalidatePath("/import");
   revalidatePath("/");
 
-  return { success: true, imported, updated, contacts: contactsCreated, jobs: jobsCreated, skipped };
+  return { success: true, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped };
 }
 
 // ─── Helpers ────────────────────────────────────────────────
