@@ -2,18 +2,20 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Briefcase, ExternalLink, Plus, X, Pencil, Trash2, Save } from "lucide-react";
+import { Briefcase, ExternalLink, Plus, X, Pencil, Trash2, Save, Mail } from "lucide-react";
 import type { LeadContact, LeadJobPosting } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { addContact, updateContact, deleteContact } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import { Card } from "./crm-shared";
+import { SendEmailDialog } from "./send-email-dialog";
 
 export function CrmContactsCard({
   leadId, contacts, jobs = [],
 }: { leadId: string; contacts: LeadContact[]; jobs?: LeadJobPosting[] }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [emailContact, setEmailContact] = useState<LeadContact | null>(null);
 
   const hrContacts = contacts.filter((c) => isHrContact(c.role));
   const otherContacts = contacts.filter((c) => !isHrContact(c.role));
@@ -63,23 +65,34 @@ export function CrmContactsCard({
                   leadId={leadId}
                   sourceJob={sourceJob}
                   onEdit={() => setEditingId(c.id)}
+                  onSendEmail={() => setEmailContact(c)}
                 />
               </li>
             );
           })}
         </ul>
       )}
+      {emailContact && emailContact.email && (
+        <SendEmailDialog
+          leadId={leadId}
+          contactId={emailContact.id}
+          contactName={emailContact.name}
+          toEmail={emailContact.email}
+          onClose={() => setEmailContact(null)}
+        />
+      )}
     </Card>
   );
 }
 
 function ContactRow({
-  contact, leadId, sourceJob, onEdit,
+  contact, leadId, sourceJob, onEdit, onSendEmail,
 }: {
   contact: LeadContact;
   leadId: string;
   sourceJob: LeadJobPosting | null;
   onEdit: () => void;
+  onSendEmail: () => void;
 }) {
   const router = useRouter();
   const { addToast } = useToastContext();
@@ -153,6 +166,14 @@ function ContactRow({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            onClick={onSendEmail}
+            disabled={!contact.email}
+            className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-blue-50 hover:text-blue-600 hover:opacity-100 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400 dark:hover:bg-blue-900/20"
+            title={contact.email ? "E-Mail senden" : "Keine E-Mail-Adresse hinterlegt"}
+          >
+            <Mail className="h-3.5 w-3.5" />
+          </button>
           <button
             onClick={onEdit}
             className="rounded p-1 text-gray-400 opacity-70 transition hover:bg-white hover:text-gray-700 hover:opacity-100 dark:hover:bg-[#2c2c2e] dark:hover:text-gray-200"

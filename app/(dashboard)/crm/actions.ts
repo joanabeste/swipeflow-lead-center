@@ -7,6 +7,8 @@ import { triggerCall, isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { dialWebexCall } from "@/lib/webex/calling";
 import { getWebexCredentials } from "@/lib/webex/auth";
 import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
+import { loadDecryptedSmtp } from "@/lib/email/user-credentials";
+import { sendEmail } from "@/lib/email/smtp";
 import type { CallDirection, CallStatus } from "@/lib/types";
 
 export type CallProvider = "phonemondo" | "webex";
@@ -516,4 +518,86 @@ export async function updateCallNotes(callId: string, leadId: string, notes: str
 
   revalidatePath(`/crm/${leadId}`);
   return { success: true };
+}
+
+// ─── E-Mail-Versand an Lead-Kontakt ──────────────────────────
+
+export async function sendLeadEmail(input: {
+  leadId: string;
+  contactId: string;
+  subject: string;
+  body: string;
+}): Promise<{ success: true; messageId: string } | { error: string }> {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  if (!subject) return { error: "Betreff fehlt." };
+  if (!body) return { error: "Nachricht fehlt." };
+
+  const smtp = await loadDecryptedSmtp(user.id);
+  if (!smtp) {
+    return {
+      error: "Keine SMTP-Zugangsdaten hinterlegt. Richte sie unter Einstellungen → E-Mail (SMTP) ein.",
+    };
+  }
+
+  const db = createServiceClient();
+  const { data: contact } = await db
+    .from("lead_contacts")
+    .select("id, lead_id, email, name")
+    .eq("id", input.contactId)
+    .maybeSingle();
+  if (!contact) return { error: "Kontakt nicht gefunden." };
+  if (!contact.email) return { error: "Kontakt hat keine E-Mail-Adresse." };
+  if ((contact.lead_id as string) !== input.leadId) {
+    return { error: "Kontakt gehört nicht zu diesem Lead." };
+  }
+
+  const toEmail = contact.email as string;
+  const result = await sendEmail(smtp, { to: toEmail, subject, body });
+
+  if (!result.ok) {
+    await db.from("email_messages").insert({
+      lead_id: input.leadId,
+      contact_id: input.contactId,
+      sent_by: user.id,
+      to_email: toEmail,
+      from_email: smtp.fromEmail,
+      subject,
+      body,
+      status: "failed",
+      error: result.error,
+    });
+    await logAudit({
+      userId: user.id,
+      action: "email.send_failed",
+      entityType: "lead",
+      entityId: input.leadId,
+      details: { to: toEmail, subject, error: result.error },
+    });
+    return { error: `Versand fehlgeschlagen: ${result.error}` };
+  }
+
+  await db.from("email_messages").insert({
+    lead_id: input.leadId,
+    contact_id: input.contactId,
+    sent_by: user.id,
+    to_email: toEmail,
+    from_email: smtp.fromEmail,
+    subject,
+    body,
+    status: "sent",
+  });
+  await logAudit({
+    userId: user.id,
+    action: "email.sent",
+    entityType: "lead",
+    entityId: input.leadId,
+    details: { to: toEmail, subject, message_id: result.messageId },
+  });
+
+  revalidatePath(`/crm/${input.leadId}`);
+  return { success: true, messageId: result.messageId };
 }
