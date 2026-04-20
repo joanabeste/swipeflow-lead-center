@@ -7,10 +7,7 @@ import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { analyzeJobDescription } from "@/lib/enrichment/job-description-analyzer";
 import { logAudit } from "@/lib/audit-log";
-import {
-  guessSalutationFromName,
-  normalizeSalutationString,
-} from "@/lib/contacts/salutation-from-name";
+import { guessSalutation } from "@/lib/contacts/salutation-from-name";
 import type { ContactSalutation } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import {
@@ -80,11 +77,13 @@ function dedupeContacts(
     const rawName = listing.contactName?.trim();
     if (!rawName) continue;
     // Anrede wird NICHT mehr in den Namen gemerged — sie landet in der eigenen
-    // Spalte `salutation`. Fallback: wenn die CSV keine "Anrede"-Spalte liefert,
-    // Vornamens-Heuristik nutzen.
-    const salutation =
-      normalizeSalutationString(listing.salutation) ??
-      guessSalutationFromName(rawName);
+    // Spalte `salutation`. Composite-Chain: CSV "Anrede" → Namens-Heuristik →
+    // E-Mail-Localpart-Fallback.
+    const salutation = guessSalutation({
+      rawSalutation: listing.salutation,
+      name: rawName,
+      email: listing.email,
+    });
     const key = (listing.email ?? rawName).toLowerCase().trim();
     if (!key || seen.has(key)) continue;
     seen.set(key, {
@@ -102,7 +101,10 @@ function dedupeContacts(
       name: descFallback.contactName,
       email: descFallback.contactEmail,
       phone: descFallback.contactPhone,
-      salutation: guessSalutationFromName(descFallback.contactName),
+      salutation: guessSalutation({
+        name: descFallback.contactName,
+        email: descFallback.contactEmail,
+      }),
       source_url: listings[0]?.jobUrl ?? null,
     });
   }

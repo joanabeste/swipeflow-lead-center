@@ -7,7 +7,7 @@ import { analyzeWebsite } from "./website-analyzer";
 import { getWebdevScoringConfig } from "./webdev-scoring";
 import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import { guessSalutationFromName } from "@/lib/contacts/salutation-from-name";
+import { guessSalutation } from "@/lib/contacts/salutation-from-name";
 import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
@@ -161,7 +161,7 @@ export async function enrichLead(
           role: c.role,
           email: c.email,
           phone: c.phone,
-          salutation: c.salutation ?? guessSalutationFromName(c.name),
+          salutation: c.salutation ?? guessSalutation({ name: c.name, email: c.email }),
           source_url: c.source_url,
         })),
       );

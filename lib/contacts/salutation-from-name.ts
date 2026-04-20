@@ -1,5 +1,5 @@
 /**
- * Heuristische Anrede-Erkennung aus Vornamen.
+ * Heuristische Anrede-Erkennung aus Vornamen & E-Mail.
  *
  * Bewusst konservativ: mehrdeutige Namen (Andrea, Kim, Nikola, Conny, Toni,
  * Sascha, Dominique) sind NICHT in der Liste → Rückgabe `null`. Besser null
@@ -7,13 +7,20 @@
  *
  * Quelle: häufigste deutsche Vornamen (Statistisches Bundesamt / Destatis +
  * verbreitete internationale Vornamen in deutschen Firmen).
+ *
+ * Schichten von `guessSalutationFromName` (jede läuft nur, wenn die vorherige
+ * `null` geliefert hat — Monotonie garantiert):
+ *   A. Prefix-Anrede: erstes Wort ist "Herr"/"Frau"/"Hr."/"Mr."/"Mrs." → direkt.
+ *   B. Komma-Swap: "Nachname, Vorname" — Teil nach Komma als Vorname nutzen.
+ *   C. Klassischer Lookup auf erstem Nicht-Prefix-Token.
+ *   D. Diakritika-Fallback: ohne Umlaute/Akzente nochmal lookupen.
  */
 
 // Männliche Vornamen (Kleinbuchstaben, für Lookup).
 const MALE_NAMES = new Set<string>([
   // Klassiker & häufige deutsche Vornamen
   "alexander", "andreas", "anton", "arne", "arno", "arthur", "axel",
-  "ben", "benedikt", "benjamin", "bernd", "bernhard", "bjoern", "björn", "boris", "bruno", "burkhard",
+  "ben", "benedikt", "benjamin", "bernd", "bernhard", "bjoern", "björn", "bjorn", "boris", "bruno", "burkhard",
   "carl", "carsten", "chris", "christian", "christoph", "christopher", "claus", "clemens",
   "daniel", "dave", "david", "detlef", "dieter", "dietmar", "dirk", "dominik", "dustin",
   "eberhard", "eduard", "egon", "elias", "emanuel", "emil", "erhard", "eric", "erich", "erik", "ernst", "erwin", "eugen",
@@ -85,37 +92,218 @@ const FEMALE_NAMES = new Set<string>([
 const NAME_PREFIXES = new Set<string>([
   "dr", "dr.", "prof", "prof.", "dipl", "dipl.", "dipl.-ing", "dipl.-ing.",
   "mag", "mag.", "ing", "ing.", "herr", "frau", "hr", "hr.", "fr", "fr.",
-  "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "mister", "miss",
+  "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "mister", "miss", "med", "med.",
   "von", "van", "de", "di", "del", "della", "zu", "zur", "vom", "der",
 ]);
 
-function extractFirstName(fullName: string): string | null {
-  const tokens = fullName
-    .trim()
+// Prefix-Wörter, die allein schon die Anrede festlegen (Layer A).
+const PREFIX_HERR = new Set(["herr", "herrn", "hr", "mr"]);
+const PREFIX_FRAU = new Set(["frau", "fr", "mrs", "ms"]);
+
+// Rollen-Mailboxen (Layer E in guessSalutationFromEmailLocalpart).
+const EMAIL_ROLE_KEYWORDS = new Set([
+  "info", "kontakt", "contact", "office", "hr", "recruiting", "jobs",
+  "bewerbung", "career", "careers", "sales", "support", "admin", "service",
+  "team", "noreply", "no-reply", "hello", "hallo", "mail", "post", "buero",
+]);
+
+function stripDiacritics(s: string): string {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+/** Liefert das erste Wort (lowercased, ohne trailing Punkte/Kommas). */
+function firstLoweredWord(fullName: string): string {
+  const w = fullName.trim().split(/\s+/)[0] ?? "";
+  return w.replace(/[,.]+$/g, "").toLowerCase();
+}
+
+/**
+ * Prüft, ob Anrede direkt aus einem Prefix ("Herr X", "Frau Y") ableitbar ist.
+ * Schicht A — vor jedem Lookup.
+ */
+function salutationFromPrefix(fullName: string): "herr" | "frau" | null {
+  const w = firstLoweredWord(fullName);
+  if (PREFIX_HERR.has(w)) return "herr";
+  if (PREFIX_FRAU.has(w)) return "frau";
+  return null;
+}
+
+/**
+ * Tokenisiert einen Namens-String. Bei Komma-Format ("Nachname, Vorname")
+ * wird der Teil NACH dem Komma vorgezogen; der Teil davor landet als
+ * Fallback ganz am Ende (nötig für `extractLastName`).
+ */
+function tokenize(fullName: string): { raw: string; lower: string }[] {
+  const trimmed = fullName.trim();
+  if (!trimmed) return [];
+  const commaIdx = trimmed.indexOf(",");
+  let ordered: string;
+  if (commaIdx >= 0) {
+    const before = trimmed.slice(0, commaIdx).trim();
+    const after = trimmed.slice(commaIdx + 1).trim();
+    ordered = after && before ? `${after} ${before}` : after || before;
+  } else {
+    ordered = trimmed;
+  }
+  return ordered
     .split(/\s+/)
-    .map((t) => t.replace(/[,.]+$/g, "").toLowerCase());
-  for (const token of tokens) {
-    if (!token) continue;
-    if (NAME_PREFIXES.has(token)) continue;
-    // Mehrteilige Vornamen (z. B. "Hans-Peter"): ersten Teil verwenden.
-    const base = token.split(/[-–]/)[0];
-    if (base && !NAME_PREFIXES.has(base)) return base;
-    if (token && !NAME_PREFIXES.has(token)) return token;
+    .map((t) => {
+      const cleaned = t.replace(/[,.]+$/g, "");
+      return { raw: cleaned, lower: cleaned.toLowerCase() };
+    })
+    .filter((t) => t.raw.length > 0);
+}
+
+function isPrefix(lower: string): boolean {
+  return NAME_PREFIXES.has(lower);
+}
+
+/**
+ * Gibt den ersten Vornamen zurück. Berücksichtigt akademische Titel, Adels-
+ * Prädikate, Komma-Formate ("Müller, Thomas") und Bindestrich-Namen
+ * ("Hans-Peter" → "Hans"). Default liefert lowercased (für Lookups).
+ * Mit `{ preserveCase: true }` in Original-Schreibweise — für Templates.
+ */
+export function extractFirstName(
+  fullName: string | null | undefined,
+  opts?: { preserveCase?: boolean },
+): string | null {
+  if (!fullName) return null;
+  const tokens = tokenize(fullName);
+  // Sonderfall: "Herr Özdemir" / "Frau Nguyen" — Anrede-Prefix + genau ein
+  // weiteres Token → dieses Token ist der Nachname, kein Vorname bekannt.
+  if (salutationFromPrefix(fullName)) {
+    const nonPrefix = tokens.filter((t) => !isPrefix(t.lower));
+    if (nonPrefix.length <= 1) return null;
+  }
+  for (const t of tokens) {
+    if (isPrefix(t.lower)) continue;
+    const baseRaw = t.raw.split(/[-–]/)[0];
+    const baseLower = t.lower.split(/[-–]/)[0];
+    if (!baseLower || isPrefix(baseLower)) continue;
+    return opts?.preserveCase ? baseRaw : baseLower;
   }
   return null;
 }
 
 /**
- * Rät die Anrede aus einem vollen Namen. Gibt `null` zurück, wenn der
- * Vorname nicht im Wörterbuch ist oder mehrdeutig wäre.
+ * Gibt den Nachnamen zurück — letztes Nicht-Prefix-Token. Bei Komma-Format
+ * ("Müller, Thomas") → das Teil VOR dem Komma. Bewahrt die Original-
+ * Schreibweise (für "Sehr geehrter Herr Müller").
+ */
+export function extractLastName(fullName: string | null | undefined): string | null {
+  if (!fullName) return null;
+  const trimmed = fullName.trim();
+  if (!trimmed) return null;
+
+  const commaIdx = trimmed.indexOf(",");
+  const source = commaIdx >= 0 ? trimmed.slice(0, commaIdx).trim() : trimmed;
+  if (!source) return null;
+
+  const tokens = source
+    .split(/\s+/)
+    .map((t) => ({ raw: t.replace(/[,.]+$/g, ""), lower: t.replace(/[,.]+$/g, "").toLowerCase() }))
+    .filter((t) => t.raw.length > 0);
+
+  const nonPrefix = tokens.filter((t) => !isPrefix(t.lower));
+
+  // Sonderfall: "Herr Özdemir" — ein Anrede-Prefix + genau ein weiteres Token
+  // → dieses Token ist explizit der Nachname.
+  if (commaIdx < 0 && salutationFromPrefix(trimmed) && nonPrefix.length === 1) {
+    return nonPrefix[0].raw;
+  }
+
+  // Sonst: im Nicht-Komma-Fall brauchen wir mindestens 2 Nicht-Prefix-Tokens,
+  // um Vorname/Nachname unterscheiden zu können.
+  if (commaIdx < 0 && nonPrefix.length < 2) return null;
+
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    if (!isPrefix(tokens[i].lower)) return tokens[i].raw;
+  }
+  return null;
+}
+
+/** Lookup mit Diakritika-Fallback (Schicht D). */
+function lookupName(lower: string): "herr" | "frau" | null {
+  if (!lower) return null;
+  if (MALE_NAMES.has(lower)) return "herr";
+  if (FEMALE_NAMES.has(lower)) return "frau";
+  const stripped = stripDiacritics(lower);
+  if (stripped !== lower) {
+    if (MALE_NAMES.has(stripped)) return "herr";
+    if (FEMALE_NAMES.has(stripped)) return "frau";
+  }
+  return null;
+}
+
+/**
+ * Rät die Anrede aus einem vollen Namen. Gibt `null` zurück, wenn weder
+ * Prefix noch Vornamen-Lookup etwas liefern.
  */
 export function guessSalutationFromName(fullName: string | null | undefined): "herr" | "frau" | null {
   if (!fullName) return null;
-  const firstName = extractFirstName(fullName);
-  if (!firstName) return null;
-  if (MALE_NAMES.has(firstName)) return "herr";
-  if (FEMALE_NAMES.has(firstName)) return "frau";
+
+  // Schicht A: "Herr Özdemir", "Frau Nguyen", "Hr. Schmidt" — Prefix gewinnt.
+  const prefixHit = salutationFromPrefix(fullName);
+  if (prefixHit) return prefixHit;
+
+  // Schichten B+C+D: tokenize (mit Komma-Swap) + Lookup pro Token, Bindestrich-Basis.
+  const tokens = tokenize(fullName);
+  for (const t of tokens) {
+    if (isPrefix(t.lower)) continue;
+    const base = t.lower.split(/[-–]/)[0];
+    const hit = lookupName(base) ?? lookupName(t.lower);
+    if (hit) return hit;
+    // Stoppen nach dem ersten Nicht-Prefix-Token: Wir wollen nicht durch alle
+    // Tokens iterieren, sonst könnten mehrdeutige Konstellationen wie
+    // "Andrea Thomas" (Vorname mehrdeutig, Nachname = männlicher Vorname)
+    // zu Fehlklassifikationen führen. Die Komma-Swap-Logik in `tokenize`
+    // erledigt den Surname-First-Fall bereits explizit.
+    return null;
+  }
   return null;
+}
+
+/**
+ * Erkennt die Anrede aus einem E-Mail-Localpart (Schicht E, Fallback wenn
+ * Namensfeld nichts liefert). Beispiel: "thomas.mueller@firma.de" → "herr".
+ * Guard: Rollen-Postfächer (info@, hr@, …) geben `null` zurück.
+ */
+export function guessSalutationFromEmailLocalpart(
+  email: string | null | undefined,
+): "herr" | "frau" | null {
+  if (!email) return null;
+  const atIdx = email.indexOf("@");
+  const local = (atIdx > 0 ? email.slice(0, atIdx) : email).toLowerCase().trim();
+  if (!local) return null;
+
+  const parts = local.split(/[._+\-0-9]+/).filter((p) => p.length >= 2);
+  if (parts.length === 0) return null;
+
+  // Rollen-Guard: wenn einer der Parts ein Rollen-Keyword ist → abbrechen.
+  if (parts.some((p) => EMAIL_ROLE_KEYWORDS.has(p))) return null;
+
+  for (const p of parts) {
+    const hit = lookupName(p);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Composite-Entrypoint: versucht in Reihenfolge rawSalutation → Name → E-Mail.
+ * Alle Quellen sind optional; gibt `null` zurück, wenn nichts greift.
+ */
+export function guessSalutation(input: {
+  name?: string | null;
+  email?: string | null;
+  rawSalutation?: string | null;
+}): "herr" | "frau" | null {
+  return (
+    normalizeSalutationString(input.rawSalutation) ??
+    guessSalutationFromName(input.name) ??
+    guessSalutationFromEmailLocalpart(input.email)
+  );
 }
 
 /**

@@ -5,6 +5,8 @@
  * Für DB-CRUD siehe `lib/email/templates-server.ts`.
  */
 
+import { extractFirstName, extractLastName } from "@/lib/contacts/salutation-from-name";
+
 export interface EmailTemplate {
   id: string;
   userId: string;
@@ -56,9 +58,11 @@ export function buildBuiltInContext(input: {
   senderName: string | null;
 }): Record<BuiltInVariable, string> {
   const fullName = (input.contactName ?? "").trim();
-  const tokens = fullName.split(/\s+/).filter(Boolean);
-  const firstName = tokens[0] ?? "";
-  const lastName = tokens.length > 1 ? tokens[tokens.length - 1] : "";
+  // Akademische Titel, Adelsprädikate, Komma-Formate sauber abfangen — nicht
+  // mehr naiv an Whitespace splitten (sonst wird aus "Dr. Thomas Müller" der
+  // Vorname "Dr.").
+  const firstName = extractFirstName(fullName, { preserveCase: true }) ?? "";
+  const lastName = extractLastName(fullName) ?? "";
   const salutationShort =
     input.contactSalutation === "herr" ? "Herr" :
     input.contactSalutation === "frau" ? "Frau" : "";
