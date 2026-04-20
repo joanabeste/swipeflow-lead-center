@@ -144,6 +144,7 @@ function TemplateEditorModal({
   const context = buildBuiltInContext({
     contactName: "Anna Beispiel",
     contactRole: "HR-Managerin",
+    contactSalutation: "frau",
     companyName: "Beispiel GmbH",
     senderName: "Du",
   });

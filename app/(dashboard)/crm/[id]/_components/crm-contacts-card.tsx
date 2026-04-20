@@ -3,12 +3,18 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Briefcase, ExternalLink, Plus, X, Pencil, Trash2, Save, Mail } from "lucide-react";
-import type { LeadContact, LeadJobPosting } from "@/lib/types";
+import type { ContactSalutation, LeadContact, LeadJobPosting } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
 import { addContact, updateContact, deleteContact } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import { Card } from "./crm-shared";
 import { SendEmailDialog } from "./send-email-dialog";
+
+function salutationPrefix(s: ContactSalutation | null): string {
+  if (s === "herr") return "Hr. ";
+  if (s === "frau") return "Fr. ";
+  return "";
+}
 
 export function CrmContactsCard({
   leadId, contacts, jobs = [], companyName, senderName = null,
@@ -84,6 +90,7 @@ export function CrmContactsCard({
           contactId={emailContact.id}
           contactName={emailContact.name}
           contactRole={emailContact.role ?? null}
+          contactSalutation={emailContact.salutation ?? null}
           companyName={companyName}
           toEmail={emailContact.email}
           senderName={senderName}
@@ -131,7 +138,10 @@ function ContactRow({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-medium">{contact.name}</p>
+            <p className="truncate text-sm font-medium">
+              <span className="text-gray-500">{salutationPrefix(contact.salutation)}</span>
+              {contact.name}
+            </p>
             {isHr && (
               <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                 HR
@@ -213,14 +223,15 @@ function ContactForm({
   const [role, setRole] = useState(contact?.role ?? "");
   const [email, setEmail] = useState(contact?.email ?? "");
   const [phone, setPhone] = useState(contact?.phone ?? "");
+  const [salutation, setSalutation] = useState<ContactSalutation | null>(contact?.salutation ?? null);
   const [pending, startTransition] = useTransition();
 
   function submit() {
     if (!name.trim()) return;
     startTransition(async () => {
       const res = contact
-        ? await updateContact(contact.id, leadId, { name, role, email, phone })
-        : await addContact({ leadId, name, role, email, phone });
+        ? await updateContact(contact.id, leadId, { name, role, email, phone, salutation })
+        : await addContact({ leadId, name, role, email, phone, salutation });
       if (res.error) addToast(res.error, "error");
       else {
         addToast(contact ? "Kontakt aktualisiert" : "Kontakt angelegt", "success");
@@ -233,6 +244,30 @@ function ContactForm({
   return (
     <div className="rounded-md border border-primary/40 bg-primary/5 p-2 dark:bg-primary/10">
       <div className="space-y-1.5">
+        {/* Anrede-Pill: kompakt, inline, ohne separates Label. */}
+        <div className="inline-flex rounded-md border border-gray-200 bg-white p-0.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]">
+          {([
+            { v: "herr", label: "Herr" },
+            { v: "frau", label: "Frau" },
+            { v: null, label: "—" },
+          ] as const).map((opt) => {
+            const active = salutation === opt.v;
+            return (
+              <button
+                key={String(opt.v)}
+                type="button"
+                onClick={() => setSalutation(opt.v)}
+                className={`rounded px-2 py-0.5 transition ${
+                  active
+                    ? "bg-primary/15 font-medium text-primary"
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}

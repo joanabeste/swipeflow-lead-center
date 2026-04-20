@@ -410,10 +410,12 @@ export async function addContact(input: {
   role?: string | null;
   email?: string | null;
   phone?: string | null;
+  salutation?: "herr" | "frau" | null;
 }) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   if (!input.name.trim()) return { error: "Name fehlt." };
+  const { guessSalutationFromName } = await import("@/lib/contacts/salutation-from-name");
   const db = createServiceClient();
   const { error } = await db.from("lead_contacts").insert({
     lead_id: input.leadId,
@@ -421,6 +423,9 @@ export async function addContact(input: {
     role: input.role?.trim() || null,
     email: input.email?.trim() || null,
     phone: input.phone?.trim() || null,
+    // Wenn nicht explizit gesetzt, Heuristik aus dem Vornamen probieren —
+    // so hat der User im Normalfall nichts zu tun.
+    salutation: input.salutation ?? guessSalutationFromName(input.name),
     source_url: null,
   });
   if (error) {
@@ -436,18 +441,45 @@ export async function updateContact(contactId: string, leadId: string, input: {
   role?: string | null;
   email?: string | null;
   phone?: string | null;
+  salutation?: "herr" | "frau" | null;
 }) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   const db = createServiceClient();
-  const { error } = await db.from("lead_contacts").update({
+  const patch: Record<string, unknown> = {
     name: input.name.trim(),
     role: input.role?.trim() || null,
     email: input.email?.trim() || null,
     phone: input.phone?.trim() || null,
-  }).eq("id", contactId);
+  };
+  // salutation nur überschreiben, wenn das Feld übergeben wurde (auch null
+  // ist gültig = "auf unbekannt zurücksetzen").
+  if (input.salutation !== undefined) patch.salutation = input.salutation;
+  const { error } = await db.from("lead_contacts").update(patch).eq("id", contactId);
   if (error) return { error: error.message };
   revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
+/**
+ * Nur Anrede eines Kontakts setzen — wird aus dem Send-Email-Dialog aufgerufen,
+ * wenn der User die fehlende Anrede schnell nachträgt.
+ */
+export async function updateContactSalutation(
+  contactId: string,
+  salutation: "herr" | "frau" | null,
+) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("lead_contacts")
+    .update({ salutation })
+    .eq("id", contactId)
+    .select("lead_id")
+    .single();
+  if (error) return { error: error.message };
+  if (data?.lead_id) revalidatePath(`/crm/${data.lead_id}`);
   return { success: true };
 }
 
@@ -550,7 +582,7 @@ export async function sendLeadEmail(input: {
   const smtp = await loadDecryptedSmtp(user.id);
   if (!smtp) {
     return {
-      error: "Keine SMTP-Zugangsdaten hinterlegt. Richte sie unter Einstellungen → E-Mail (SMTP) ein.",
+      error: "Keine SMTP-Zugangsdaten hinterlegt. Richte sie unter Mein Konto → E-Mail-Versand (SMTP) ein.",
     };
   }
 

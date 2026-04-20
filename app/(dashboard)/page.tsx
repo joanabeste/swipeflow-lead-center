@@ -2,8 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ServiceMode } from "@/lib/types";
 import { Greeting } from "./greeting";
 import { loadDashboardData } from "./widgets/data";
-import { resolveUserWidgets } from "./widgets/registry";
-import { DashboardEditor } from "./widgets/dashboard-editor";
+import { resolveUserLayout } from "./widgets/registry";
 import { SortableDashboard } from "./widgets/sortable-dashboard";
 import {
   PipelineWidget, StatsWidget, QuickActionsWidget,
@@ -24,43 +23,32 @@ export default async function DashboardPage() {
     .single();
   const serviceMode: ServiceMode = (profile?.service_mode as ServiceMode) ?? "recruiting";
   const userName = (profile?.name as string | null) ?? null;
-  const userWidgets = (profile?.dashboard_widgets as string[] | null) ?? null;
 
   const data = await loadDashboardData(user.id, serviceMode);
-  const widgets = resolveUserWidgets(userWidgets, serviceMode);
+  const layout = resolveUserLayout(profile?.dashboard_widgets ?? null, serviceMode);
 
   const displayName = (userName?.split(" ")[0] ?? user?.email?.split("@")[0] ?? "").trim();
 
-  // Zweispaltige Widgets (recent-leads / recent-activity / crm-queue / todays-calls)
-  // vs. volle Breite (pipeline / stats / quick-actions). Gruppen für Layout-Paare.
-  const fullWidthKeys = [
-    "pipeline", "stats", "quick-actions",
-    "call-stats-7d", "enrichment-trend-7d", "crm-status-distribution",
-  ];
-
   // Widgets auf dem Server rendern (Server Components mit DB-Zugriff) und
-  // als ReactNode-Map an die Client-Komponente übergeben, damit der Drag-
-  // and-Drop-Edit-Mode die gleichen Renderings umsortieren kann.
+  // als ReactNode-Map an die Client-Komponente übergeben, damit der
+  // Edit-Mode dieselben Renderings umsortieren kann.
   const widgetNodes: Record<string, React.ReactNode> = {};
-  for (const key of widgets) widgetNodes[key] = renderWidget(key, data);
+  for (const item of layout) widgetNodes[item.k] = renderWidget(item.k, data);
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Greeting displayName={displayName} />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {motivationText(data, serviceMode)}
-          </p>
-        </div>
-        <DashboardEditor initialOrder={widgets} serviceMode={serviceMode} />
+      <div>
+        <Greeting displayName={displayName} />
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {motivationText(data, serviceMode)}
+        </p>
       </div>
 
       <div className="mt-6">
         <SortableDashboard
-          initialOrder={widgets}
+          initialLayout={layout}
           widgetNodes={widgetNodes}
-          fullWidthKeys={fullWidthKeys}
+          serviceMode={serviceMode}
         />
       </div>
     </div>

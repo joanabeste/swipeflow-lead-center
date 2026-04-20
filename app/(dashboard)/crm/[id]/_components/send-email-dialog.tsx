@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { X, Send, AlertCircle, FileText } from "lucide-react";
-import { loadMyEmailTemplates, sendLeadEmail } from "../../actions";
+import { X, Send, AlertCircle, FileText, UserRound } from "lucide-react";
+import { loadMyEmailTemplates, sendLeadEmail, updateContactSalutation } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import {
   BUILT_IN_VARIABLES,
@@ -18,6 +18,7 @@ interface Props {
   contactId: string;
   contactName: string;
   contactRole: string | null;
+  contactSalutation: "herr" | "frau" | null;
   companyName: string;
   toEmail: string;
   senderName: string | null;
@@ -29,6 +30,7 @@ export function SendEmailDialog({
   contactId,
   contactName,
   contactRole,
+  contactSalutation,
   companyName,
   toEmail,
   senderName,
@@ -43,6 +45,10 @@ export function SendEmailDialog({
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [activeTemplateId, setActiveTemplateId] = useState<string>("");
   const [customVarValues, setCustomVarValues] = useState<Record<string, string>>({});
+  // Lokaler Salutation-State, damit das UI nach dem Quick-Fix sofort
+  // reagieren kann, ohne den Dialog zu schließen.
+  const [salutation, setSalutation] = useState<"herr" | "frau" | null>(contactSalutation);
+  const [salutationSaving, startSalutationTransition] = useTransition();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,9 +63,30 @@ export function SendEmailDialog({
   const builtInCtx = buildBuiltInContext({
     contactName,
     contactRole,
+    contactSalutation: salutation,
     companyName,
     senderName,
   });
+
+  // Warnen, wenn das Template eine Anrede-Variable nutzt, aber keine
+  // Anrede hinterlegt ist — dann käme sonst "Sehr geehrte Damen und Herren"
+  // heraus, obwohl der Kontakt eigentlich persönlich adressiert werden soll.
+  const usesSalutationVar =
+    (subject + "\n" + body).match(/\{\{\s*(anrede|contact_salutation)\s*\}\}/i) != null;
+  const needsSalutationPrompt = usesSalutationVar && salutation == null;
+
+  function handlePickSalutation(value: "herr" | "frau") {
+    setSalutation(value);
+    startSalutationTransition(async () => {
+      const res = await updateContactSalutation(contactId, value);
+      if (res.error) {
+        addToast(res.error, "error");
+        setSalutation(contactSalutation);
+      } else {
+        addToast("Anrede gespeichert.", "success");
+      }
+    });
+  }
 
   function applyTemplate(id: string) {
     setActiveTemplateId(id);
@@ -164,12 +191,42 @@ export function SendEmailDialog({
               </div>
               {missingSmtp && (
                 <Link
-                  href="/einstellungen/email"
+                  href="/mein-konto"
                   className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
                 >
                   SMTP-Zugangsdaten einrichten →
                 </Link>
               )}
+            </div>
+          )}
+
+          {needsSalutationPrompt && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/40 dark:bg-amber-900/20">
+              <div className="flex items-center gap-1.5 font-medium text-amber-800 dark:text-amber-200">
+                <UserRound className="h-4 w-4" />
+                Anrede für {contactName} unbekannt
+              </div>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                Ohne Festlegung wird <code className="rounded bg-white/60 px-1 dark:bg-black/20">Sehr geehrte Damen und Herren</code> verwendet.
+              </p>
+              <div className="mt-2 flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handlePickSalutation("herr")}
+                  disabled={salutationSaving}
+                  className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/40"
+                >
+                  Herr
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePickSalutation("frau")}
+                  disabled={salutationSaving}
+                  className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:bg-transparent dark:text-amber-100 dark:hover:bg-amber-900/40"
+                >
+                  Frau
+                </button>
+              </div>
             </div>
           )}
 

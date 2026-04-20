@@ -7,6 +7,7 @@ import { analyzeWebsite } from "./website-analyzer";
 import { getWebdevScoringConfig } from "./webdev-scoring";
 import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
+import { guessSalutationFromName } from "@/lib/contacts/salutation-from-name";
 import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
@@ -150,7 +151,8 @@ export async function enrichLead(
         .eq("source", "enrichment");
     }
 
-    // 4. Neue Kontakte einfügen
+    // 4. Neue Kontakte einfügen.
+    // Salutation: primär aus LLM-Extraktion, Fallback aus Namens-Heuristik.
     if (result.contacts.length > 0) {
       await db.from("lead_contacts").insert(
         result.contacts.map((c) => ({
@@ -159,6 +161,7 @@ export async function enrichLead(
           role: c.role,
           email: c.email,
           phone: c.phone,
+          salutation: c.salutation ?? guessSalutationFromName(c.name),
           source_url: c.source_url,
         })),
       );

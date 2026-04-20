@@ -20,6 +20,8 @@ export const BUILT_IN_VARIABLES = [
   "contact_name",
   "contact_first_name",
   "contact_role",
+  "contact_salutation",
+  "anrede",
   "company_name",
   "sender_name",
 ] as const;
@@ -49,15 +51,35 @@ export function renderTemplate(text: string, context: Record<string, string | un
 export function buildBuiltInContext(input: {
   contactName: string | null;
   contactRole: string | null;
+  contactSalutation: "herr" | "frau" | null;
   companyName: string;
   senderName: string | null;
 }): Record<BuiltInVariable, string> {
   const fullName = (input.contactName ?? "").trim();
-  const firstName = fullName.split(/\s+/)[0] ?? "";
+  const tokens = fullName.split(/\s+/).filter(Boolean);
+  const firstName = tokens[0] ?? "";
+  const lastName = tokens.length > 1 ? tokens[tokens.length - 1] : "";
+  const salutationShort =
+    input.contactSalutation === "herr" ? "Herr" :
+    input.contactSalutation === "frau" ? "Frau" : "";
+
+  // Smarte Anrede-Zeile: mit Geschlecht + Nachname → "Sehr geehrter Herr Müller",
+  // sonst neutral.
+  let anrede: string;
+  if (input.contactSalutation === "herr" && lastName) {
+    anrede = `Sehr geehrter Herr ${lastName}`;
+  } else if (input.contactSalutation === "frau" && lastName) {
+    anrede = `Sehr geehrte Frau ${lastName}`;
+  } else {
+    anrede = "Sehr geehrte Damen und Herren";
+  }
+
   return {
     contact_name: fullName,
     contact_first_name: firstName,
     contact_role: input.contactRole ?? "",
+    contact_salutation: salutationShort,
+    anrede,
     company_name: input.companyName,
     sender_name: (input.senderName ?? "").trim(),
   };

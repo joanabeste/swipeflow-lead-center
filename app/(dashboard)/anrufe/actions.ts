@@ -23,6 +23,7 @@ export interface QueueContact {
   role: string | null;
   phone: string | null;
   email: string | null;
+  salutation: "herr" | "frau" | null;
   source_url: string | null;
   is_hr: boolean;
 }
@@ -31,11 +32,25 @@ export interface QueueLead {
   id: string;
   company_name: string;
   phone: string | null;
+  email: string | null;
+  street: string | null;
+  zip: string | null;
   city: string | null;
+  state: string | null;
+  country: string | null;
   domain: string | null;
   website: string | null;
   industry: string | null;
   career_page_url: string | null;
+  description: string | null;
+  company_size: string | null;
+  legal_form: string | null;
+  register_id: string | null;
+  has_ssl: boolean | null;
+  page_speed_score: number | null;
+  website_tech: string | null;
+  enriched_at: string | null;
+  enrichment_source: string | null;
   distance_km: number | null;
   job_postings_count: number;
   last_call_status: string | null;
@@ -48,6 +63,38 @@ export interface QueueLead {
   contacts: QueueContact[];
   /** HR-Kontakt mit Telefonnummer, sonst erster mit Telefon, sonst null. */
   default_contact_id: string | null;
+}
+
+export interface ActiveLeadNote {
+  id: string;
+  content: string;
+  created_at: string;
+  author_name: string | null;
+}
+
+export interface ActiveLeadCall {
+  id: string;
+  direction: "outbound" | "inbound";
+  status: string | null;
+  duration_seconds: number | null;
+  notes: string | null;
+  phone_number: string | null;
+  started_at: string;
+}
+
+export interface ActiveLeadJob {
+  id: string;
+  title: string;
+  location: string | null;
+  url: string | null;
+  posted_date: string | null;
+  source: string | null;
+}
+
+export interface ActiveLeadDetails {
+  notes: ActiveLeadNote[];
+  calls: ActiveLeadCall[];
+  jobs: ActiveLeadJob[];
 }
 
 export interface CustomStatusOption {
@@ -125,7 +172,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
   const { data: leads } = await db
     .from("leads")
     .select(
-      "id, company_name, phone, city, domain, website, industry, career_page_url, latitude, longitude, crm_status_id, updated_at",
+      "id, company_name, phone, email, street, zip, city, state, country, domain, website, industry, career_page_url, description, company_size, legal_form, register_id, has_ssl, page_speed_score, website_tech, enriched_at, enrichment_source, latitude, longitude, crm_status_id, updated_at",
     )
     .in("crm_status_id", statusIds)
     .not("phone", "is", null)
@@ -151,7 +198,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
       .gte("started_at", oneHourAgo),
     db
       .from("lead_contacts")
-      .select("id, lead_id, name, role, phone, email, source_url, created_at")
+      .select("id, lead_id, name, role, phone, email, salutation, source_url, created_at")
       .in("lead_id", leadIds)
       .order("created_at", { ascending: true }),
     db
@@ -182,6 +229,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
       role: (c.role as string | null) ?? null,
       phone: (c.phone as string | null) ?? null,
       email: (c.email as string | null) ?? null,
+      salutation: (c.salutation as "herr" | "frau" | null) ?? null,
       source_url: (c.source_url as string | null) ?? null,
       is_hr: isHrContact((c.role as string | null) ?? null),
     };
@@ -244,11 +292,25 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
         id: l.id as string,
         company_name: l.company_name as string,
         phone: (l.phone as string | null) ?? null,
+        email: (l.email as string | null) ?? null,
+        street: (l.street as string | null) ?? null,
+        zip: (l.zip as string | null) ?? null,
         city: (l.city as string | null) ?? null,
+        state: (l.state as string | null) ?? null,
+        country: (l.country as string | null) ?? null,
         domain: (l.domain as string | null) ?? null,
         website: (l.website as string | null) ?? null,
         industry: (l.industry as string | null) ?? null,
         career_page_url: (l.career_page_url as string | null) ?? null,
+        description: (l.description as string | null) ?? null,
+        company_size: (l.company_size as string | null) ?? null,
+        legal_form: (l.legal_form as string | null) ?? null,
+        register_id: (l.register_id as string | null) ?? null,
+        has_ssl: (l.has_ssl as boolean | null) ?? null,
+        page_speed_score: (l.page_speed_score as number | null) ?? null,
+        website_tech: (l.website_tech as string | null) ?? null,
+        enriched_at: (l.enriched_at as string | null) ?? null,
+        enrichment_source: (l.enrichment_source as string | null) ?? null,
         distance_km: distance,
         job_postings_count: jobCountByLead.get(l.id as string) ?? 0,
         last_call_status: lastCall?.status ?? null,
@@ -261,6 +323,77 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
         default_contact_id: defaultContact?.id ?? null,
       };
     });
+}
+
+/**
+ * Lädt Detail-Informationen zum aktuell aktiven Lead: letzte Notizen,
+ * Anrufhistorie und Job-Postings. Wird beim Wechsel des aktiven Leads
+ * in der Queue nachgeladen — separat, um die Queue-Liste leicht zu halten.
+ */
+export async function loadActiveLeadDetails(leadId: string): Promise<ActiveLeadDetails> {
+  const db = createServiceClient();
+
+  const [notesRes, callsRes, jobsRes] = await Promise.all([
+    db
+      .from("lead_notes")
+      .select("id, content, created_at, created_by")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: false })
+      .limit(3),
+    db
+      .from("lead_calls")
+      .select("id, direction, status, duration_seconds, notes, phone_number, started_at")
+      .eq("lead_id", leadId)
+      .order("started_at", { ascending: false })
+      .limit(5),
+    db
+      .from("lead_job_postings")
+      .select("id, title, location, url, posted_date, source")
+      .eq("lead_id", leadId)
+      .order("posted_date", { ascending: false, nullsFirst: false })
+      .limit(10),
+  ]);
+
+  // Author-Namen für Notizen auflösen.
+  const authorIds = Array.from(
+    new Set((notesRes.data ?? []).map((n) => n.created_by as string | null).filter((x): x is string => !!x)),
+  );
+  const authorMap = new Map<string, string>();
+  if (authorIds.length > 0) {
+    const { data: authors } = await db
+      .from("profiles")
+      .select("id, name")
+      .in("id", authorIds);
+    for (const a of authors ?? []) {
+      authorMap.set(a.id as string, (a.name as string | null) ?? "");
+    }
+  }
+
+  return {
+    notes: (notesRes.data ?? []).map((n) => ({
+      id: n.id as string,
+      content: n.content as string,
+      created_at: n.created_at as string,
+      author_name: n.created_by ? (authorMap.get(n.created_by as string) ?? null) : null,
+    })),
+    calls: (callsRes.data ?? []).map((c) => ({
+      id: c.id as string,
+      direction: (c.direction as "outbound" | "inbound") ?? "outbound",
+      status: (c.status as string | null) ?? null,
+      duration_seconds: (c.duration_seconds as number | null) ?? null,
+      notes: (c.notes as string | null) ?? null,
+      phone_number: (c.phone_number as string | null) ?? null,
+      started_at: c.started_at as string,
+    })),
+    jobs: (jobsRes.data ?? []).map((j) => ({
+      id: j.id as string,
+      title: j.title as string,
+      location: (j.location as string | null) ?? null,
+      url: (j.url as string | null) ?? null,
+      posted_date: (j.posted_date as string | null) ?? null,
+      source: (j.source as string | null) ?? null,
+    })),
+  };
 }
 
 /**

@@ -11,6 +11,7 @@ export interface EnrichmentResult {
     role: string | null;
     email: string | null;
     phone: string | null;
+    salutation: "herr" | "frau" | null;
     source_url: string;
   }[];
   career_page_url: string | null;
@@ -50,7 +51,7 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   // Schema
   const fields: string[] = [];
   if (config.contacts_management || config.contacts_hr || config.contacts_all) {
-    fields.push('"contacts":[{"name":"","role":"","email":"","phone":"","source_url":""}]');
+    fields.push('"contacts":[{"name":"","role":"","email":"","phone":"","salutation":"","source_url":""}]');
   }
   if (config.career_page) fields.push('"career_page_url":""');
   if (config.job_postings) fields.push('"job_postings":[{"title":"","url":"","location":"","posted_date":""}]');
@@ -122,6 +123,9 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
   }
   if (config.contacts_management || config.contacts_hr || config.contacts_all) {
     rules.push("Telefon: +49-Format. Impressum auf Tel/Fon/+49/(0 prüfen.");
+    rules.push(
+      "salutation: 'herr' wenn im Text eindeutig 'Herr X' steht oder aus Kontext/Pronomen ersichtlich; 'frau' bei 'Frau Y' oder weiblichem Pronomen; sonst null. NUR die Werte 'herr', 'frau' oder null — keine anderen Strings.",
+    );
     if (preData.emails.length > 0) {
       rules.push(`Bereits gefundene E-Mails: ${preData.emails.join(", ")}. Ordne sie den passenden Personen zu.`);
     }
@@ -307,8 +311,35 @@ export async function extractFromPages(
       console.log("[ENRICH_DEBUG] LLM job_postings:", JSON.stringify(raw.job_postings ?? []));
     }
 
+    // LLM-Output für salutation robust normalisieren: nur 'herr' | 'frau' | null
+    // durchlassen (akzeptiert auch "Herr"/"Frau"/"mr"/"mrs"/""/null).
+    const normSalutation = (v: unknown): "herr" | "frau" | null => {
+      if (typeof v !== "string") return null;
+      const s = v.trim().toLowerCase().replace(/\.+$/, "");
+      if (s === "herr" || s === "hr" || s === "mr") return "herr";
+      if (s === "frau" || s === "fr" || s === "mrs" || s === "ms") return "frau";
+      return null;
+    };
+
+    const rawContacts = Array.isArray(raw.contacts) ? raw.contacts : [];
+    type RawContact = {
+      name?: unknown;
+      role?: unknown;
+      email?: unknown;
+      phone?: unknown;
+      salutation?: unknown;
+      source_url?: unknown;
+    };
+
     return {
-      contacts: Array.isArray(raw.contacts) ? raw.contacts : [],
+      contacts: rawContacts.map((c: RawContact) => ({
+        name: typeof c.name === "string" ? c.name : "",
+        role: typeof c.role === "string" ? c.role : null,
+        email: typeof c.email === "string" ? c.email : null,
+        phone: typeof c.phone === "string" ? c.phone : null,
+        salutation: normSalutation(c.salutation),
+        source_url: typeof c.source_url === "string" ? c.source_url : "",
+      })),
       career_page_url: raw.career_page_url ?? null,
       job_postings: Array.isArray(raw.job_postings) ? raw.job_postings : [],
       additional_info: {

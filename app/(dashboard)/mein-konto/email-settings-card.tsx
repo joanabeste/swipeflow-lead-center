@@ -4,13 +4,9 @@ import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, AlertCircle, Zap, Trash2 } from "lucide-react";
 import type { UserSmtpRecord } from "@/lib/email/user-credentials";
-import {
-  saveEmailSettings,
-  testEmailSettings,
-  deleteEmailSettings,
-} from "../actions";
-import { useToastContext } from "../../toast-provider";
-import { Card, FormStatus, SubmitButton } from "./ui";
+import { saveEmailSettings, testEmailSettings, deleteEmailSettings } from "./actions";
+import { useToastContext } from "../toast-provider";
+import { FormStatus, SubmitButton } from "../einstellungen/_components/ui";
 
 export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
   const [state, formAction, pending] = useActionState(saveEmailSettings, undefined);
@@ -41,7 +37,7 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
   }
 
   return (
-    <Card>
+    <>
       {smtp?.verifiedAt && !smtp.lastTestError && (
         <div className="mb-4 inline-flex items-center gap-1.5 rounded-md bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700 dark:bg-green-900/20 dark:text-green-400">
           <Check className="h-3.5 w-3.5" />
@@ -67,10 +63,14 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
             <label htmlFor="host" className="block text-sm font-medium">SMTP-Host</label>
             <input
               id="host" name="host" type="text" required
-              defaultValue={smtp?.host ?? ""}
-              placeholder="z.B. smtp.gmail.com"
+              // Default: Mittwald Postausgang. Bestehende User-Werte haben Vorrang.
+              defaultValue={smtp?.host ?? "mail.agenturserver.de"}
+              placeholder="z.B. mail.agenturserver.de"
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Mittwald-Default: <span className="font-mono">mail.agenturserver.de</span>
+            </p>
           </div>
           <div>
             <label htmlFor="port" className="block text-sm font-medium">Port</label>
@@ -80,7 +80,7 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              587 (STARTTLS) oder 465 (Implicit TLS)
+              STARTTLS: 25 oder 587 · SSL: 465
             </p>
           </div>
           <div className="flex items-end pb-1">
@@ -173,6 +173,6 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
           )}
         </div>
       </form>
-    </Card>
+    </>
   );
 }

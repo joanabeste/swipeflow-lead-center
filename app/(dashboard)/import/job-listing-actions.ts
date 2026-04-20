@@ -7,6 +7,11 @@ import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { analyzeJobDescription } from "@/lib/enrichment/job-description-analyzer";
 import { logAudit } from "@/lib/audit-log";
+import {
+  guessSalutationFromName,
+  normalizeSalutationString,
+} from "@/lib/contacts/salutation-from-name";
+import type { ContactSalutation } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import {
   validateCsvSize,
@@ -53,6 +58,7 @@ interface ContactDraft {
   name: string;
   email: string | null;
   phone: string | null;
+  salutation: ContactSalutation | null;
   source_url: string | null;
 }
 
@@ -73,15 +79,19 @@ function dedupeContacts(
   for (const listing of listings) {
     const rawName = listing.contactName?.trim();
     if (!rawName) continue;
-    const fullName = listing.salutation?.trim()
-      ? `${listing.salutation.trim()} ${rawName}`.replace(/\s+/g, " ").trim()
-      : rawName;
-    const key = (listing.email ?? fullName).toLowerCase().trim();
+    // Anrede wird NICHT mehr in den Namen gemerged — sie landet in der eigenen
+    // Spalte `salutation`. Fallback: wenn die CSV keine "Anrede"-Spalte liefert,
+    // Vornamens-Heuristik nutzen.
+    const salutation =
+      normalizeSalutationString(listing.salutation) ??
+      guessSalutationFromName(rawName);
+    const key = (listing.email ?? rawName).toLowerCase().trim();
     if (!key || seen.has(key)) continue;
     seen.set(key, {
-      name: fullName,
+      name: rawName,
       email: listing.email,
       phone: listing.phone,
+      salutation,
       source_url: listing.jobUrl,
     });
   }
@@ -92,6 +102,7 @@ function dedupeContacts(
       name: descFallback.contactName,
       email: descFallback.contactEmail,
       phone: descFallback.contactPhone,
+      salutation: guessSalutationFromName(descFallback.contactName),
       source_url: listings[0]?.jobUrl ?? null,
     });
   }
@@ -332,6 +343,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
             role: "Ansprechpartner",
             email: contact.email,
             phone: contact.phone,
+            salutation: contact.salutation,
             source_url: contact.source_url,
           });
           contactsCreated++;
@@ -418,6 +430,7 @@ async function upsertContactsAndJobs(
         role: "Ansprechpartner",
         email: c.email,
         phone: c.phone,
+        salutation: c.salutation,
         source_url: c.source_url,
       }));
 

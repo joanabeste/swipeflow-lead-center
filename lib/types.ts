@@ -239,6 +239,8 @@ export interface RequiredFieldProfile {
   created_at: string;
 }
 
+export type ContactSalutation = "herr" | "frau";
+
 export interface LeadContact {
   id: string;
   lead_id: string;
@@ -246,6 +248,7 @@ export interface LeadContact {
   role: string | null;
   email: string | null;
   phone: string | null;
+  salutation: ContactSalutation | null;
   source_url: string | null;
   created_at: string;
 }
