@@ -8,6 +8,7 @@ import {
   Upload,
   PhoneCall,
   PhoneOutgoing,
+  Target,
   ShieldBan,
   Settings,
   ScrollText,
@@ -25,6 +26,7 @@ const mainNav: NavItem[] = [
   { href: "/import", label: "Import", icon: Upload },
   { href: "/leads", label: "Neue Leads", icon: FileSpreadsheet },
   { href: "/crm", label: "CRM", icon: PhoneCall },
+  { href: "/deals", label: "Deals", icon: Target },
   { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
 ];
 
