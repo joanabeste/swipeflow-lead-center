@@ -91,7 +91,7 @@ export function WebexSettings({
           id="webex-panel-recordings"
           icon={Mic}
           title="Aufzeichnungen"
-          subtitle="Automatischer Sync alle 2 Minuten"
+          subtitle="Täglicher Sync + manueller Button"
           open={openPanels.recordings}
           onToggle={() => togglePanel("recordings")}
         >

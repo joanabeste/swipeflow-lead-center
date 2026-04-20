@@ -56,7 +56,8 @@ export function WebexRecordingsPanelBody({
           Jetzt synchronisieren
         </button>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Automatischer Sync alle 2 Minuten via Cron.
+          Automatischer Sync 1× täglich (nachts 2 Uhr). Für Gespräche direkt nach dem Anruf
+          bitte „Jetzt synchronisieren" drücken.
         </p>
       </div>
 

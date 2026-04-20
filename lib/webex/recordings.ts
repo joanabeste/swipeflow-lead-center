@@ -13,7 +13,7 @@ export async function isWebexConfigured(): Promise<boolean> {
 
 /**
  * Listet Call-Recordings des Accounts für einen Zeitraum. Webex paginiert;
- * wir folgen dem `Link`-Header max. 10 Seiten (ausreichend für 2-min-Sync).
+ * wir folgen dem `Link`-Header max. 10 Seiten (10×100 = 1000 Recordings pro Lauf).
  */
 export async function listRecordings(input: {
   from: Date;

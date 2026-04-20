@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/webex/sync-recordings",
-      "schedule": "*/2 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
