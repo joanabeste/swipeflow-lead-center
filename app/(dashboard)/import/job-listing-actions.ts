@@ -47,6 +47,57 @@ interface ParsedJobListing {
   description: string | null;
 }
 
+/** Kontakt-Entwurf (noch ohne lead_id). */
+interface ContactDraft {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  source_url: string | null;
+}
+
+/**
+ * Sammelt aus allen Zeilen einer Firma die EINDEUTIGEN Ansprechpartner.
+ * Dedup-Key: email (lowercased) — falls email fehlt, fällt auf name (lowercased) zurück.
+ * Erster Treffer gewinnt.
+ *
+ * Ergänzt als Fallback den aus der Beschreibung extrahierten Kontakt der
+ * ersten Zeile, falls überhaupt kein Kontakt in den CSV-Spalten gesetzt ist.
+ */
+function dedupeContacts(
+  listings: ParsedJobListing[],
+  descFallback: { contactName: string | null; contactEmail: string | null; contactPhone: string | null },
+): ContactDraft[] {
+  const seen = new Map<string, ContactDraft>();
+
+  for (const listing of listings) {
+    const rawName = listing.contactName?.trim();
+    if (!rawName) continue;
+    const fullName = listing.salutation?.trim()
+      ? `${listing.salutation.trim()} ${rawName}`.replace(/\s+/g, " ").trim()
+      : rawName;
+    const key = (listing.email ?? fullName).toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.set(key, {
+      name: fullName,
+      email: listing.email,
+      phone: listing.phone,
+      source_url: listing.jobUrl,
+    });
+  }
+
+  // Fallback: kein Kontakt in Spalten → versuche den aus der Beschreibung.
+  if (seen.size === 0 && descFallback.contactName) {
+    seen.set(descFallback.contactName.toLowerCase(), {
+      name: descFallback.contactName,
+      email: descFallback.contactEmail,
+      phone: descFallback.contactPhone,
+      source_url: listings[0]?.jobUrl ?? null,
+    });
+  }
+
+  return Array.from(seen.values());
+}
+
 export async function processJobListingImport(fileContent: string): Promise<{
   success: boolean;
   imported: number;
@@ -138,6 +189,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
     domain: string | null;
     descData: ReturnType<typeof analyzeJobDescription>;
     listings: ParsedJobListing[];
+    contactDrafts: ContactDraft[];
   }
   const newLeads: PendingNewLead[] = [];
 
@@ -156,6 +208,9 @@ export async function processJobListingImport(fileContent: string): Promise<{
 
     // Beschreibung analysieren (Regex, keine API)
     const descData = analyzeJobDescription(first.description ?? "");
+
+    // Alle eindeutigen Ansprechpartner aus ALLEN Zeilen sammeln.
+    const contactDrafts = dedupeContacts(companyListings, descData);
 
     // Blacklist + Cancel-Rules
     const leadData: Record<string, string | null> = {
@@ -191,12 +246,18 @@ export async function processJobListingImport(fileContent: string): Promise<{
         }
       }
 
-      // Kontakt + Jobs für bestehenden Lead direkt einfügen
-      await createContactsAndJobs(db, existingLeadId, first, descData, companyListings);
-      contactsCreated += contactCountFor(first, descData);
-      jobsCreated += companyListings.filter((l) => l.jobTitle).length;
+      // Kontakte + Jobs für bestehenden Lead direkt einfügen (mit DB-Dedup).
+      const { contacts: addedContacts, jobs: addedJobs } = await upsertContactsAndJobs(
+        db,
+        existingLeadId,
+        contactDrafts,
+        companyListings,
+        descData,
+      );
+      contactsCreated += addedContacts;
+      jobsCreated += addedJobs;
     } else {
-      newLeads.push({ company: first, domain, descData, listings: companyListings });
+      newLeads.push({ company: first, domain, descData, listings: companyListings, contactDrafts });
     }
   }
 
@@ -232,29 +293,33 @@ export async function processJobListingImport(fileContent: string): Promise<{
         const { data: row } = await db.from("leads").insert(insertPayload[i]).select("id").single();
         if (row) {
           imported++;
-          await createContactsAndJobs(db, row.id, newLeads[i].company, newLeads[i].descData, newLeads[i].listings);
-          contactsCreated += contactCountFor(newLeads[i].company, newLeads[i].descData);
-          jobsCreated += newLeads[i].listings.filter((l) => l.jobTitle).length;
+          const { contacts: c, jobs: j } = await upsertContactsAndJobs(
+            db,
+            row.id,
+            newLeads[i].contactDrafts,
+            newLeads[i].listings,
+            newLeads[i].descData,
+          );
+          contactsCreated += c;
+          jobsCreated += j;
         }
       }
     } else if (insertedRows) {
       imported = insertedRows.length;
-      // Kontakte + Jobs in Batches anlegen
+      // Kontakte + Jobs in Batches anlegen (neue Leads → kein DB-Dedup nötig).
       const allContacts: Record<string, unknown>[] = [];
       const allJobs: Record<string, unknown>[] = [];
       for (let i = 0; i < insertedRows.length && i < newLeads.length; i++) {
         const leadId = insertedRows[i].id;
         const nl = newLeads[i];
-        const contactName = nl.company.contactName?.trim() || nl.descData.contactName;
-        if (contactName) {
-          const fullName = nl.company.salutation ? `${nl.company.salutation} ${contactName}`.trim() : contactName;
+        for (const contact of nl.contactDrafts) {
           allContacts.push({
             lead_id: leadId,
-            name: fullName,
+            name: contact.name,
             role: "Ansprechpartner",
-            email: nl.company.email ?? nl.descData.contactEmail,
-            phone: nl.company.phone ?? nl.descData.contactPhone,
-            source_url: nl.company.jobUrl,
+            email: contact.email,
+            phone: contact.phone,
+            source_url: contact.source_url,
           });
           contactsCreated++;
         }
@@ -301,28 +366,52 @@ export async function processJobListingImport(fileContent: string): Promise<{
 
 // ─── Helpers ────────────────────────────────────────────────
 
-function contactCountFor(c: ParsedJobListing, d: ReturnType<typeof analyzeJobDescription>): number {
-  return c.contactName?.trim() || d.contactName ? 1 : 0;
-}
-
-async function createContactsAndJobs(
+/**
+ * Legt Kontakte + Job-Postings für einen (bestehenden oder neuen) Lead an.
+ * Bei bestehenden Leads werden Kontakt-Duplikate per Name/E-Mail-Match vermieden.
+ * Job-Postings sind durch den unique(lead_id, url)-Index abgesichert.
+ */
+async function upsertContactsAndJobs(
   db: ReturnType<typeof createServiceClient>,
   leadId: string,
-  first: ParsedJobListing,
-  descData: ReturnType<typeof analyzeJobDescription>,
+  contactDrafts: ContactDraft[],
   companyListings: ParsedJobListing[],
-): Promise<void> {
-  const contactName = first.contactName?.trim() || descData.contactName;
-  if (contactName) {
-    const fullName = first.salutation ? `${first.salutation} ${contactName}`.trim() : contactName;
-    await db.from("lead_contacts").insert({
-      lead_id: leadId,
-      name: fullName,
-      role: "Ansprechpartner",
-      email: first.email ?? descData.contactEmail,
-      phone: first.phone ?? descData.contactPhone,
-      source_url: first.jobUrl,
-    });
+  descData: ReturnType<typeof analyzeJobDescription>,
+): Promise<{ contacts: number; jobs: number }> {
+  let contactsAdded = 0;
+  let jobsAdded = 0;
+
+  if (contactDrafts.length > 0) {
+    // Bestehende Kontakte für Dedup laden.
+    const { data: existingContacts } = await db
+      .from("lead_contacts")
+      .select("name, email")
+      .eq("lead_id", leadId);
+    const existingKeys = new Set<string>();
+    for (const c of existingContacts ?? []) {
+      if (c.email) existingKeys.add(String(c.email).toLowerCase());
+      if (c.name) existingKeys.add(String(c.name).toLowerCase().trim());
+    }
+
+    const toInsert = contactDrafts
+      .filter((c) => {
+        const emailKey = c.email?.toLowerCase();
+        const nameKey = c.name.toLowerCase().trim();
+        return !(emailKey && existingKeys.has(emailKey)) && !existingKeys.has(nameKey);
+      })
+      .map((c) => ({
+        lead_id: leadId,
+        name: c.name,
+        role: "Ansprechpartner",
+        email: c.email,
+        phone: c.phone,
+        source_url: c.source_url,
+      }));
+
+    if (toInsert.length > 0) {
+      await db.from("lead_contacts").insert(toInsert);
+      contactsAdded = toInsert.length;
+    }
   }
 
   const jobsToInsert = companyListings
@@ -335,8 +424,8 @@ async function createContactsAndJobs(
       posted_date: listing.postedDate,
       source: "ba_import" as const,
     }));
+
   if (jobsToInsert.length > 0) {
-    // Mit URL: upsert wegen Unique-Index; ohne URL: regulärer insert
     const withUrl = jobsToInsert.filter((j) => j.url);
     const withoutUrl = jobsToInsert.filter((j) => !j.url);
     if (withUrl.length > 0) {
@@ -345,5 +434,8 @@ async function createContactsAndJobs(
     if (withoutUrl.length > 0) {
       await db.from("lead_job_postings").insert(withoutUrl);
     }
+    jobsAdded = jobsToInsert.length;
   }
+
+  return { contacts: contactsAdded, jobs: jobsAdded };
 }
