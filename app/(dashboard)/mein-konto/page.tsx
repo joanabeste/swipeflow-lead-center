@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
 import { AccountForm } from "./account-form";
-import { PhonemondoForm } from "./phonemondo-form";
 
 export default async function MeinKontoPage() {
   const supabase = await createClient();
@@ -8,7 +7,7 @@ export default async function MeinKontoPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, email, role, status, service_mode, phonemondo_extension")
+    .select("name, email, role, status, service_mode")
     .eq("id", user!.id)
     .single();
 
@@ -40,18 +39,6 @@ export default async function MeinKontoPage() {
             <dd className="mt-1">{profile?.service_mode === "webdev" ? "Webentwicklung" : "Recruiting"}</dd>
           </div>
         </dl>
-      </div>
-
-      {/* PhoneMondo */}
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-        <h2 className="font-semibold">Telefon (PhoneMondo)</h2>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Wähle dein PhoneMondo-Telefon (Source). Beim Click-to-Call im CRM
-          ruft PhoneMondo zuerst dieses Gerät an und verbindet dich dann
-          mit dem Lead. Tipp: Klick auf &bdquo;Sources laden&ldquo; holt deine verfügbaren
-          Geräte direkt aus deinem PhoneMondo-Account.
-        </p>
-        <PhonemondoForm extension={profile?.phonemondo_extension ?? null} />
       </div>
 
       {/* Passwort ändern */}

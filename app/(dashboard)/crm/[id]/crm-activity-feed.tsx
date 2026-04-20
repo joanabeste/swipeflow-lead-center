@@ -219,7 +219,7 @@ function ToolbarButton({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
         active
-          ? "bg-primary text-white"
+          ? "bg-primary text-gray-900"
           : "text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
       }`}
     >

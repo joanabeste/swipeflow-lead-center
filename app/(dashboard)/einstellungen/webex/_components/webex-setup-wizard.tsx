@@ -74,7 +74,7 @@ export function WebexSetupWizard({ onClose }: { onClose: () => void }) {
               );
             const circleBg =
               status === "current"
-                ? "bg-primary text-white"
+                ? "bg-primary text-gray-900"
                 : done[i] || status === "past"
                 ? "bg-emerald-500 text-white"
                 : "bg-gray-200 text-gray-500 dark:bg-white/10 dark:text-gray-400";
@@ -133,7 +133,7 @@ export function WebexSetupWizard({ onClose }: { onClose: () => void }) {
             </button>
             <button
               onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-primary-dark"
             >
               Weiter
               <ChevronRight className="h-3.5 w-3.5" />
@@ -399,7 +399,7 @@ function SaveStep({ onSavedClose }: { onSavedClose: () => void }) {
           <button
             type="submit"
             disabled={!verifiedOk || saving}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
             Speichern &amp; fertig

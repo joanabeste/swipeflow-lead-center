@@ -22,8 +22,8 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { href: "/", label: "Übersicht", icon: LayoutDashboard },
-  { href: "/leads", label: "Neue Leads", icon: FileSpreadsheet },
   { href: "/import", label: "Import", icon: Upload },
+  { href: "/leads", label: "Neue Leads", icon: FileSpreadsheet },
   { href: "/crm", label: "CRM", icon: PhoneCall },
   { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
 ];

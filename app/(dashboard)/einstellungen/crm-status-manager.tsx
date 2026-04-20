@@ -23,7 +23,7 @@ export function CrmStatusManager({ statuses }: { statuses: CustomLeadStatus[] })
         <h3 className="font-semibold">CRM-Status verwalten</h3>
         <button
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary-dark"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-gray-900 hover:bg-primary-dark"
         >
           <Plus className="h-4 w-4" />
           Neuer Status
@@ -187,7 +187,7 @@ function StatusForm({
         <button
           type="submit"
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-white hover:bg-primary-dark disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-gray-900 hover:bg-primary-dark disabled:opacity-50"
         >
           <Check className="h-3.5 w-3.5" />
           {pending ? "Speichern…" : "Speichern"}

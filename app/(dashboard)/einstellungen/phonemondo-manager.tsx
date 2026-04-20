@@ -184,7 +184,7 @@ function ExtensionRow({ profile }: { profile: Profile }) {
       <button
         onClick={save}
         disabled={!dirty || pending}
-        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
       >
         {pending ? "…" : dirty ? <><Save className="h-3 w-3" />Speichern</> : <><Check className="h-3 w-3" />Aktuell</>}
       </button>

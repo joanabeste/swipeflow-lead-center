@@ -184,7 +184,7 @@ export function ComposeCall({
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Gesprächsnotiz" className="w-full resize-none rounded-md border border-gray-200 bg-white p-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]" />
           <div className="flex justify-end gap-2">
             <button onClick={onClose} className="rounded-md px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5">Abbrechen</button>
-            <button onClick={logSubmit} disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50">
+            <button onClick={logSubmit} disabled={pending} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50">
               {pending ? "Speichern…" : "Protokoll speichern"}
             </button>
           </div>

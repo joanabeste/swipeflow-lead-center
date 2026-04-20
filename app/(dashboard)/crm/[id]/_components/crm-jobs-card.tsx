@@ -151,7 +151,7 @@ function JobForm({ leadId, onClose }: { leadId: string; onClose: () => void }) {
         <button
           onClick={submit}
           disabled={pending || !title.trim()}
-          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
         >
           <Save className="h-3 w-3" />
           {pending ? "…" : "Anlegen"}

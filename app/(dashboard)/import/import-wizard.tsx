@@ -118,7 +118,7 @@ export function ImportWizard({ templates }: Props) {
             <div
               className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium ${
                 step >= s.n
-                  ? "bg-primary text-white"
+                  ? "bg-primary text-gray-900"
                   : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
               }`}
             >
@@ -231,7 +231,7 @@ export function ImportWizard({ templates }: Props) {
             <button
               onClick={() => setStep(3)}
               disabled={!mapping.company_name && !Object.values(mapping).includes("company_name")}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               Weiter
               <ArrowRight className="h-4 w-4" />
@@ -300,7 +300,7 @@ export function ImportWizard({ templates }: Props) {
             <button
               onClick={handleImport}
               disabled={processing}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               {processing ? (
                 <>

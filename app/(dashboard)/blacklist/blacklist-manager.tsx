@@ -137,7 +137,7 @@ export function BlacklistManager({ entries, rules }: Props) {
             </select>
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark"
             >
               <Plus className="h-4 w-4" />
               Hinzufügen
@@ -178,7 +178,7 @@ export function BlacklistManager({ entries, rules }: Props) {
               <button
                 type="submit"
                 disabled={entryPending}
-                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
               >
                 {entryPending ? "Wird gespeichert…" : "Speichern"}
               </button>
@@ -254,7 +254,7 @@ export function BlacklistManager({ entries, rules }: Props) {
                       onClick={() => setPage(pageNum)}
                       className={`rounded px-2.5 py-1 text-xs font-medium ${
                         page === pageNum
-                          ? "bg-primary text-white"
+                          ? "bg-primary text-gray-900"
                           : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
                       }`}
                     >
@@ -320,7 +320,7 @@ export function BlacklistManager({ entries, rules }: Props) {
             <button
               type="submit"
               disabled={rulePending}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Hinzufügen

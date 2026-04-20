@@ -119,7 +119,7 @@ export function SendEmailDialog({ leadId, contactId, contactName, toEmail, onClo
             <button
               type="submit"
               disabled={pending || !subject.trim() || !body.trim()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />
               {pending ? "Sende…" : "Senden"}

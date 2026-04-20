@@ -76,7 +76,7 @@ export function SortableHeader({
                   <div className="mt-1.5 flex gap-1">
                     <button
                       type="submit"
-                      className="rounded bg-primary px-2 py-0.5 text-xs text-white hover:bg-primary-dark"
+                      className="rounded bg-primary px-2 py-0.5 text-xs text-gray-900 hover:bg-primary-dark"
                     >
                       Filtern
                     </button>

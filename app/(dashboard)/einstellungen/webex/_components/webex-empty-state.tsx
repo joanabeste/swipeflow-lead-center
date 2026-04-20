@@ -6,7 +6,7 @@ export function WebexEmptyState({ onStart }: { onStart: () => void }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br from-primary/5 via-white to-primary/10 p-8 dark:border-[#2c2c2e]/50 dark:from-primary/10 dark:via-[#1c1c1e] dark:to-primary/20">
       <div className="mx-auto max-w-xl text-center">
-        <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-white shadow-sm">
+        <span className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-gray-900 shadow-sm">
           <Sparkles className="h-6 w-6" />
         </span>
         <h2 className="mt-4 text-xl font-bold tracking-tight">
@@ -20,7 +20,7 @@ export function WebexEmptyState({ onStart }: { onStart: () => void }) {
         </p>
         <button
           onClick={onStart}
-          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark hover:shadow"
+          className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-primary-dark hover:shadow"
         >
           Einrichtungs-Assistent starten
         </button>
