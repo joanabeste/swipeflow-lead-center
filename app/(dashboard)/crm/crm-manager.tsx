@@ -6,7 +6,7 @@ import { Download, Trash2, Phone, StickyNote, MessageSquare, Plus } from "lucide
 import type { CustomLeadStatus } from "@/lib/types";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads } from "../leads/actions";
-import { CrmStatusBadge } from "./status-badge";
+import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
 import { SearchBox } from "@/components/table/search-box";
@@ -461,7 +461,13 @@ function CellRenderer({
         </a>
       ) : <span>–</span>;
     case "crm_status_id":
-      return <CrmStatusBadge statusId={lead.crm_status_id} statuses={statuses} />;
+      return (
+        <InlineStatusDropdown
+          leadId={lead.id}
+          currentStatusId={lead.crm_status_id}
+          statuses={statuses.filter((s) => s.is_active)}
+        />
+      );
     case "call_count":
       return (
         <span className="inline-flex items-center gap-1">
