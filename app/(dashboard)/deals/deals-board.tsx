@@ -361,14 +361,35 @@ function DealCard({ deal, stages }: { deal: DealWithRelations; stages: DealStage
         <p className="truncate text-xs text-gray-500 dark:text-gray-400">
           {deal.company_name}
         </p>
-        <div className="mt-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-primary">
-            {formatAmount(deal.amountCents, deal.currency)}
-          </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <p className="text-sm font-semibold text-primary">
+              {formatAmount(deal.amountCents, deal.currency)}
+            </p>
+            {deal.probability != null && (
+              <span
+                className="shrink-0 rounded bg-gray-100 px-1 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-400"
+                title={`Closing-Wahrscheinlichkeit · Forecast ${formatAmount(
+                  Math.round((deal.amountCents * deal.probability) / 100),
+                  deal.currency,
+                )}`}
+              >
+                {deal.probability}%
+              </span>
+            )}
+          </div>
           {deal.assignee_name && (
             <AvatarChip name={deal.assignee_name} avatarUrl={deal.assignee_avatar_url} />
           )}
         </div>
+        {deal.nextStep && (
+          <p
+            className="mt-1.5 line-clamp-2 text-[11px] italic text-gray-500 dark:text-gray-400"
+            title={deal.nextStep}
+          >
+            → {deal.nextStep}
+          </p>
+        )}
       </Link>
     </div>
   );
@@ -407,15 +428,16 @@ function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: Deal
             <th className="px-3 py-2.5">Firma</th>
             <th className="px-3 py-2.5">Stage</th>
             <th className="px-3 py-2.5 text-right">Volumen</th>
+            <th className="px-3 py-2.5 text-right">Closing-%</th>
             <th className="px-3 py-2.5">Zuständig</th>
-            <th className="px-3 py-2.5">Erwartet</th>
-            <th className="px-3 py-2.5">Aktualisiert</th>
+            <th className="px-3 py-2.5">Nächster Schritt</th>
+            <th className="px-3 py-2.5">Letzter FollowUp</th>
           </tr>
         </thead>
         <tbody>
           {deals.length === 0 && (
             <tr>
-              <td colSpan={7} className="px-3 py-8 text-center text-gray-400">
+              <td colSpan={8} className="px-3 py-8 text-center text-gray-400">
                 Noch keine Deals.
               </td>
             </tr>
@@ -461,14 +483,17 @@ function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: Deal
               <td className="px-3 py-2 text-right font-medium text-primary">
                 {formatAmount(d.amountCents, d.currency)}
               </td>
+              <td className="px-3 py-2 text-right text-xs text-gray-500 dark:text-gray-400">
+                {d.probability != null ? `${d.probability}%` : "—"}
+              </td>
               <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                 {d.assignee_name ?? "—"}
               </td>
-              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                {d.expectedCloseDate ? new Date(d.expectedCloseDate).toLocaleDateString("de-DE") : "—"}
+              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400" title={d.nextStep ?? undefined}>
+                <span className="line-clamp-1">{d.nextStep ?? "—"}</span>
               </td>
-              <td className="px-3 py-2 text-xs text-gray-400">
-                {new Date(d.updatedAt).toLocaleDateString("de-DE")}
+              <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                {d.lastFollowupAt ? new Date(d.lastFollowupAt).toLocaleDateString("de-DE") : "—"}
               </td>
             </tr>
           ))}

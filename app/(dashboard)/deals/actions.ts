@@ -36,6 +36,9 @@ export async function createDealAction(input: {
   stageId: string;
   assignedTo: string | null;
   expectedCloseDate: string | null;
+  probability?: number | null;
+  nextStep?: string | null;
+  lastFollowupAt?: string | null;
 }): Promise<{ success: true; dealId: string } | { error: string }> {
   const user = await requireUser();
   if (!user) return { error: "Nicht angemeldet." };
@@ -46,6 +49,10 @@ export async function createDealAction(input: {
 
   const cents = parseAmountToCents(input.amountRaw);
   if (cents === null) return { error: "Volumen ist kein gültiger Betrag." };
+
+  if (input.probability != null && (input.probability < 0 || input.probability > 100)) {
+    return { error: "Wahrscheinlichkeit muss zwischen 0 und 100 liegen." };
+  }
 
   const db = createServiceClient();
 
@@ -77,6 +84,9 @@ export async function createDealAction(input: {
     stageId: input.stageId,
     assignedTo: input.assignedTo ?? user.id,
     expectedCloseDate: input.expectedCloseDate,
+    probability: input.probability ?? null,
+    nextStep: input.nextStep?.trim() || null,
+    lastFollowupAt: input.lastFollowupAt ?? null,
     createdBy: user.id,
   });
   if ("error" in res) return { error: res.error };

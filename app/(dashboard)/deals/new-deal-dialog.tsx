@@ -31,12 +31,16 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
   const [stageId, setStageId] = useState(stages.find((s) => s.kind === "open")?.id ?? stages[0]?.id ?? "");
   const [assignedTo, setAssignedTo] = useState<string>("");
   const [expectedCloseDate, setExpectedCloseDate] = useState<string>("");
+  const [probability, setProbability] = useState<string>("");
+  const [nextStep, setNextStep] = useState<string>("");
+  const [lastFollowupAt, setLastFollowupAt] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     startTransition(async () => {
+      const probNum = probability.trim() === "" ? null : Number(probability);
       const res = await createDealAction({
         leadId: mode === "existing" ? selectedLead?.id : undefined,
         newCompanyName: mode === "new" ? newCompanyName : undefined,
@@ -46,6 +50,9 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
         stageId,
         assignedTo: assignedTo || null,
         expectedCloseDate: expectedCloseDate || null,
+        probability: probNum,
+        nextStep: nextStep.trim() || null,
+        lastFollowupAt: lastFollowupAt || null,
       });
       if ("error" in res) {
         setError(res.error);
@@ -204,6 +211,44 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
                 className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="d-prob" className="block text-sm font-medium">Closing-Wahrscheinlichkeit (%)</label>
+              <input
+                id="d-prob"
+                type="number"
+                min={0}
+                max={100}
+                value={probability}
+                onChange={(e) => setProbability(e.target.value)}
+                placeholder="z.B. 65"
+                className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
+              />
+            </div>
+            <div>
+              <label htmlFor="d-lastfu" className="block text-sm font-medium">Letzter FollowUp</label>
+              <input
+                id="d-lastfu"
+                type="date"
+                value={lastFollowupAt}
+                onChange={(e) => setLastFollowupAt(e.target.value)}
+                className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="d-nextstep" className="block text-sm font-medium">Nächster Schritt (optional)</label>
+            <input
+              id="d-nextstep"
+              type="text"
+              value={nextStep}
+              onChange={(e) => setNextStep(e.target.value)}
+              placeholder="z.B. Ersttermin am 12.03., Urlaub bis 16.03., …"
+              className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
+            />
           </div>
 
           <div>
