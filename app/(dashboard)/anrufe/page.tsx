@@ -1,14 +1,23 @@
 import { PhoneOutgoing } from "lucide-react";
-import { loadCallQueue } from "./actions";
+import {
+  getCallQueueStatusIds,
+  loadCallQueue,
+  loadCustomStatuses,
+} from "./actions";
 import { CallQueueClient } from "./call-queue-client";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
+import { getCallQueueSettings } from "@/lib/app-settings";
 
 export default async function AnrufePage() {
-  const [queue, webexCreds] = await Promise.all([
-    loadCallQueue(),
-    getWebexCredentials(),
-  ]);
+  const [queue, webexCreds, callQueueSettings, customStatuses, selectedStatusIds] =
+    await Promise.all([
+      loadCallQueue(),
+      getWebexCredentials(),
+      getCallQueueSettings(),
+      loadCustomStatuses(),
+      getCallQueueStatusIds(),
+    ]);
 
   const providers = {
     phonemondo: isPhoneMondoConfigured(),
@@ -22,9 +31,9 @@ export default async function AnrufePage() {
           <PhoneOutgoing className="h-5 w-5" />
         </span>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Anrufe</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Auto-Dialer</h1>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Qualifizierte Leads automatisch nacheinander anrufen — bei Nicht-Erreichen springt die Queue weiter.
+            Leads mit bestimmten CRM-Status automatisch nacheinander anrufen — bei Nicht-Erreichen springt die Queue weiter.
           </p>
         </div>
       </header>
@@ -38,7 +47,13 @@ export default async function AnrufePage() {
           </p>
         </div>
       ) : (
-        <CallQueueClient initialQueue={queue} providers={providers} />
+        <CallQueueClient
+          initialQueue={queue}
+          providers={providers}
+          settings={callQueueSettings}
+          customStatuses={customStatuses}
+          selectedStatusIds={selectedStatusIds}
+        />
       )}
     </div>
   );

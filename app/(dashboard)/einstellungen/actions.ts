@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import type { EnrichmentConfig, ServiceMode, WebdevStrictness } from "@/lib/types";
-import { saveHqLocation as saveHqLocationHelper } from "@/lib/app-settings";
+import {
+  saveHqLocation as saveHqLocationHelper,
+  saveCallQueueSettings as saveCallQueueSettingsHelper,
+} from "@/lib/app-settings";
 import { geocodeAddress } from "@/lib/geo/geocode";
 import {
   saveWebexToken as saveWebexTokenHelper,
@@ -500,6 +503,42 @@ export async function reverifyWebex(): Promise<
       .eq("provider", "webex");
   }
   return result;
+}
+
+// ─── Auto-Dialer / Call-Queue ────────────────────────────────
+
+export async function saveCallQueueSettings(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const ringRaw = parseInt((formData.get("ring_timeout_seconds") as string) ?? "", 10);
+  const advanceRaw = parseInt((formData.get("auto_advance_delay_seconds") as string) ?? "", 10);
+
+  if (!Number.isFinite(ringRaw) || ringRaw < 5 || ringRaw > 120) {
+    return { error: "Ring-Timeout muss zwischen 5 und 120 Sekunden liegen." };
+  }
+  if (!Number.isFinite(advanceRaw) || advanceRaw < 0 || advanceRaw > 30) {
+    return { error: "Auto-Advance-Delay muss zwischen 0 und 30 Sekunden liegen." };
+  }
+
+  await saveCallQueueSettingsHelper(
+    { ringTimeoutSeconds: ringRaw, autoAdvanceDelaySeconds: advanceRaw },
+    check.user.id,
+  );
+
+  await logAudit({
+    userId: check.user.id,
+    action: "settings.call_queue_updated",
+    entityType: "app_settings",
+    details: { ringTimeoutSeconds: ringRaw, autoAdvanceDelaySeconds: advanceRaw },
+  });
+
+  revalidatePath("/einstellungen/anrufe");
+  revalidatePath("/anrufe");
+  return { success: true };
 }
 
 export async function setUserPhonemondoExtension(userId: string, extension: string | null) {

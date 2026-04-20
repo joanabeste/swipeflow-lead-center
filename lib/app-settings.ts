@@ -51,3 +51,58 @@ export async function saveHqLocation(hq: HqLocation, userId: string | null): Pro
     { onConflict: "key" },
   );
 }
+
+// ─── Call-Queue-Einstellungen ──────────────────────────────────────────
+
+export interface CallQueueSettings {
+  /** Sekunden warten, bevor der Auto-Dialer den nächsten Lead anruft,
+   *  wenn der Webhook keinen missed/failed-Status liefert. */
+  ringTimeoutSeconds: number;
+  /** Sekunden zwischen „Nicht erreicht" und dem nächsten Anruf-Start. */
+  autoAdvanceDelaySeconds: number;
+}
+
+const FALLBACK_CALL_QUEUE: CallQueueSettings = {
+  ringTimeoutSeconds: 25,
+  autoAdvanceDelaySeconds: 3,
+};
+
+export async function getCallQueueSettings(): Promise<CallQueueSettings> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "call_queue")
+      .single();
+    const v = data?.value as Partial<CallQueueSettings> | undefined;
+    return {
+      ringTimeoutSeconds:
+        typeof v?.ringTimeoutSeconds === "number" && v.ringTimeoutSeconds > 0
+          ? Math.min(120, Math.max(5, Math.round(v.ringTimeoutSeconds)))
+          : FALLBACK_CALL_QUEUE.ringTimeoutSeconds,
+      autoAdvanceDelaySeconds:
+        typeof v?.autoAdvanceDelaySeconds === "number" && v.autoAdvanceDelaySeconds >= 0
+          ? Math.min(30, Math.max(0, Math.round(v.autoAdvanceDelaySeconds)))
+          : FALLBACK_CALL_QUEUE.autoAdvanceDelaySeconds,
+    };
+  } catch {
+    return FALLBACK_CALL_QUEUE;
+  }
+}
+
+export async function saveCallQueueSettings(
+  settings: CallQueueSettings,
+  userId: string | null,
+): Promise<void> {
+  const db = createServiceClient();
+  await db.from("app_settings").upsert(
+    {
+      key: "call_queue",
+      value: settings as unknown as Record<string, unknown>,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+}
