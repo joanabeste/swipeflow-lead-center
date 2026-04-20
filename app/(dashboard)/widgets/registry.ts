@@ -23,23 +23,36 @@ export interface WidgetMeta {
   serviceMode?: "recruiting" | "webdev";
 }
 
+// Default-Reihenfolge: vertriebsrelevante & motivierende Widgets zuerst,
+// Kennzahlen/Enrichment-Trend später. Ordnung:
+//   1  Offene Deals        (ganz oben — primär vertriebsrelevant)
+//   5  Pipeline-Balken     (Status-Übersicht)
+//  10  Spruch des Tages    (motivierender Kopf)
+//  15  Anrufe (7 Tage)     (Wochen-Performance)
+//  20  CRM-Queue           (daily tasks)
+//  22  Mein Tag            (persönliche Tages-Stats)
+//  30  Schnell-Aktionen    (Navigations-Kürzel)
+//  40  Kennzahlen          (Enrich-Quote etc. — bewusst nach unten)
+//  50  Zuletzt bearb. Leads
+//  60  Letzte Aktivitäten
 export const WIDGET_REGISTRY: WidgetMeta[] = [
-  { key: "motivational-quote", label: "Spruch des Tages", description: "Täglich wechselnder Sales-Spruch", defaultVisible: true, defaultOrder: 1, defaultWidth: "full" },
-  { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 5, defaultWidth: "half" },
-  { key: "pipeline", label: "Pipeline-Balken", description: "Lead-Verteilung über alle Status", defaultVisible: true, defaultOrder: 10, defaultWidth: "full" },
-  { key: "stats", label: "Kennzahlen", description: "Vier Metriken passend zu deinem Modus", defaultVisible: true, defaultOrder: 20, defaultWidth: "full" },
-  { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 25, defaultWidth: "half" },
-  { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: true, defaultOrder: 26, defaultWidth: "half" },
-  { key: "crm-status-distribution", label: "CRM-Status-Verteilung", description: "Qualifizierte Leads nach Vertriebsphase", defaultVisible: false, defaultOrder: 27, defaultWidth: "full" },
-  { key: "todays-calls", label: "Heutige Anrufe", description: "Calls aller Nutzer seit 00:00", defaultVisible: false, defaultOrder: 30, defaultWidth: "half" },
-  { key: "call-stats-7d", label: "Anrufe (7 Tage)", description: "Tägliche Anruf-Statistik aller Nutzer", defaultVisible: true, defaultOrder: 32, defaultWidth: "full" },
-  { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 34, defaultWidth: "full" },
-  { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 40, defaultWidth: "full" },
+  { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: true, defaultOrder: 1, defaultWidth: "full" },
+  { key: "pipeline", label: "Pipeline-Balken", description: "Lead-Verteilung über alle Status", defaultVisible: true, defaultOrder: 5, defaultWidth: "full" },
+  { key: "motivational-quote", label: "Spruch des Tages", description: "Täglich wechselnder Sales-Spruch", defaultVisible: true, defaultOrder: 10, defaultWidth: "full" },
+  { key: "call-stats-7d", label: "Anrufe (7 Tage)", description: "Tägliche Anruf-Statistik aller Nutzer", defaultVisible: true, defaultOrder: 15, defaultWidth: "full" },
+  { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 20, defaultWidth: "half" },
+  { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 22, defaultWidth: "half" },
+  { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 30, defaultWidth: "full" },
+  { key: "stats", label: "Kennzahlen", description: "Vier Metriken passend zu deinem Modus", defaultVisible: true, defaultOrder: 40, defaultWidth: "full" },
   { key: "recent-leads", label: "Zuletzt bearbeitete Leads", description: "Die acht aktuellsten Leads", defaultVisible: true, defaultOrder: 50, defaultWidth: "half" },
   { key: "recent-activity", label: "Letzte Aktivitäten", description: "Audit-Log der letzten Schritte", defaultVisible: true, defaultOrder: 60, defaultWidth: "half" },
-  { key: "follow-up-reminder", label: "Überfällige Follow-Ups", description: "Todo-Leads ohne Kontakt seit > 7 Tagen", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
+  // Nicht default-sichtbar, aber über Edit-Mode hinzufügbar:
+  { key: "crm-status-distribution", label: "CRM-Status-Verteilung", description: "Qualifizierte Leads nach Vertriebsphase", defaultVisible: false, defaultOrder: 27, defaultWidth: "full" },
+  { key: "todays-calls", label: "Heutige Anrufe", description: "Calls aller Nutzer seit 00:00", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
+  { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 45, defaultWidth: "full" },
+  { key: "follow-up-reminder", label: "Überfällige Follow-Ups", description: "Todo-Leads ohne Kontakt seit > 7 Tagen", defaultVisible: false, defaultOrder: 29, defaultWidth: "half" },
   { key: "team-leaderboard", label: "Team-Leaderboard heute", description: "Anrufe pro Nutzer als Scoreboard", defaultVisible: false, defaultOrder: 33, defaultWidth: "half" },
-  { key: "email-stats-7d", label: "E-Mail-Performance (7 Tage)", description: "Versand-Stats seit SMTP aktiv ist", defaultVisible: false, defaultOrder: 36, defaultWidth: "full" },
+  { key: "email-stats-7d", label: "E-Mail-Performance (7 Tage)", description: "Versand-Stats seit SMTP aktiv ist", defaultVisible: false, defaultOrder: 46, defaultWidth: "full" },
 ];
 
 const WIDGET_KEYS = new Set(WIDGET_REGISTRY.map((w) => w.key));
