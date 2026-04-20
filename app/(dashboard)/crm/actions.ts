@@ -9,7 +9,8 @@ import { getWebexCredentials } from "@/lib/webex/auth";
 import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
 import { loadDecryptedSmtp } from "@/lib/email/user-credentials";
 import { sendEmail } from "@/lib/email/smtp";
-import { listTemplates, type EmailTemplate } from "@/lib/email/templates";
+import { listTemplates } from "@/lib/email/templates-server";
+import type { EmailTemplate } from "@/lib/email/templates";
 import type { CallDirection, CallStatus } from "@/lib/types";
 
 export type CallProvider = "phonemondo" | "webex";

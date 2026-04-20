@@ -14,14 +14,15 @@ import { CrmActivityFeed } from "./crm-activity-feed";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
 import { useServiceMode } from "@/lib/service-mode";
 
-type NoteRow = LeadNote & { profiles: { name: string } | null };
-type CallRow = LeadCall & { profiles: { name: string } | null };
+type AuthorProfile = { name: string; avatar_url: string | null };
+type NoteRow = LeadNote & { profiles: AuthorProfile | null };
+type CallRow = LeadCall & { profiles: AuthorProfile | null };
 type AuditRow = {
   id: string;
   action: string;
   details: Record<string, unknown> | null;
   created_at: string;
-  profiles: { name: string } | null;
+  profiles: AuthorProfile | null;
 };
 
 interface Props {

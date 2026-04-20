@@ -31,6 +31,7 @@ interface UnifiedItem {
   kind: ActivityKind;
   at: string;
   author: string | null;
+  authorAvatarUrl: string | null;
   render: () => React.ReactNode;
 }
 
@@ -57,6 +58,7 @@ export function CrmActivityFeed({
     items.push({
       id: `n-${n.id}`, kind: "note", at: n.created_at,
       author: n.profiles?.name ?? null,
+      authorAvatarUrl: n.profiles?.avatar_url ?? null,
       render: () => <NoteItem note={n} leadId={leadId} />,
     });
   }
@@ -64,6 +66,7 @@ export function CrmActivityFeed({
     items.push({
       id: `c-${c.id}`, kind: "call", at: c.started_at,
       author: c.profiles?.name ?? null,
+      authorAvatarUrl: c.profiles?.avatar_url ?? null,
       render: () => <CallItem call={c} />,
     });
   }
@@ -72,6 +75,7 @@ export function CrmActivityFeed({
     items.push({
       id: `e-${e.id}`, kind: "enrichment", at: e.completed_at,
       author: null,
+      authorAvatarUrl: null,
       render: () => <EnrichmentItem enrichment={e} />,
     });
   }
@@ -80,12 +84,14 @@ export function CrmActivityFeed({
       items.push({
         id: `a-${log.id}`, kind: "status", at: log.created_at,
         author: log.profiles?.name ?? null,
+        authorAvatarUrl: log.profiles?.avatar_url ?? null,
         render: () => <StatusChangeItem log={log} statuses={statuses} kind="crm" />,
       });
     } else if (log.action === "lead.bulk_status_update") {
       items.push({
         id: `a-${log.id}`, kind: "status", at: log.created_at,
         author: log.profiles?.name ?? null,
+        authorAvatarUrl: log.profiles?.avatar_url ?? null,
         render: () => <StatusChangeItem log={log} statuses={statuses} kind="pipeline" />,
       });
     }
@@ -94,6 +100,7 @@ export function CrmActivityFeed({
     items.push({
       id: `ch-${ch.id}`, kind: "change", at: ch.created_at,
       author: null,
+      authorAvatarUrl: null,
       render: () => <ChangeItem change={ch} />,
     });
   }
@@ -189,7 +196,7 @@ export function CrmActivityFeed({
           filtered.map((item) => (
             <div key={item.id} className="flex gap-3 p-4 hover:bg-gray-50/50 dark:hover:bg-white/[0.02]">
               <div className="flex-shrink-0">
-                <PersonAvatar name={item.author} kind={item.kind} />
+                <PersonAvatar name={item.author} kind={item.kind} avatarUrl={item.authorAvatarUrl} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm">

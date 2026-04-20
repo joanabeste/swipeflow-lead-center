@@ -24,7 +24,7 @@ import {
   createTemplate as createTemplateHelper,
   updateTemplate as updateTemplateHelper,
   deleteTemplate as deleteTemplateHelper,
-} from "@/lib/email/templates";
+} from "@/lib/email/templates-server";
 
 export async function saveFieldProfile(
   _prev: { error?: string } | undefined,

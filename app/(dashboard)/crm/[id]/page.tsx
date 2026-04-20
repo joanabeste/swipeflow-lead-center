@@ -51,14 +51,26 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
   for (const log of auditLogs ?? []) if (log.user_id) userIds.add(log.user_id as string);
 
   const { data: profileRows } = userIds.size > 0
-    ? await db.from("profiles").select("id, name").in("id", Array.from(userIds))
-    : { data: [] as { id: string; name: string }[] };
+    ? await db.from("profiles").select("id, name, avatar_url").in("id", Array.from(userIds))
+    : { data: [] as { id: string; name: string; avatar_url: string | null }[] };
+  const profileById = new Map<string, { name: string; avatarUrl: string | null }>();
+  for (const p of profileRows ?? []) {
+    profileById.set(p.id as string, {
+      name: p.name as string,
+      avatarUrl: (p.avatar_url as string | null) ?? null,
+    });
+  }
   const nameById = new Map<string, string>();
-  for (const p of profileRows ?? []) nameById.set(p.id, p.name);
+  for (const [id, p] of profileById) nameById.set(id, p.name);
 
-  function withAuthor<T extends { created_by?: string | null }>(row: T): T & { profiles: { name: string } | null } {
-    const name = row.created_by ? nameById.get(row.created_by) : null;
-    return { ...row, profiles: name ? { name } : null };
+  function withAuthor<T extends { created_by?: string | null }>(
+    row: T,
+  ): T & { profiles: { name: string; avatar_url: string | null } | null } {
+    const p = row.created_by ? profileById.get(row.created_by) : null;
+    return {
+      ...row,
+      profiles: p ? { name: p.name, avatar_url: p.avatarUrl } : null,
+    };
   }
 
   if (!lead) notFound();
@@ -110,15 +122,16 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       calls={((calls ?? []) as LeadCall[]).map(withAuthor)}
       enrichments={(enrichments ?? []) as LeadEnrichment[]}
       changes={(changes ?? []) as LeadChange[]}
-      auditLogs={(auditLogs ?? []).map((log) => ({
-        id: log.id as string,
-        action: log.action as string,
-        details: log.details as Record<string, unknown> | null,
-        created_at: log.created_at as string,
-        profiles: log.user_id && nameById.has(log.user_id as string)
-          ? { name: nameById.get(log.user_id as string)! }
-          : null,
-      }))}
+      auditLogs={(auditLogs ?? []).map((log) => {
+        const p = log.user_id ? profileById.get(log.user_id as string) ?? null : null;
+        return {
+          id: log.id as string,
+          action: log.action as string,
+          details: log.details as Record<string, unknown> | null,
+          created_at: log.created_at as string,
+          profiles: p ? { name: p.name, avatar_url: p.avatarUrl } : null,
+        };
+      })}
       statuses={(statuses ?? []) as CustomLeadStatus[]}
       hq={hq}
       senderName={senderName}

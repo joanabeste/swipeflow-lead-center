@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AccountForm } from "./account-form";
+import { AvatarUpload } from "./avatar-upload";
 
 export default async function MeinKontoPage() {
   const supabase = await createClient();
@@ -7,9 +8,17 @@ export default async function MeinKontoPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, email, role, status, service_mode")
+    .select("name, email, role, status, service_mode, avatar_url")
     .eq("id", user!.id)
     .single();
+
+  const name = (profile?.name as string | null) ?? "";
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("") || (user?.email?.[0]?.toUpperCase() ?? "?");
 
   return (
     <div className="max-w-2xl">
@@ -17,6 +26,20 @@ export default async function MeinKontoPage() {
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         Profil und Passwort verwalten
       </p>
+
+      {/* Profilbild */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="font-semibold">Profilbild</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Wird neben deinen Notizen und Anrufen in der CRM-Historie angezeigt.
+        </p>
+        <div className="mt-4">
+          <AvatarUpload
+            currentUrl={(profile?.avatar_url as string | null) ?? null}
+            fallback={initials}
+          />
+        </div>
+      </div>
 
       {/* Profil-Übersicht */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">

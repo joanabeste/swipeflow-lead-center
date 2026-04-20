@@ -1,6 +1,9 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { logAudit } from "@/lib/audit-log";
+import { uploadAvatar, deleteAvatar } from "@/lib/supabase/avatar";
 
 export async function changeMyPassword(
   _prev: { error?: string; success?: boolean } | undefined,
@@ -23,5 +26,63 @@ export async function changeMyPassword(
   const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) return { error: "Passwort konnte nicht geändert werden." };
 
+  return { success: true };
+}
+
+// ─── Profilbild ───────────────────────────────────────────────
+
+/**
+ * Lädt ein JPEG-Blob (nach Crop vom Client) in den Avatars-Bucket und
+ * setzt `profiles.avatar_url`. Max. 5 MB.
+ */
+export async function saveMyAvatar(
+  dataUrl: string,
+): Promise<{ error?: string; url?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  // Data-URL parsen: "data:image/jpeg;base64,...."
+  const match = /^data:(image\/[a-z+]+);base64,(.+)$/.exec(dataUrl);
+  if (!match) return { error: "Ungültiges Bild-Format." };
+  const contentType = match[1];
+  if (!/^image\/(jpeg|png|webp)$/.test(contentType)) {
+    return { error: "Nur JPEG/PNG/WebP erlaubt." };
+  }
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length > 5 * 1024 * 1024) {
+    return { error: "Bild zu groß (max. 5 MB)." };
+  }
+
+  const res = await uploadAvatar(user.id, bytes, contentType);
+  if ("error" in res) return { error: res.error };
+
+  await logAudit({
+    userId: user.id,
+    action: "profile.avatar_uploaded",
+    entityType: "profile",
+    entityId: user.id,
+  });
+
+  revalidatePath("/mein-konto");
+  return { url: res.url };
+}
+
+export async function removeMyAvatar(): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const res = await deleteAvatar(user.id);
+  if ("error" in res) return { error: res.error };
+
+  await logAudit({
+    userId: user.id,
+    action: "profile.avatar_deleted",
+    entityType: "profile",
+    entityId: user.id,
+  });
+
+  revalidatePath("/mein-konto");
   return { success: true };
 }

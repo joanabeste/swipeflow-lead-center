@@ -1,6 +1,6 @@
 import { FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { listTemplates } from "@/lib/email/templates";
+import { listTemplates } from "@/lib/email/templates-server";
 import { PageHeader } from "../_components/ui";
 import { EmailTemplatesManager } from "../_components/email-templates-manager";
 

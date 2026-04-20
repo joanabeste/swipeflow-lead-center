@@ -1,10 +1,19 @@
+import Image from "next/image";
 import {
   StickyNote, PhoneCall, Activity as ActivityIcon, Sparkles, ArrowRight,
 } from "lucide-react";
 import type { ActivityKind } from "./types";
 import { hashHue } from "./activity-helpers";
 
-export function PersonAvatar({ name, kind }: { name: string | null; kind: ActivityKind }) {
+export function PersonAvatar({
+  name,
+  kind,
+  avatarUrl,
+}: {
+  name: string | null;
+  kind: ActivityKind;
+  avatarUrl?: string | null;
+}) {
   const initials = name
     ? name.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("") || "?"
     : "·";
@@ -21,12 +30,18 @@ export function PersonAvatar({ name, kind }: { name: string | null; kind: Activi
   const Icon = c.icon;
   return (
     <div className="relative">
-      <div
-        className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-        style={{ backgroundColor: `hsl(${hue}, 50%, 45%)` }}
-      >
-        {initials}
-      </div>
+      {avatarUrl ? (
+        <div className="relative h-9 w-9 overflow-hidden rounded-full">
+          <Image src={avatarUrl} alt={name ?? ""} fill sizes="36px" className="object-cover" unoptimized />
+        </div>
+      ) : (
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+          style={{ backgroundColor: `hsl(${hue}, 50%, 45%)` }}
+        >
+          {initials}
+        </div>
+      )}
       <div
         className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white dark:border-[#1c1c1e]"
         style={{ backgroundColor: c.color }}
