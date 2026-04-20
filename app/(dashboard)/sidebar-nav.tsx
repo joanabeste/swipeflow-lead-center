@@ -4,14 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  FileSpreadsheet,
   Upload,
-  PhoneCall,
+  Inbox,
+  Users,
   PhoneOutgoing,
   Target,
   ShieldBan,
   Settings,
-  ScrollText,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -21,19 +20,26 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const mainNav: NavItem[] = [
+// Einträge nach Workflow-Phase gruppiert — oben → daily home, dann
+// Akquise (roh reinholen), Vertrieb (bearbeiten), Verwaltung (Config).
+const topNav: NavItem[] = [
   { href: "/", label: "Übersicht", icon: LayoutDashboard },
-  { href: "/import", label: "Import", icon: Upload },
-  { href: "/leads", label: "Neue Leads", icon: FileSpreadsheet },
-  { href: "/crm", label: "CRM", icon: PhoneCall },
-  { href: "/deals", label: "Deals", icon: Target },
-  { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
 ];
 
-const settingsNav: NavItem[] = [
+const akquiseNav: NavItem[] = [
+  { href: "/import", label: "Import", icon: Upload },
+  { href: "/leads", label: "Neue Leads", icon: Inbox },
+];
+
+const vertriebNav: NavItem[] = [
+  { href: "/crm", label: "CRM", icon: Users },
+  { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
+  { href: "/deals", label: "Deals", icon: Target },
+];
+
+const verwaltungNav: NavItem[] = [
   { href: "/blacklist", label: "Ausschluss", icon: ShieldBan },
   { href: "/einstellungen", label: "Einstellungen", icon: Settings },
-  { href: "/aktivitaet", label: "Aktivität", icon: ScrollText },
 ];
 
 export function SidebarNav() {
@@ -64,15 +70,24 @@ export function SidebarNav() {
 
   return (
     <nav className="flex-1 px-3">
-      <div className="space-y-1">
-        {mainNav.map(renderItem)}
-      </div>
-      <p className="mb-2 mt-6 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-600">
-        Verwaltung
-      </p>
-      <div className="space-y-1">
-        {settingsNav.map(renderItem)}
-      </div>
+      <div className="space-y-1">{topNav.map(renderItem)}</div>
+
+      <SectionLabel>Akquise</SectionLabel>
+      <div className="space-y-1">{akquiseNav.map(renderItem)}</div>
+
+      <SectionLabel>Vertrieb</SectionLabel>
+      <div className="space-y-1">{vertriebNav.map(renderItem)}</div>
+
+      <SectionLabel>Verwaltung</SectionLabel>
+      <div className="space-y-1">{verwaltungNav.map(renderItem)}</div>
     </nav>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2 mt-6 px-3 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-600">
+      {children}
+    </p>
   );
 }
