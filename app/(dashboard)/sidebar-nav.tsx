@@ -72,7 +72,7 @@ export function SidebarNav() {
     <nav className="flex-1 px-3">
       <div className="space-y-1">{topNav.map(renderItem)}</div>
 
-      <SectionLabel>Akquise</SectionLabel>
+      <SectionLabel>Leads</SectionLabel>
       <div className="space-y-1">{akquiseNav.map(renderItem)}</div>
 
       <SectionLabel>Vertrieb</SectionLabel>

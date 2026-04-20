@@ -1,3 +1,4 @@
+import { ExternalLink, Briefcase } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { ImportTabs } from "./import-tabs";
 import { ImportHistory } from "./import-history";
@@ -29,6 +30,31 @@ export default async function ImportPage() {
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
         Leads aus verschiedenen Quellen importieren
       </p>
+
+      {/* Direkt-Link zur externen BA-Lead-Quelle — spart den User-Weg
+          über Bookmarks, wenn er neue Stellenanzeigen scrapen will. */}
+      <a
+        href="https://swipeflow.maik.software/"
+        target="_blank"
+        rel="noreferrer"
+        className="group mt-5 flex items-center justify-between gap-3 rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 to-primary/5 p-4 transition hover:border-primary hover:shadow-sm dark:border-primary/20"
+      >
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <Briefcase className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold">Neue Leads scrapen — Swipeflow BA-Tool</p>
+            <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+              Öffnet das externe Tool für Stellenanzeigen-Recherche aus der Bundesagentur für Arbeit. Anschließend als CSV hier importieren.
+            </p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-primary group-hover:underline">
+          Öffnen
+          <ExternalLink className="h-3.5 w-3.5" />
+        </span>
+      </a>
 
       <div className="mt-6">
         <ImportTabs templates={templates ?? []} />
