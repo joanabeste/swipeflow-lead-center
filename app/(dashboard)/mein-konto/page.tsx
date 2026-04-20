@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getUserSmtp } from "@/lib/email/user-credentials";
 import { AccountForm } from "./account-form";
 import { AvatarUpload } from "./avatar-upload";
-import { EmailSettingsCard } from "./email-settings-card";
 import { SalutationBackfillButton } from "./salutation-backfill-button";
 
 export default async function MeinKontoPage() {
@@ -14,8 +12,6 @@ export default async function MeinKontoPage() {
     .select("name, email, role, status, service_mode, avatar_url")
     .eq("id", user!.id)
     .single();
-
-  const smtp = user ? await getUserSmtp(user.id) : null;
 
   const name = (profile?.name as string | null) ?? "";
   const initials = name
@@ -76,20 +72,6 @@ export default async function MeinKontoPage() {
           Vergib ein neues Passwort. Mindestens 8 Zeichen.
         </p>
         <AccountForm />
-      </div>
-
-      {/* E-Mail-Versand (SMTP) */}
-      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold">E-Mail-Versand (SMTP)</h2>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-gray-500 dark:bg-white/5 dark:text-gray-400">
-            Optional
-          </span>
-        </div>
-        <p className="mt-1 mb-4 text-sm text-gray-500 dark:text-gray-400">
-          Hinterlege deinen eigenen SMTP-Server, um E-Mails direkt aus dem CRM an Leads zu senden — mit deiner Absender-Adresse statt einer generischen. Ohne Konfiguration bleibt der E-Mail-Versand deaktiviert.
-        </p>
-        <EmailSettingsCard smtp={smtp} />
       </div>
 
       {/* Wartung */}

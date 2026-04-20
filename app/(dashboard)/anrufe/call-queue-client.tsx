@@ -861,6 +861,8 @@ function StatusDot({ label, color }: { label: string; color: string | null }) {
 
 function LastCallStatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
+    initiated: { label: "gewählt", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+    ringing: { label: "klingelt", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
     answered: { label: "angenommen", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
     missed: { label: "verpasst", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
     failed: { label: "fehlgeschlagen", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },

@@ -191,7 +191,7 @@ export function SendEmailDialog({
               </div>
               {missingSmtp && (
                 <Link
-                  href="/mein-konto"
+                  href="/einstellungen/email"
                   className="mt-2 inline-block text-xs font-semibold text-primary hover:underline"
                 >
                   SMTP-Zugangsdaten einrichten →

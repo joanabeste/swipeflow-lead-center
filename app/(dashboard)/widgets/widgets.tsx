@@ -662,7 +662,7 @@ export function EmailStats7dWidget({ data }: { data: DashboardData }) {
       </div>
       {total === 0 && (
         <p className="mt-4 text-center text-xs text-gray-400">
-          Noch keine E-Mails versendet — SMTP unter <Link href="/mein-konto" className="text-primary hover:underline">Mein Konto</Link> einrichten.
+          Noch keine E-Mails versendet — SMTP unter <Link href="/einstellungen/email" className="text-primary hover:underline">Einstellungen → E-Mail</Link> einrichten.
         </p>
       )}
     </Card>

@@ -2,11 +2,13 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, AlertCircle, Zap, Trash2 } from "lucide-react";
+import { Check, AlertCircle, Zap, Trash2, Lock, Shield } from "lucide-react";
 import type { UserSmtpRecord } from "@/lib/email/user-credentials";
 import { saveEmailSettings, testEmailSettings, deleteEmailSettings } from "./actions";
-import { useToastContext } from "../toast-provider";
-import { FormStatus, SubmitButton } from "../einstellungen/_components/ui";
+import { useToastContext } from "../../toast-provider";
+import { FormStatus, SubmitButton } from "../_components/ui";
+
+type SecurityMode = "starttls" | "ssl";
 
 export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
   const [state, formAction, pending] = useActionState(saveEmailSettings, undefined);
@@ -16,6 +18,22 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement | null>(null);
   const [showPasswordField, setShowPasswordField] = useState(!smtp);
+
+  // Security-Mode ersetzt das unklare "Implicit TLS"-Checkbox durch zwei
+  // klar beschriftete Optionen. Bei Auswahl wird auch der Port auf den
+  // passenden Default gesetzt (kann manuell überschrieben werden).
+  const initialMode: SecurityMode = smtp?.secure ? "ssl" : "starttls";
+  const [securityMode, setSecurityMode] = useState<SecurityMode>(initialMode);
+  const [port, setPort] = useState<number>(smtp?.port ?? 587);
+
+  function handleModeChange(mode: SecurityMode) {
+    setSecurityMode(mode);
+    // Port nur auf Default setzen, wenn aktueller Port dem jeweils anderen
+    // Standard-Port entspricht. Wenn der User einen Nicht-Standard-Port
+    // gewählt hat (z. B. 25), bleibt der bestehen.
+    if (mode === "ssl" && (port === 587 || port === 25)) setPort(465);
+    if (mode === "starttls" && port === 465) setPort(587);
+  }
 
   async function handleTest() {
     if (!formRef.current) return;
@@ -63,7 +81,6 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
             <label htmlFor="host" className="block text-sm font-medium">SMTP-Host</label>
             <input
               id="host" name="host" type="text" required
-              // Default: Mittwald Postausgang. Bestehende User-Werte haben Vorrang.
               defaultValue={smtp?.host ?? "mail.agenturserver.de"}
               placeholder="z.B. mail.agenturserver.de"
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
@@ -72,28 +89,43 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
               Mittwald-Default: <span className="font-mono">mail.agenturserver.de</span>
             </p>
           </div>
+
+          {/* Security-Mode: zwei klare Optionen statt unklarer Checkbox. */}
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium">Verbindungs-Sicherheit</label>
+            <input type="hidden" name="security_mode" value={securityMode} />
+            <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <SecurityOption
+                active={securityMode === "starttls"}
+                onClick={() => handleModeChange("starttls")}
+                icon={<Shield className="h-4 w-4" />}
+                title="STARTTLS"
+                subtitle="Port 587 · empfohlen"
+                description="Startet unverschlüsselt und baut dann sofort eine TLS-Verschlüsselung auf. Standard für die meisten Provider (Mittwald, Gmail, etc.)."
+              />
+              <SecurityOption
+                active={securityMode === "ssl"}
+                onClick={() => handleModeChange("ssl")}
+                icon={<Lock className="h-4 w-4" />}
+                title="SSL/TLS"
+                subtitle="Port 465"
+                description="Komplette Verschlüsselung ab dem ersten Byte. Alternative für Provider, die STARTTLS nicht unterstützen."
+              />
+            </div>
+          </div>
+
           <div>
             <label htmlFor="port" className="block text-sm font-medium">Port</label>
             <input
               id="port" name="port" type="number" min={1} max={65535} required
-              defaultValue={smtp?.port ?? 587}
+              value={port}
+              onChange={(e) => setPort(Number(e.target.value) || 0)}
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              STARTTLS: 25 oder 587 · SSL: 465
+              Wird automatisch passend zur Sicherheit gesetzt — manuell überschreibbar.
             </p>
           </div>
-          <div className="flex items-end pb-1">
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox" name="secure"
-                defaultChecked={smtp?.secure ?? false}
-                className="rounded border-gray-300 dark:border-gray-600"
-              />
-              Implicit TLS (SSL, i.d.R. Port 465)
-            </label>
-          </div>
-
           <div>
             <label htmlFor="username" className="block text-sm font-medium">Username</label>
             <input
@@ -103,7 +135,8 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
           </div>
-          <div>
+
+          <div className="sm:col-span-2">
             <label htmlFor="password" className="block text-sm font-medium">Passwort</label>
             {!showPasswordField && smtp ? (
               <div className="mt-1.5 flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-gray-400">
@@ -174,5 +207,47 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
         </div>
       </form>
     </>
+  );
+}
+
+function SecurityOption({
+  active,
+  onClick,
+  icon,
+  title,
+  subtitle,
+  description,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left rounded-lg border p-3 transition ${
+        active
+          ? "border-primary bg-primary/5 ring-1 ring-primary"
+          : "border-gray-200 bg-white hover:border-gray-300 dark:border-[#2c2c2e] dark:bg-[#232325] dark:hover:border-[#3a3a3c]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-1.5 text-sm font-semibold">
+          <span className={active ? "text-primary" : "text-gray-500 dark:text-gray-400"}>
+            {icon}
+          </span>
+          {title}
+        </div>
+        {active && <Check className="h-4 w-4 text-primary" />}
+      </div>
+      <p className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{subtitle}</p>
+      <p className="mt-1.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+        {description}
+      </p>
+    </button>
   );
 }

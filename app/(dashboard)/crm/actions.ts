@@ -582,7 +582,7 @@ export async function sendLeadEmail(input: {
   const smtp = await loadDecryptedSmtp(user.id);
   if (!smtp) {
     return {
-      error: "Keine SMTP-Zugangsdaten hinterlegt. Richte sie unter Mein Konto → E-Mail-Versand (SMTP) ein.",
+      error: "Keine SMTP-Zugangsdaten hinterlegt. Richte sie unter Einstellungen → E-Mail (SMTP) ein.",
     };
   }
 
