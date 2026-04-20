@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   // Event-Shape von PhoneMondo mit unserem PhoneMondoWebhookEvent-Interface
   // abgleichen können. Nach ein paar echten Events wieder entfernen.
   console.log("[phonemondo:webhook:payload]", {
-    keys: Object.keys(event as Record<string, unknown>),
+    keys: Object.keys(event as unknown as Record<string, unknown>),
     event,
   });
 
