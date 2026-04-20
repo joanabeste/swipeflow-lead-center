@@ -17,6 +17,7 @@ create index if not exists email_templates_user_idx
 alter table email_templates enable row level security;
 
 -- Nutzer sehen nur ihre eigenen Templates.
+drop policy if exists "email_templates_own_select" on email_templates;
 create policy "email_templates_own_select" on email_templates
   for select using (auth.uid() = user_id);
 

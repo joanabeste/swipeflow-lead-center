@@ -43,6 +43,7 @@ create index if not exists enrichment_jobs_active_idx
 alter table enrichment_jobs enable row level security;
 
 -- Nutzer sehen nur ihre eigenen Jobs.
+drop policy if exists "users_select_own_jobs" on enrichment_jobs;
 create policy "users_select_own_jobs" on enrichment_jobs
   for select using (auth.uid() = user_id);
 
