@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
 import type { EnrichmentConfig, ServiceMode, CompanyDetailField } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
+
+const POLL_INTERVAL_MS = 2000;
 
 interface Props {
   leadIds: string[];
@@ -48,7 +50,6 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   // Das ist bewusst Derived-State-Reset beim Modus-Wechsel; setState im
   // Effect ist hier die pragmatische Lösung.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setConfig({ ...defaults[serviceMode] });
     setShowDetailFields(false);
     setDetailFields(new Set());
@@ -57,13 +58,61 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);
   const [qualifying, setQualifying] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const total = leadIds.length;
+
+  // Polling: sobald eine Job-ID bekannt ist, alle 2s den Status abrufen.
+  // Die Background-Function läuft unabhängig weiter — Modal-Close bricht
+  // NICHTS mehr ab. Beim Unmount räumt der Cleanup den Timer auf.
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+
+    async function tick() {
+      if (cancelled) return;
+      try {
+        const res = await fetch(`/api/enrich-batch/status?id=${jobId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json() as {
+          status: "pending" | "running" | "completed" | "failed";
+          processed: number;
+          currentLeadName: string | null;
+          results: EnrichResult[];
+          lastError: string | null;
+        };
+        if (cancelled) return;
+        setResults(data.results);
+        setCompleted(data.processed);
+        setCurrentLead(data.currentLeadName ?? "");
+        if (data.status === "completed" || data.status === "failed") {
+          setPhase("complete");
+          return; // Polling stoppen
+        }
+      } catch {
+        // Netz-Wackler — einfach weiter pollen.
+      }
+      if (!cancelled) {
+        pollRef.current = setTimeout(tick, POLL_INTERVAL_MS);
+      }
+    }
+    pollRef.current = setTimeout(tick, 0);
+
+    return () => {
+      cancelled = true;
+      if (pollRef.current) {
+        clearTimeout(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [jobId]);
 
   const startEnrichment = useCallback(async () => {
     setPhase("running");
     setResults([]);
     setCompleted(0);
+    setCurrentLead("");
 
     // Effektive Config: wenn Detail-Modus aktiv und Felder ausgewählt → Whitelist mitsenden
     const effectiveConfig: EnrichmentConfig = {
@@ -80,59 +129,16 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadIds, config: effectiveConfig, serviceMode }),
       });
-
-      if (!res.ok || !res.body) {
-        setResults([{ leadId: "", name: "", success: false, error: "Server-Fehler" }]);
+      if (!res.ok) {
+        setResults([{ leadId: "", name: "", success: false, error: `Server-Fehler (${res.status})` }]);
         setPhase("complete");
         return;
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === "start") {
-              setCurrentLead(event.name);
-            } else if (event.type === "complete") {
-              setCompleted((p) => p + 1);
-              setResults((prev) => [...prev, {
-                leadId: event.leadId,
-                name: event.name ?? "",
-                success: event.success,
-                contactsCount: event.contactsCount,
-                jobsCount: event.jobsCount,
-                firstContactName: event.firstContactName,
-                hasEmail: event.hasEmail,
-                hasPhone: event.hasPhone,
-                websiteIssues: event.websiteIssues,
-                hasSsl: event.hasSsl,
-                isMobile: event.isMobile,
-                websiteTech: event.websiteTech,
-                designEstimate: event.designEstimate,
-                cancelled: event.cancelled,
-                cancelReason: event.cancelReason,
-                error: event.error,
-              }]);
-            } else if (event.type === "done") {
-              setPhase("complete");
-            }
-          } catch { /* ignore */ }
-        }
-      }
-      setPhase("complete");
+      const data = (await res.json()) as { jobId: string };
+      setJobId(data.jobId);
+      // Ab hier übernimmt der Polling-Effect.
     } catch {
+      setResults([{ leadId: "", name: "", success: false, error: "Netzwerk-Fehler" }]);
       setPhase("complete");
     }
   }, [leadIds, config, showDetailFields, detailFields, serviceMode]);
@@ -189,11 +195,13 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
               {serviceMode === "webdev" ? "Webentwicklung" : "Recruiting"}
             </span>
           </div>
-          {phase !== "running" && (
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-              <X className="h-5 w-5" />
-            </button>
-          )}
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            title={phase === "running" ? "Schließen — Anreicherung läuft im Hintergrund weiter" : "Schließen"}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="max-h-[75vh] overflow-y-auto px-6 py-4">
@@ -309,6 +317,9 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Leads werden angereichert…
               </div>
+              <p className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+                Du kannst dieses Fenster schließen — die Anreicherung läuft im Hintergrund weiter und du wirst benachrichtigt, wenn sie fertig ist.
+              </p>
               {results.length > 0 && (
                 <div className="space-y-1">
                   {results.map((r) => (
