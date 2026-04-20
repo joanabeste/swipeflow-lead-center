@@ -46,14 +46,17 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const [showDetailFields, setShowDetailFields] = useState(false);
   const [detailFields, setDetailFields] = useState<Set<CompanyDetailField>>(new Set());
 
-  // Wenn User im Modal den Modus wechselt, Config + Detail-Felder neu laden.
-  // Das ist bewusst Derived-State-Reset beim Modus-Wechsel; setState im
-  // Effect ist hier die pragmatische Lösung.
-  useEffect(() => {
+  // Reset-State-on-Prop-Change ohne useEffect (React-19-Pattern):
+  // Vergleich des vorherigen Modus mit dem aktuellen und setState während
+  // des Renders, wenn er gewechselt hat. Vermeidet die setState-in-effect-
+  // Warnung und den zusätzlichen Render eines Effect-basierten Resets.
+  const [prevMode, setPrevMode] = useState(serviceMode);
+  if (prevMode !== serviceMode) {
+    setPrevMode(serviceMode);
     setConfig({ ...defaults[serviceMode] });
     setShowDetailFields(false);
     setDetailFields(new Set());
-  }, [serviceMode, defaults]);
+  }
   const [results, setResults] = useState<EnrichResult[]>([]);
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);
