@@ -2,55 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  MapPin, Tag, Sparkles, ListChecks, Briefcase, Globe, Phone, Mic, Users,
-} from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { SETTINGS_GROUPS } from "./settings-groups";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-export const SETTINGS_GROUPS: NavGroup[] = [
-  {
-    label: "Organisation",
-    items: [
-      { href: "/einstellungen/standort", label: "Standort", icon: MapPin },
-      { href: "/einstellungen/crm-status", label: "CRM-Status", icon: Tag },
-    ],
-  },
-  {
-    label: "Qualifizierung",
-    items: [
-      { href: "/einstellungen/anreicherung", label: "Anreicherung", icon: Sparkles },
-      { href: "/einstellungen/pflichtfelder", label: "Pflichtfelder", icon: ListChecks },
-      { href: "/einstellungen/recruiting-bewertung", label: "Recruiting-Bewertung", icon: Briefcase },
-      { href: "/einstellungen/webdesign-bewertung", label: "Webdesign-Bewertung", icon: Globe },
-    ],
-  },
-  {
-    label: "Integrationen",
-    items: [
-      { href: "/einstellungen/phonemondo", label: "PhoneMondo", icon: Phone },
-      { href: "/einstellungen/webex", label: "Webex", icon: Mic },
-    ],
-  },
-  {
-    label: "Team",
-    items: [
-      { href: "/einstellungen/team", label: "Nutzer & Rollen", icon: Users },
-    ],
-  },
-];
-
-const ALL_ITEMS: NavItem[] = SETTINGS_GROUPS.flatMap((g) => g.items);
+// Re-Export für Bestands-Konsumenten (die vorher aus dem Client-Modul importiert haben).
+export { SETTINGS_GROUPS, SETTINGS_ITEMS, getSettingsMeta } from "./settings-groups";
+export type { SettingsNavItem, SettingsNavGroup } from "./settings-groups";
 
 export function SettingsSidebar() {
   const pathname = usePathname();
@@ -123,13 +79,3 @@ export function SettingsSidebar() {
     </>
   );
 }
-
-export function getSettingsMeta(pathname: string): { group: string; label: string } | null {
-  for (const group of SETTINGS_GROUPS) {
-    const hit = group.items.find((i) => i.href === pathname);
-    if (hit) return { group: group.label, label: hit.label };
-  }
-  return null;
-}
-
-export { ALL_ITEMS as SETTINGS_ITEMS };

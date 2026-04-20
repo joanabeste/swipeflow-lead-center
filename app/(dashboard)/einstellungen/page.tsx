@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SETTINGS_GROUPS } from "./_components/settings-sidebar";
+import { SETTINGS_GROUPS } from "./_components/settings-groups";
 
 export default function EinstellungenLandingPage() {
   return (
