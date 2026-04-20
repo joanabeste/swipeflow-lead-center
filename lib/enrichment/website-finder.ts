@@ -37,7 +37,60 @@ export async function findCompanyWebsite(companyName: string, city?: string | nu
   const bingResult = await searchBing(query);
   if (bingResult) return bingResult;
 
+  // 5. Heuristisches Domain-Guessing (HEAD-Probe).
+  // Greift, wenn alle Suchmaschinen nichts liefern — in der Praxis der häufigste
+  // Grund für „keine Website gefunden" bei mittelständischen Firmen mit
+  // schwach gepflegtem Web-Footprint.
+  const guessResult = await guessDomainFromName(companyName);
+  if (guessResult) return guessResult;
+
   return null;
+}
+
+/**
+ * Baut aus dem Firmennamen plausible Domain-Varianten und probiert sie via
+ * HEAD-Request. Gibt die erste erreichbare Domain zurück (Status < 400).
+ *
+ * Bewusst kein Content-Check: falsche Treffer (parked, Fremdfirma) werden
+ * vom nachfolgenden LLM-Extractor aussortiert — besser als der komplette
+ * Enrichment-Abbruch beim `null`-Return.
+ */
+async function guessDomainFromName(name: string): Promise<string | null> {
+  const base = normalizeForComparison(name);
+  if (base.length < 4) return null;
+
+  // Hyphenated-Variante aus Einzelwörtern (z.B. "Acme Solutions GmbH" → "acme-solutions")
+  const words = name
+    .toLowerCase()
+    .replace(/[äÄ]/g, "ae").replace(/[öÖ]/g, "oe").replace(/[üÜ]/g, "ue").replace(/ß/g, "ss")
+    .replace(/\b(gmbh|ag|ug|kg|ohg|se|mbh|co|cokg|haftungsbeschraenkt)\b/g, "")
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z0-9-]/g, ""))
+    .filter((w) => w.length > 1);
+  const hyphenated = words.join("-");
+
+  const bases = Array.from(new Set([base, hyphenated].filter((x) => x.length >= 4)));
+  const tlds = [".de", ".com", ".eu", ".at"];
+
+  const candidates: string[] = [];
+  for (const b of bases) for (const tld of tlds) candidates.push(`${b}${tld}`);
+
+  const checks = candidates.map(async (domain) => {
+    try {
+      const res = await fetch(`https://${domain}`, {
+        method: "HEAD",
+        redirect: "follow",
+        signal: AbortSignal.timeout(4_000),
+        headers: { "User-Agent": USER_AGENT },
+      });
+      return res.status < 400 ? domain : null;
+    } catch {
+      return null;
+    }
+  });
+  const results = await Promise.all(checks);
+  // Bevorzugt Reihenfolge: kürzere Base zuerst, dann .de vor .com
+  return results.find((r) => r !== null) ?? null;
 }
 
 async function searchBrave(query: string): Promise<string | null> {
