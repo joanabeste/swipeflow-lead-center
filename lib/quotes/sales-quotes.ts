@@ -21,22 +21,11 @@ export const SALES_QUOTES: SalesQuote[] = [
   { text: "Die beste Verkaufsstrategie: einen Anruf mehr als gestern.", tone: "motivation" },
   { text: "Jeder Profi war mal ein Anfänger mit 50 Absagen.", tone: "motivation" },
   { text: "Erfolg = 1 % Inspiration + 99 % Follow-Up.", tone: "motivation" },
-  { text: "Pipeline heute > Pipeline gestern. Immer.", tone: "motivation" },
   { text: "Der nächste Anruf bringt den Durchbruch.", tone: "motivation" },
   { text: "Dein Telefon wird nicht von selbst klingeln.", tone: "motivation" },
   { text: "Disziplin schlägt Motivation. Jeden. Einzelnen. Tag.", tone: "motivation" },
   { text: "Wer nicht fragt, closed nicht.", tone: "motivation" },
   { text: "Angebote verkaufen nicht. Menschen verkaufen.", tone: "motivation" },
-
-  // ─── Humor / locker ─────────────────────────────────────────
-  { text: "Kaffee ist kein Plan. Aber er hilft beim Anruf davor. ☕", tone: "humor" },
-  { text: "Wenn Einwand, dann Dialog. Nicht Monolog.", tone: "humor" },
-  { text: "'Ich melde mich' ist der zweitschönste Moment im Sales. Der schönste: man meldet sich wirklich.", tone: "humor" },
-  { text: "Schon drei Absagen vor dem Mittag? Gratulation — du arbeitest tatsächlich.", tone: "humor" },
-  { text: "Der Entscheider ist im Urlaub? Perfekt. Dann sprichst du mit dem nächsten Entscheider.", tone: "humor" },
-  { text: "CRM pflegen ist wie Zähne putzen: nicht sexy, aber spart später Schmerzen.", tone: "humor" },
-  { text: "Ein leerer Kalender ist kein Ruhetag. Das ist ein Notruf.", tone: "humor" },
-  { text: "Sales-Regel Nr. 1: der billigste ist der, der zuerst aufgibt. Bitte nicht dieser sein.", tone: "humor" },
 
   // ─── Klassisch ──────────────────────────────────────────────
   { text: "Verkaufen ist nicht überzeugen — es ist verstehen.", tone: "classic" },
@@ -48,22 +37,13 @@ export const SALES_QUOTES: SalesQuote[] = [
 
   // ─── Weisheit / Operativ ────────────────────────────────────
   { text: "Die zweite Call-Runde macht den Deal. Nicht die erste.", tone: "wisdom" },
-  { text: "Qualifizieren heißt: 'Nein' früher erkennen, bevor es teuer wird.", tone: "wisdom" },
-  { text: "Ein guter Discovery-Call spart drei schlechte Demos.", tone: "wisdom" },
-  { text: "Deals verschwinden nicht, weil der Preis zu hoch ist. Sie verschwinden, weil der Wert nicht klar war.", tone: "wisdom" },
-  { text: "Der nächste Schritt ist immer ein konkreter Termin. Nie nur 'ich melde mich'.", tone: "wisdom" },
   { text: "Pipeline ohne Termine ist eine Wunschliste.", tone: "wisdom" },
-  { text: "Zuhören schlägt Präsentieren. Immer.", tone: "wisdom" },
-  { text: "Der beste Deal ist der, den du nicht brauchst.", tone: "wisdom" },
-  { text: "Schnell 'Nein' ist besser als langsam 'Vielleicht'.", tone: "wisdom" },
-
+  
   // ─── Extra Motivation für schwere Tage ──────────────────────
   { text: "Das Telefon ist das günstigste Marketing-Tool der Welt. Benutze es.", tone: "motivation" },
-  { text: "Heute nicht gut gelaufen? Morgen startest du bei 0 — und bei 0 Deals.", tone: "motivation" },
   { text: "Wer den Hörer abnimmt, gewinnt.", tone: "motivation" },
   { text: "Du verkaufst nicht, du löst Probleme. Finde das Problem.", tone: "motivation" },
   { text: "Nichts ist vorbei, solange der Lead nicht 'Stop' gesagt hat.", tone: "motivation" },
-  { text: "Deine Pipeline spiegelt deinen Fleiß der letzten 30 Tage.", tone: "wisdom" },
   { text: "Konstanz schlägt Intensität.", tone: "wisdom" },
 ];
 
