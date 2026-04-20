@@ -5,6 +5,8 @@ import type {
 } from "@/lib/types";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
+import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
+import { getWebexCredentials } from "@/lib/webex/auth";
 import { CrmLeadDetail } from "./crm-lead-detail";
 
 export default async function CrmLeadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -79,9 +81,16 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     }
   }
 
+  const webexCreds = await getWebexCredentials();
+  const callProviders = {
+    phonemondo: isPhoneMondoConfigured(),
+    webex: !!webexCreds && (webexCreds.source === "env" || webexCreds.scopes.includes("spark:calls_write")),
+  };
+
   return (
     <CrmLeadDetail
       lead={typedLead}
+      callProviders={callProviders}
       contacts={(contacts ?? []) as LeadContact[]}
       jobs={(jobs ?? []) as LeadJobPosting[]}
       notes={((notes ?? []) as LeadNote[]).map(withAuthor)}

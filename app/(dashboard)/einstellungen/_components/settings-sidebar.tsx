@@ -39,7 +39,7 @@ export const SETTINGS_GROUPS: NavGroup[] = [
     label: "Integrationen",
     items: [
       { href: "/einstellungen/phonemondo", label: "PhoneMondo", icon: Phone },
-      { href: "/einstellungen/webex-recordings", label: "Aufzeichnungen", icon: Mic },
+      { href: "/einstellungen/webex", label: "Webex", icon: Mic },
     ],
   },
   {

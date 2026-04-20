@@ -35,10 +35,11 @@ interface Props {
   auditLogs: AuditRow[];
   statuses: CustomLeadStatus[];
   hq: HqLocation;
+  callProviders: { phonemondo: boolean; webex: boolean };
 }
 
 export function CrmLeadDetail({
-  lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq,
+  lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq, callProviders,
 }: Props) {
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
@@ -128,6 +129,7 @@ export function CrmLeadDetail({
             enrichments={enrichments}
             changes={changes}
             auditLogs={auditLogs}
+            callProviders={callProviders}
           />
         }
       />

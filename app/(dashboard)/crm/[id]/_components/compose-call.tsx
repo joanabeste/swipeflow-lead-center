@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { PhoneCall, PhoneOutgoing, X } from "lucide-react";
 import type { LeadContact, CallDirection, CallStatus } from "@/lib/types";
-import { logCall, startCall } from "../../actions";
+import { logCall, startCall, type CallProvider } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 
 export function ComposeCall({
-  leadId, leadPhone, contacts, onClose, onSaved,
+  leadId, leadPhone, contacts, callProviders, onClose, onSaved,
 }: {
   leadId: string; leadPhone: string | null; contacts: LeadContact[];
+  callProviders: { phonemondo: boolean; webex: boolean };
   onClose: () => void; onSaved: () => void;
 }) {
   const [mode, setMode] = useState<"live" | "log">("live");
@@ -23,6 +24,10 @@ export function ComposeCall({
   const [error, setError] = useState<string | null>(null);
   const { addToast } = useToastContext();
 
+  const bothProviders = callProviders.phonemondo && callProviders.webex;
+  const defaultProvider: CallProvider = callProviders.phonemondo ? "phonemondo" : "webex";
+  const [provider, setProvider] = useState<CallProvider>(defaultProvider);
+
   const callable = [
     ...(leadPhone ? [{ label: "Firmennummer", phone: leadPhone, contactId: null as string | null }] : []),
     ...contacts.filter((c) => c.phone).map((c) => ({
@@ -35,12 +40,12 @@ export function ComposeCall({
   function live(p: string, cId: string | null) {
     setError(null);
     startTransition(async () => {
-      const res = await startCall({ leadId, phoneNumber: p, contactId: cId });
+      const res = await startCall({ leadId, phoneNumber: p, contactId: cId, provider });
       if (res.error) {
         setError(res.error);
         addToast(res.error, "error");
       } else {
-        addToast("Anruf gestartet", "success");
+        addToast(`Anruf via ${provider === "webex" ? "Webex" : "PhoneMondo"} gestartet`, "success");
         onSaved();
       }
     });
@@ -100,6 +105,36 @@ export function ComposeCall({
 
       {mode === "live" ? (
         <div className="mt-3 space-y-2">
+          {bothProviders && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500 dark:text-gray-400">Provider:</span>
+              <div className="flex rounded-md border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
+                <button
+                  type="button"
+                  onClick={() => setProvider("phonemondo")}
+                  className={`rounded px-2 py-0.5 text-xs ${
+                    provider === "phonemondo" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
+                  }`}
+                >
+                  PhoneMondo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProvider("webex")}
+                  className={`rounded px-2 py-0.5 text-xs ${
+                    provider === "webex" ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500"
+                  }`}
+                >
+                  Webex
+                </button>
+              </div>
+            </div>
+          )}
+          {!callProviders.phonemondo && !callProviders.webex && (
+            <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+              Keine Telefonie-Integration konfiguriert. In den Einstellungen (PhoneMondo oder Webex) einrichten.
+            </p>
+          )}
           {callable.length === 0 ? (
             <p className="text-sm text-gray-400">Keine Telefonnummer vorhanden.</p>
           ) : (

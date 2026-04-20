@@ -6,6 +6,12 @@ import { logAudit } from "@/lib/audit-log";
 import type { EnrichmentConfig, ServiceMode, WebdevStrictness } from "@/lib/types";
 import { saveHqLocation as saveHqLocationHelper } from "@/lib/app-settings";
 import { geocodeAddress } from "@/lib/geo/geocode";
+import {
+  saveWebexToken as saveWebexTokenHelper,
+  deleteWebexCredentials as deleteWebexCredentialsHelper,
+  verifyWebexToken,
+  getWebexCredentials,
+} from "@/lib/webex/auth";
 
 export async function saveFieldProfile(
   _prev: { error?: string } | undefined,
@@ -405,6 +411,95 @@ export async function triggerRecordingSync(): Promise<
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Sync fehlgeschlagen" };
   }
+}
+
+// ─── Webex ───────────────────────────────────────────────────
+
+export async function testWebexToken(
+  token: string,
+): Promise<
+  | { ok: true; scopes: string[]; personEmail: string | null; displayName: string | null; missingRequiredScopes: string[]; hasTranscriptsScope: boolean; hasCallingScope: boolean }
+  | { ok: false; error: string }
+> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { ok: false, error: check.error as string };
+  const result = await verifyWebexToken(token);
+  return result;
+}
+
+export async function saveWebexCredentials(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const token = ((formData.get("token") as string) ?? "").trim();
+  if (!token) return { error: "Kein Token eingegeben." };
+
+  const res = await saveWebexTokenHelper({ token, updatedBy: check.user.id });
+  if (!res.ok) return { error: res.error };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "integrations.webex.token_saved",
+    entityType: "integration_credentials",
+    details: {
+      scopes: res.verify.scopes,
+      person_email: res.verify.personEmail,
+      has_transcripts: res.verify.hasTranscriptsScope,
+      has_calling: res.verify.hasCallingScope,
+    },
+  });
+
+  revalidatePath("/einstellungen/webex");
+  revalidatePath("/einstellungen");
+  return { success: true };
+}
+
+export async function deleteWebexCredentials(): Promise<{ error?: string; success?: boolean }> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const res = await deleteWebexCredentialsHelper();
+  if (!res.ok) return { error: res.error };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "integrations.webex.token_deleted",
+    entityType: "integration_credentials",
+  });
+
+  revalidatePath("/einstellungen/webex");
+  return { success: true };
+}
+
+/** Re-verifiziert den gespeicherten Token (Status-Refresh-Button). */
+export async function reverifyWebex(): Promise<
+  | { ok: true; scopes: string[]; personEmail: string | null; displayName: string | null; missingRequiredScopes: string[]; hasTranscriptsScope: boolean; hasCallingScope: boolean }
+  | { ok: false; error: string }
+> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { ok: false, error: check.error as string };
+
+  const stored = await getWebexCredentials();
+  if (!stored) return { ok: false, error: "Kein Token gespeichert." };
+  const result = await verifyWebexToken(stored.token);
+
+  if (result.ok) {
+    // Scopes + last_verified_at im DB-Eintrag aktualisieren.
+    const db = createServiceClient();
+    await db
+      .from("integration_credentials")
+      .update({
+        scopes: result.scopes,
+        last_verified_at: new Date().toISOString(),
+        last_verify_error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("provider", "webex");
+  }
+  return result;
 }
 
 export async function setUserPhonemondoExtension(userId: string, extension: string | null) {

@@ -23,6 +23,7 @@ interface Props {
   enrichments: LeadEnrichment[];
   changes: LeadChange[];
   auditLogs: AuditRow[];
+  callProviders: { phonemondo: boolean; webex: boolean };
 }
 
 interface UnifiedItem {
@@ -34,7 +35,7 @@ interface UnifiedItem {
 }
 
 export function CrmActivityFeed({
-  leadId, leadPhone, currentStatusId, statuses, contacts, notes, calls, enrichments, changes, auditLogs,
+  leadId, leadPhone, currentStatusId, statuses, contacts, notes, calls, enrichments, changes, auditLogs, callProviders,
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<ActivityKind>("all");
@@ -173,6 +174,7 @@ export function CrmActivityFeed({
           leadId={leadId}
           leadPhone={leadPhone}
           contacts={contacts}
+          callProviders={callProviders}
           onClose={() => setComposeMode("idle")}
           onSaved={() => { setComposeMode("idle"); router.refresh(); }}
         />

@@ -1,15 +1,14 @@
 // Webex-Calling-Recordings-API-Client
 //
-// Auth: Bearer-Token aus WEBEX_CALLING_TOKEN. Personal Access Tokens sind 12h
-// gültig. Für produktive Umgebungen ideal OAuth2 mit Refresh-Token — MVP nutzt
-// den PAT und wirft bei 401 einen sprechenden Fehler.
+// Token-Source: siehe lib/webex/auth.ts (DB verschlüsselt + ENV-Fallback).
 
 import type { WebexRecording } from "./types";
+import { getWebexToken, getWebexCredentials } from "./auth";
 
 const WEBEX_API_BASE = "https://webexapis.com/v1";
 
-export function isWebexConfigured(): boolean {
-  return !!process.env.WEBEX_CALLING_TOKEN;
+export async function isWebexConfigured(): Promise<boolean> {
+  return (await getWebexCredentials()) !== null;
 }
 
 /**
@@ -21,9 +20,7 @@ export async function listRecordings(input: {
   to: Date;
   max?: number;
 }): Promise<WebexRecording[]> {
-  const token = process.env.WEBEX_CALLING_TOKEN;
-  if (!token) throw new Error("WEBEX_CALLING_TOKEN fehlt");
-
+  const token = await getWebexToken();
   const max = Math.min(input.max ?? 100, 100);
   const params = new URLSearchParams({
     from: input.from.toISOString(),
@@ -53,7 +50,6 @@ export async function listRecordings(input: {
     const data = (await res.json()) as { items?: WebexRecording[] };
     if (Array.isArray(data.items)) collected.push(...data.items);
 
-    // Nächste Seite per Link-Header
     const link: string | null = res.headers.get("link");
     const nextMatch = link?.match(/<([^>]+)>;\s*rel="next"/i);
     url = nextMatch ? nextMatch[1] : null;
@@ -65,12 +61,9 @@ export async function listRecordings(input: {
 
 /**
  * Fordert eine frische signierte Download-URL für ein Recording an.
- * Webex gibt meist die URL direkt im /recordings/{id}-Endpoint zurück.
  */
 export async function getRecordingDownloadUrl(recordingId: string): Promise<string | null> {
-  const token = process.env.WEBEX_CALLING_TOKEN;
-  if (!token) throw new Error("WEBEX_CALLING_TOKEN fehlt");
-
+  const token = await getWebexToken();
   const res = await fetch(`${WEBEX_API_BASE}/admin/callingRecordings/${encodeURIComponent(recordingId)}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     signal: AbortSignal.timeout(10_000),
@@ -83,10 +76,7 @@ export async function getRecordingDownloadUrl(recordingId: string): Promise<stri
   return data.downloadUrl ?? null;
 }
 
-/**
- * Normalisiert eine Telefonnummer zu Ziffern ohne Prefix/Formatierung
- * für robustes Matching (+49 16 09 / 2181021 → 4916092181021).
- */
+/** Normalisiert eine Telefonnummer zu Ziffern ohne Prefix/Formatierung. */
 export function normalizeNumber(n: string | null | undefined): string {
   if (!n) return "";
   return n.replace(/[^0-9]/g, "").replace(/^0+/, "");

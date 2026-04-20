@@ -23,4 +23,6 @@ export interface WebexRecording {
   format?: string;
   /** Größe in Bytes */
   sizeBytes?: number;
+  /** Optional: Meeting-ID — wird für Transcript-Lookup benutzt. */
+  meetingId?: string;
 }

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
-  Trash2, Pencil, Save,
+  Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange } from "@/lib/types";
 import { CrmStatusBadge } from "../../status-badge";
@@ -108,6 +108,7 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
 }
 
 export function CallItem({ call }: { call: CallRow }) {
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const directionIcon =
     call.status === "missed" ? <PhoneMissed className="h-3 w-3 text-red-500" />
       : call.direction === "inbound" ? <PhoneIncoming className="h-3 w-3 text-blue-500" />
@@ -118,6 +119,13 @@ export function CallItem({ call }: { call: CallRow }) {
   };
   const hasEnded = !!call.ended_at;
   const hasRecording = !!call.recording_url;
+  const hasTranscript = !!call.transcript_text;
+  const aiDisabled = call.transcript_fetch_error?.toLowerCase().includes("ai assistant");
+  const providerLabel =
+    call.call_provider === "webex" ? "Webex"
+      : call.call_provider === "phonemondo" ? "PhoneMondo"
+      : null;
+
   return (
     <div className="text-sm">
       <p className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
@@ -129,6 +137,11 @@ export function CallItem({ call }: { call: CallRow }) {
         )}
         {call.phone_number && (
           <span className="text-xs text-gray-500 dark:text-gray-400">· {call.phone_number}</span>
+        )}
+        {providerLabel && (
+          <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-400">
+            {providerLabel}
+          </span>
         )}
       </p>
       {call.notes && (
@@ -144,6 +157,36 @@ export function CallItem({ call }: { call: CallRow }) {
           <Play className="h-3 w-3" />
           Aufzeichnung wird synchronisiert…
         </p>
+      )}
+
+      {hasTranscript && (
+        <div className="mt-2">
+          <button
+            onClick={() => setTranscriptOpen((v) => !v)}
+            className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-white/5"
+          >
+            <FileText className="h-3 w-3" />
+            Transkript
+            {transcriptOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+          {transcriptOpen && (
+            <pre className="mt-1 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md border border-gray-100 bg-gray-50 p-2.5 text-xs text-gray-700 dark:border-[#2c2c2e] dark:bg-white/5 dark:text-gray-300">
+              {call.transcript_text}
+            </pre>
+          )}
+        </div>
+      )}
+      {!hasTranscript && hasRecording && aiDisabled && (
+        <p
+          className="mt-1 inline-flex items-center gap-1 text-xs text-amber-600"
+          title={call.transcript_fetch_error ?? ""}
+        >
+          <AlertCircle className="h-3 w-3" />
+          Kein Transkript (AI Assistant inaktiv)
+        </p>
+      )}
+      {!hasTranscript && hasRecording && !aiDisabled && call.transcript_fetch_attempted_at === null && (
+        <p className="mt-1 text-xs text-gray-400">Transkript wird verarbeitet…</p>
       )}
     </div>
   );

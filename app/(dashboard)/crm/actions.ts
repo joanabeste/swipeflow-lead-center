@@ -4,8 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { triggerCall, isPhoneMondoConfigured } from "@/lib/phonemondo/client";
+import { dialWebexCall } from "@/lib/webex/calling";
+import { getWebexCredentials } from "@/lib/webex/auth";
 import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
 import type { CallDirection, CallStatus } from "@/lib/types";
+
+export type CallProvider = "phonemondo" | "webex";
 
 async function currentUser() {
   const supabase = await createClient();
@@ -185,24 +189,33 @@ export async function logCall(input: {
   return { success: true, call: data };
 }
 
-/** Startet einen ausgehenden Anruf über PhoneMondo und legt sofort einen
- *  lead_calls-Eintrag mit status='initiated' an. Status-Updates kommen dann
- *  per Webhook (siehe app/api/phonemondo/webhook/route.ts). */
+/** Startet einen ausgehenden Anruf über PhoneMondo ODER Webex (Default: PhoneMondo
+ *  für Backwards-Compat). Legt sofort einen lead_calls-Eintrag mit
+ *  status='initiated' + call_provider an. PhoneMondo-Status kommt per Webhook. */
 export async function startCall(input: {
   leadId: string;
   contactId?: string | null;
   phoneNumber: string;
+  provider?: CallProvider;
 }) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
+  if (!input.phoneNumber) return { error: "Keine Telefonnummer vorhanden." };
 
+  const provider: CallProvider = input.provider ?? "phonemondo";
+  return provider === "webex"
+    ? startCallWebex({ ...input, userId: user.id })
+    : startCallPhoneMondo({ ...input, userId: user.id });
+}
+
+async function startCallPhoneMondo(input: {
+  leadId: string;
+  contactId?: string | null;
+  phoneNumber: string;
+  userId: string;
+}) {
   if (!isPhoneMondoConfigured()) {
-    console.error("[startCall] PHONEMONDO_API_TOKEN fehlt im process.env.", {
-      hasToken: !!process.env.PHONEMONDO_API_TOKEN,
-      hasSecret: !!process.env.PHONEMONDO_WEBHOOK_SECRET,
-      hasBase: !!process.env.PHONEMONDO_API_BASE_URL,
-      nodeEnv: process.env.NODE_ENV,
-    });
+    console.error("[startCall] PHONEMONDO_API_TOKEN fehlt im process.env.");
     return {
       error:
         "PhoneMondo ist nicht konfiguriert. Prüfe: Zeile 'PHONEMONDO_API_TOKEN=…' in .env.local vorhanden? Dev-Server nach Änderung neu gestartet (Ctrl+C + npm run dev)?",
@@ -213,14 +226,11 @@ export async function startCall(input: {
   const { data: profile } = await db
     .from("profiles")
     .select("phonemondo_extension")
-    .eq("id", user.id)
+    .eq("id", input.userId)
     .single();
   const extension = profile?.phonemondo_extension?.trim();
   if (!extension) {
     return { error: "Keine PhoneMondo-Durchwahl in deinem Profil hinterlegt." };
-  }
-  if (!input.phoneNumber) {
-    return { error: "Keine Telefonnummer vorhanden." };
   }
 
   let mondoCallId: string | null = null;
@@ -228,7 +238,7 @@ export async function startCall(input: {
     const res = await triggerCall({
       target: input.phoneNumber,
       extension,
-      metadata: { leadId: input.leadId, userId: user.id },
+      metadata: { leadId: input.leadId, userId: input.userId },
     });
     mondoCallId = res.callId;
   } catch (e) {
@@ -244,30 +254,81 @@ export async function startCall(input: {
       direction: "outbound" as CallDirection,
       status: "initiated" as CallStatus,
       phone_number: input.phoneNumber,
+      call_provider: "phonemondo",
       mondo_call_id: mondoCallId,
       started_at: now,
-      created_by: user.id,
+      created_by: input.userId,
     })
     .select()
     .single();
   if (error) return { error: error.message };
 
   await logAudit({
-    userId: user.id,
+    userId: input.userId,
     action: "lead.call_logged",
     entityType: "lead",
     entityId: input.leadId,
-    details: {
-      call_id: callRow.id,
-      mondo_call_id: mondoCallId,
-      direction: "outbound",
-      status: "initiated",
-    },
+    details: { call_id: callRow.id, mondo_call_id: mondoCallId, provider: "phonemondo", status: "initiated" },
   });
 
   revalidatePath(`/crm/${input.leadId}`);
   revalidatePath("/crm");
   return { success: true, callId: callRow.id, mondoCallId };
+}
+
+async function startCallWebex(input: {
+  leadId: string;
+  contactId?: string | null;
+  phoneNumber: string;
+  userId: string;
+}) {
+  const creds = await getWebexCredentials();
+  if (!creds) return { error: "Webex nicht konfiguriert — Token in den Einstellungen hinterlegen." };
+  if (creds.source === "db" && !creds.scopes.includes("spark:calls_write")) {
+    return {
+      error:
+        "Webex-Token fehlt der Scope `spark:calls_write`. Neuen Token mit diesem Scope in developer.webex.com erstellen.",
+    };
+  }
+
+  let webexCallId: string;
+  try {
+    const res = await dialWebexCall({ destination: input.phoneNumber });
+    webexCallId = res.callId;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Webex-Anruf fehlgeschlagen." };
+  }
+
+  const db = createServiceClient();
+  const now = new Date().toISOString();
+  const { data: callRow, error } = await db
+    .from("lead_calls")
+    .insert({
+      lead_id: input.leadId,
+      contact_id: input.contactId ?? null,
+      direction: "outbound" as CallDirection,
+      status: "initiated" as CallStatus,
+      phone_number: input.phoneNumber,
+      call_provider: "webex",
+      mondo_call_id: webexCallId, // spalte dient als generisches external-call-id
+      started_at: now,
+      created_by: input.userId,
+    })
+    .select()
+    .single();
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: input.userId,
+    action: "lead.call_logged",
+    entityType: "lead",
+    entityId: input.leadId,
+    details: { call_id: callRow.id, webex_call_id: webexCallId, provider: "webex", status: "initiated" },
+  });
+
+  revalidatePath(`/crm/${input.leadId}`);
+  revalidatePath("/crm");
+  return { success: true, callId: callRow.id, webexCallId };
 }
 
 export async function createManualLead(input: {

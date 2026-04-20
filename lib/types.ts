@@ -217,6 +217,14 @@ export interface LeadCall {
   recording_fetched_at: string | null;
   recording_fetch_attempted_at: string | null;
   recording_fetch_error: string | null;
+  /** Transkript- + Provider-Felder (Migration 025) */
+  transcript_id: string | null;
+  transcript_text: string | null;
+  transcript_vtt_url: string | null;
+  transcript_fetched_at: string | null;
+  transcript_fetch_attempted_at: string | null;
+  transcript_fetch_error: string | null;
+  call_provider: "phonemondo" | "webex" | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
