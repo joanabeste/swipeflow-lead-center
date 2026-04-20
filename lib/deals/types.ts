@@ -21,9 +21,18 @@ export interface Deal {
   assignedTo: string | null;
   expectedCloseDate: string | null; // ISO date
   actualCloseDate: string | null;
+  probability: number | null;       // 0–100
+  nextStep: string | null;
+  lastFollowupAt: string | null;    // ISO date
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Gewichteter Forecast eines Deals (amount * probability/100), auch 0 wenn keine Probability. */
+export function weightedForecastCents(deal: Pick<Deal, "amountCents" | "probability">): number {
+  const p = deal.probability ?? 0;
+  return Math.round((deal.amountCents * p) / 100);
 }
 
 export interface DealWithRelations extends Deal {

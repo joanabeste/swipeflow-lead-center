@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AccountForm } from "./account-form";
 import { AvatarUpload } from "./avatar-upload";
 import { SalutationBackfillButton } from "./salutation-backfill-button";
+import { ThemeToggle } from "../theme-toggle";
 
 export default async function MeinKontoPage() {
   const supabase = await createClient();
@@ -72,6 +73,15 @@ export default async function MeinKontoPage() {
           Vergib ein neues Passwort. Mindestens 8 Zeichen.
         </p>
         <AccountForm />
+      </div>
+
+      {/* Darstellung */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="font-semibold">Darstellung</h2>
+        <p className="mt-1 mb-4 text-sm text-gray-500 dark:text-gray-400">
+          Helles oder dunkles Design für die gesamte App.
+        </p>
+        <ThemeToggle />
       </div>
 
       {/* Wartung */}

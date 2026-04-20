@@ -103,6 +103,9 @@ export async function updateDealAction(
     stageId?: string;
     assignedTo?: string | null;
     expectedCloseDate?: string | null;
+    probability?: number | null;
+    nextStep?: string | null;
+    lastFollowupAt?: string | null;
   },
 ): Promise<{ success: true } | { error: string }> {
   const user = await requireUser();
@@ -123,6 +126,14 @@ export async function updateDealAction(
   if (updates.stageId !== undefined) patch.stageId = updates.stageId;
   if (updates.assignedTo !== undefined) patch.assignedTo = updates.assignedTo;
   if (updates.expectedCloseDate !== undefined) patch.expectedCloseDate = updates.expectedCloseDate;
+  if (updates.probability !== undefined) {
+    if (updates.probability != null && (updates.probability < 0 || updates.probability > 100)) {
+      return { error: "Wahrscheinlichkeit muss zwischen 0 und 100 liegen." };
+    }
+    patch.probability = updates.probability;
+  }
+  if (updates.nextStep !== undefined) patch.nextStep = updates.nextStep?.trim() || null;
+  if (updates.lastFollowupAt !== undefined) patch.lastFollowupAt = updates.lastFollowupAt;
 
   const res = await updateDealHelper(dealId, user.id, patch);
   if ("error" in res) return { error: res.error };

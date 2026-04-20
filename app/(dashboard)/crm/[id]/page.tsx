@@ -112,8 +112,9 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       .from("deals")
       .select(`
         id, lead_id, title, description, amount_cents, currency, stage_id,
-        assigned_to, expected_close_date, actual_close_date, created_by,
-        created_at, updated_at,
+        assigned_to, expected_close_date, actual_close_date,
+        probability, next_step, last_followup_at,
+        created_by, created_at, updated_at,
         leads!inner(company_name, domain),
         deal_stages!inner(label, color, kind),
         profiles:assigned_to(name, avatar_url)
@@ -145,6 +146,9 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       assignedTo: (row.assigned_to as string | null) ?? null,
       expectedCloseDate: (row.expected_close_date as string | null) ?? null,
       actualCloseDate: (row.actual_close_date as string | null) ?? null,
+      probability: (row.probability as number | null) ?? null,
+      nextStep: (row.next_step as string | null) ?? null,
+      lastFollowupAt: (row.last_followup_at as string | null) ?? null,
       createdBy: (row.created_by as string | null) ?? null,
       createdAt: row.created_at as string,
       updatedAt: row.updated_at as string,

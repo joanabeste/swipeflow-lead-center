@@ -569,29 +569,48 @@ export function CallQueueClient({
 
                       {/* Picker-Row bei > 1 Kontakt */}
                       {currentLead.contacts.length > 1 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {currentLead.contacts.map((c) => {
                             const selected = c.id === activeContactId;
+                            // "Ohne Tel" nur warnen, wenn weder Kontakt-Nr. noch
+                            // Firmen-Nr. verfügbar ist — sonst kann man ja über
+                            // die Firmen-Zentrale anrufen, und das Label wäre irreführend.
+                            const hasAnyPhone = !!(c.phone ?? currentLead.phone);
+                            const phoneFallbackOnly = !c.phone && !!currentLead.phone;
                             return (
                               <button
                                 key={c.id}
                                 type="button"
                                 onClick={() => selectContact(c.id)}
                                 disabled={mode === "calling"}
-                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition ${
+                                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition ${
                                   selected
                                     ? "border-primary bg-primary/10 text-primary"
                                     : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-300"
                                 } disabled:opacity-50`}
-                                title={c.phone ? `Anrufen: ${c.phone}` : "Keine Telefonnummer"}
+                                title={
+                                  hasAnyPhone
+                                    ? `Anrufen: ${c.phone ?? currentLead.phone}`
+                                    : "Keine Telefonnummer hinterlegt"
+                                }
                               >
                                 {c.is_hr && (
                                   <span className="rounded bg-emerald-100 px-1 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                                     HR
                                   </span>
                                 )}
-                                <span className="truncate max-w-[160px]">{c.name}</span>
-                                {!c.phone && <span className="text-gray-400">(ohne Tel)</span>}
+                                <span className="truncate max-w-[200px]">
+                                  <span className="font-medium">{c.name}</span>
+                                  {c.role && (
+                                    <span className="text-gray-400"> · {c.role}</span>
+                                  )}
+                                </span>
+                                {!hasAnyPhone && (
+                                  <span className="text-[10px] text-red-500">ohne Tel</span>
+                                )}
+                                {phoneFallbackOnly && (
+                                  <span className="text-[10px] text-gray-400" title="Nur Firmen-Nummer verfügbar">Firma</span>
+                                )}
                               </button>
                             );
                           })}
@@ -1004,6 +1023,63 @@ function LeadDetailSections({
 
   return (
     <>
+      {/* Stellenanzeigen ganz oben — beim Cold-Call der primäre Gesprächsaufhänger. */}
+      {details && details.jobs.length > 0 && (
+        <DetailCard
+          icon={Briefcase}
+          title="Stellenanzeigen"
+          right={
+            <span className="text-[11px] text-gray-400">
+              {details.jobs.length} {details.jobs.length === 1 ? "Eintrag" : "Einträge"}
+            </span>
+          }
+        >
+          <ul className="space-y-2">
+            {details.jobs.map((job) => (
+              <li
+                key={job.id}
+                className="rounded-lg border border-gray-100 p-2.5 dark:border-[#2c2c2e]"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{job.title}</p>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                      {job.location && (
+                        <span className="inline-flex items-center gap-0.5">
+                          <MapPin className="h-3 w-3" />
+                          {job.location}
+                        </span>
+                      )}
+                      {job.posted_date && (
+                        <span>
+                          {new Date(job.posted_date).toLocaleDateString("de-DE")}
+                        </span>
+                      )}
+                      {job.source && (
+                        <span className="rounded bg-gray-100 px-1 text-[10px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
+                          {job.source}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {job.url && (
+                    <a
+                      href={job.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-gray-400 hover:text-primary"
+                      title="Anzeige öffnen"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </DetailCard>
+      )}
+
       {hasCompanyData && (
         <DetailCard icon={Building2} title="Unternehmen">
           <dl className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
@@ -1127,62 +1203,6 @@ function LeadDetailSections({
               </DataRow>
             )}
           </dl>
-        </DetailCard>
-      )}
-
-      {details && details.jobs.length > 0 && (
-        <DetailCard
-          icon={Briefcase}
-          title="Stellenanzeigen"
-          right={
-            <span className="text-[11px] text-gray-400">
-              {details.jobs.length} {details.jobs.length === 1 ? "Eintrag" : "Einträge"}
-            </span>
-          }
-        >
-          <ul className="space-y-2">
-            {details.jobs.map((job) => (
-              <li
-                key={job.id}
-                className="rounded-lg border border-gray-100 p-2.5 dark:border-[#2c2c2e]"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{job.title}</p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
-                      {job.location && (
-                        <span className="inline-flex items-center gap-0.5">
-                          <MapPin className="h-3 w-3" />
-                          {job.location}
-                        </span>
-                      )}
-                      {job.posted_date && (
-                        <span>
-                          {new Date(job.posted_date).toLocaleDateString("de-DE")}
-                        </span>
-                      )}
-                      {job.source && (
-                        <span className="rounded bg-gray-100 px-1 text-[10px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
-                          {job.source}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {job.url && (
-                    <a
-                      href={job.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 text-gray-400 hover:text-primary"
-                      title="Anzeige öffnen"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                    </a>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
         </DetailCard>
       )}
 

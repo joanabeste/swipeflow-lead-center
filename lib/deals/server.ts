@@ -55,18 +55,21 @@ export async function deleteStage(id: string): Promise<void> {
 
 // ─── Deals ────────────────────────────────────────────────────
 
+const DEAL_SELECT = `
+  id, lead_id, title, description, amount_cents, currency, stage_id,
+  assigned_to, expected_close_date, actual_close_date,
+  probability, next_step, last_followup_at,
+  created_by, created_at, updated_at,
+  leads!inner(company_name, domain),
+  deal_stages!inner(label, color, kind),
+  profiles:assigned_to(name, avatar_url)
+`;
+
 export async function listDeals(): Promise<DealWithRelations[]> {
   const db = createServiceClient();
   const { data } = await db
     .from("deals")
-    .select(`
-      id, lead_id, title, description, amount_cents, currency, stage_id,
-      assigned_to, expected_close_date, actual_close_date, created_by,
-      created_at, updated_at,
-      leads!inner(company_name, domain),
-      deal_stages!inner(label, color, kind),
-      profiles:assigned_to(name, avatar_url)
-    `)
+    .select(DEAL_SELECT)
     .order("updated_at", { ascending: false });
   return (data ?? []).map(mapDealRelRow);
 }
@@ -75,14 +78,7 @@ export async function getDeal(id: string): Promise<DealWithRelations | null> {
   const db = createServiceClient();
   const { data } = await db
     .from("deals")
-    .select(`
-      id, lead_id, title, description, amount_cents, currency, stage_id,
-      assigned_to, expected_close_date, actual_close_date, created_by,
-      created_at, updated_at,
-      leads!inner(company_name, domain),
-      deal_stages!inner(label, color, kind),
-      profiles:assigned_to(name, avatar_url)
-    `)
+    .select(DEAL_SELECT)
     .eq("id", id)
     .maybeSingle();
   return data ? mapDealRelRow(data) : null;
@@ -96,6 +92,9 @@ export async function createDeal(input: {
   stageId: string;
   assignedTo: string | null;
   expectedCloseDate: string | null;
+  probability?: number | null;
+  nextStep?: string | null;
+  lastFollowupAt?: string | null;
   createdBy: string;
 }): Promise<{ id: string } | { error: string }> {
   const db = createServiceClient();
@@ -109,6 +108,9 @@ export async function createDeal(input: {
       stage_id: input.stageId,
       assigned_to: input.assignedTo,
       expected_close_date: input.expectedCloseDate,
+      probability: input.probability ?? null,
+      next_step: input.nextStep ?? null,
+      last_followup_at: input.lastFollowupAt ?? null,
       created_by: input.createdBy,
     })
     .select("id")
@@ -139,12 +141,15 @@ export async function updateDeal(
     assignedTo: string | null;
     expectedCloseDate: string | null;
     actualCloseDate: string | null;
+    probability: number | null;
+    nextStep: string | null;
+    lastFollowupAt: string | null;
   }>,
 ): Promise<{ success: true } | { error: string }> {
   const db = createServiceClient();
   const { data: before } = await db
     .from("deals")
-    .select("title, description, amount_cents, stage_id, assigned_to, expected_close_date, actual_close_date")
+    .select("title, description, amount_cents, stage_id, assigned_to, expected_close_date, actual_close_date, probability, next_step, last_followup_at")
     .eq("id", id)
     .maybeSingle();
   if (!before) return { error: "Deal nicht gefunden." };
@@ -197,6 +202,18 @@ export async function updateDeal(
   if (updates.actualCloseDate !== undefined) {
     row.actual_close_date = updates.actualCloseDate;
     track("actual_close_date", before.actual_close_date, updates.actualCloseDate);
+  }
+  if (updates.probability !== undefined) {
+    row.probability = updates.probability;
+    track("probability", before.probability, updates.probability);
+  }
+  if (updates.nextStep !== undefined) {
+    row.next_step = updates.nextStep;
+    track("next_step", before.next_step, updates.nextStep);
+  }
+  if (updates.lastFollowupAt !== undefined) {
+    row.last_followup_at = updates.lastFollowupAt;
+    track("last_followup_at", before.last_followup_at, updates.lastFollowupAt);
   }
 
   const { error } = await db.from("deals").update(row).eq("id", id);
@@ -281,6 +298,9 @@ type DealRelRow = {
   assigned_to: string | null;
   expected_close_date: string | null;
   actual_close_date: string | null;
+  probability: number | null;
+  next_step: string | null;
+  last_followup_at: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -310,6 +330,9 @@ function mapDealRelRow(r: unknown): DealWithRelations {
     assignedTo: row.assigned_to,
     expectedCloseDate: row.expected_close_date,
     actualCloseDate: row.actual_close_date,
+    probability: row.probability,
+    nextStep: row.next_step,
+    lastFollowupAt: row.last_followup_at,
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -336,6 +359,9 @@ export function dealCore(d: DealWithRelations): Deal {
     assignedTo: d.assignedTo,
     expectedCloseDate: d.expectedCloseDate,
     actualCloseDate: d.actualCloseDate,
+    probability: d.probability,
+    nextStep: d.nextStep,
+    lastFollowupAt: d.lastFollowupAt,
     createdBy: d.createdBy,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,

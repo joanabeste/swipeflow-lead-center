@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Calendar, User, Trash2, Save, Pencil, Activity } from "lucide-react";
+import { Building2, Calendar, User, Trash2, Save, Pencil, Activity, Percent, Footprints, Clock } from "lucide-react";
 import type { DealChange, DealStage, DealWithRelations } from "@/lib/deals/types";
-import { formatAmount } from "@/lib/deals/types";
+import { formatAmount, weightedForecastCents } from "@/lib/deals/types";
 import { updateDealAction, deleteDealAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
 
@@ -29,9 +29,15 @@ export function DealDetail({ deal, stages, team, changes }: Props) {
   const [stageId, setStageId] = useState(deal.stageId);
   const [assignedTo, setAssignedTo] = useState(deal.assignedTo ?? "");
   const [expectedCloseDate, setExpectedCloseDate] = useState(deal.expectedCloseDate ?? "");
+  const [probability, setProbability] = useState<string>(
+    deal.probability != null ? String(deal.probability) : "",
+  );
+  const [nextStep, setNextStep] = useState(deal.nextStep ?? "");
+  const [lastFollowupAt, setLastFollowupAt] = useState(deal.lastFollowupAt ?? "");
 
   function handleSave() {
     startTransition(async () => {
+      const probNum = probability.trim() === "" ? null : Number(probability);
       const res = await updateDealAction(deal.id, {
         title,
         description,
@@ -39,6 +45,9 @@ export function DealDetail({ deal, stages, team, changes }: Props) {
         stageId,
         assignedTo: assignedTo || null,
         expectedCloseDate: expectedCloseDate || null,
+        probability: probNum,
+        nextStep: nextStep.trim() || null,
+        lastFollowupAt: lastFollowupAt || null,
       });
       if ("error" in res) {
         addToast(res.error, "error");
@@ -102,6 +111,9 @@ export function DealDetail({ deal, stages, team, changes }: Props) {
                       setStageId(deal.stageId);
                       setAssignedTo(deal.assignedTo ?? "");
                       setExpectedCloseDate(deal.expectedCloseDate ?? "");
+                      setProbability(deal.probability != null ? String(deal.probability) : "");
+                      setNextStep(deal.nextStep ?? "");
+                      setLastFollowupAt(deal.lastFollowupAt ?? "");
                     }}
                     className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
                   >
@@ -228,6 +240,85 @@ export function DealDetail({ deal, stages, team, changes }: Props) {
                 </p>
               )}
             </div>
+
+            {/* Closing-Wahrscheinlichkeit + Forecast */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Closing-Wahrscheinlichkeit
+              </p>
+              {editing ? (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={probability}
+                    onChange={(e) => setProbability(e.target.value)}
+                    placeholder="z.B. 65"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
+                  />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">%</span>
+                </div>
+              ) : (
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm">
+                  <Percent className="h-3.5 w-3.5 text-gray-400" />
+                  {deal.probability != null ? (
+                    <>
+                      <span className="font-medium">{deal.probability}%</span>
+                      <span className="text-gray-400">·</span>
+                      <span className="text-gray-500 dark:text-gray-400">
+                        Forecast {formatAmount(weightedForecastCents(deal), deal.currency)}
+                      </span>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Letzter FollowUp */}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Letzter FollowUp
+              </p>
+              {editing ? (
+                <input
+                  type="date"
+                  value={lastFollowupAt}
+                  onChange={(e) => setLastFollowupAt(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+              ) : (
+                <p className="mt-1 inline-flex items-center gap-1.5 text-sm">
+                  <Clock className="h-3.5 w-3.5 text-gray-400" />
+                  {deal.lastFollowupAt
+                    ? new Date(deal.lastFollowupAt).toLocaleDateString("de-DE")
+                    : "—"}
+                </p>
+              )}
+            </div>
+
+            {/* Nächster Schritt (volle Breite) */}
+            <div className="sm:col-span-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Nächster Schritt
+              </p>
+              {editing ? (
+                <input
+                  type="text"
+                  value={nextStep}
+                  onChange={(e) => setNextStep(e.target.value)}
+                  placeholder="z.B. Ersttermin am 12.03., Urlaub bis 16.03., …"
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+              ) : (
+                <p className="mt-1 inline-flex items-start gap-1.5 text-sm">
+                  <Footprints className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                  {deal.nextStep || <span className="italic text-gray-400">Kein Next Step hinterlegt</span>}
+                </p>
+              )}
+            </div>
           </div>
 
           {currentStage && (currentStage.kind === "won" || currentStage.kind === "lost") && deal.actualCloseDate && (
@@ -330,6 +421,9 @@ function FieldChangeLabel({
     assigned_to: "Zuständig",
     expected_close_date: "Erwartetes Abschluss-Datum",
     actual_close_date: "Abschluss-Datum",
+    probability: "Closing-%",
+    next_step: "Nächster Schritt",
+    last_followup_at: "Letzter FollowUp",
   };
   const label = labels[change.field] ?? change.field;
 
