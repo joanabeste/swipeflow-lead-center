@@ -27,6 +27,14 @@ const KNOWN_PATHS: { path: string; category: FetchedPage["category"] }[] = [
   { path: "/jobs-karriere", category: "karriere" },
   { path: "/unternehmen/karriere", category: "karriere" },
   { path: "/de/karriere", category: "karriere" },
+  { path: "/stellenmarkt", category: "karriere" },
+  { path: "/work-with-us", category: "karriere" },
+  { path: "/join-us", category: "karriere" },
+  { path: "/mitmachen", category: "karriere" },
+  { path: "/bewerbung", category: "karriere" },
+  { path: "/team/jobs", category: "karriere" },
+  { path: "/de/jobs", category: "karriere" },
+  { path: "/ueber-uns/karriere", category: "karriere" },
 ];
 
 const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
@@ -47,6 +55,12 @@ const LINK_KEYWORDS: Record<string, FetchedPage["category"]> = {
   ausbildung: "karriere",
   ausbildungsplätze: "karriere",
   ausbildungsplatz: "karriere",
+  "work with us": "karriere",
+  bewerbung: "karriere",
+  mitmachen: "karriere",
+  "wir suchen": "karriere",
+  "open positions": "karriere",
+  vacancies: "karriere",
 };
 
 const MAX_CHARS_PER_PAGE = 8_000; // Reduziert von 15.000 — weniger Rauschen
@@ -133,8 +147,36 @@ export async function fetchCompanyPages(
     return null;
   });
 
-  const subPages = await Promise.all(subPagePromises);
+  // 2b. Karriere-Subdomains probieren (karriere.acme.de, jobs.acme.de, …).
+  // Parallel zu den KNOWN_PATHS; fällt ins Leere wenn die Subdomain nicht
+  // erreichbar ist (HTTP-Fehler → `error`, wird unten weggefiltert).
+  const subdomainPromises: Promise<FetchedPage | null>[] = [];
+  if (needsKarriere && !foundCategories.has("karriere")) {
+    try {
+      const bareHost = new URL(baseUrl).hostname.replace(/^www\./, "");
+      for (const sub of ["karriere", "jobs", "career", "careers"]) {
+        const url = `https://${sub}.${bareHost}`;
+        subdomainPromises.push(
+          fetchPage(url, "karriere").then((p) => {
+            if (p.error) return null;
+            foundCategories.add("karriere");
+            return p;
+          }),
+        );
+      }
+    } catch {
+      // ignore URL-Parsing-Fehler — dann eben ohne Subdomain-Probe
+    }
+  }
+
+  const [subPages, subdomainPages] = await Promise.all([
+    Promise.all(subPagePromises),
+    Promise.all(subdomainPromises),
+  ]);
   for (const page of subPages) {
+    if (page) pages.push(page);
+  }
+  for (const page of subdomainPages) {
     if (page) pages.push(page);
   }
 

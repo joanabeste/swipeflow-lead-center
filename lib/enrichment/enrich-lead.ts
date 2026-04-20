@@ -382,8 +382,10 @@ export async function enrichLead(
       entityType: "lead",
       entityId: leadId,
       details: {
-        contacts_found: result.contacts.length,
-        jobs_found: result.job_postings.length,
+        contacts_found: totalContacts,
+        contacts_from_llm: result.contacts.length,
+        jobs_found: totalJobs,
+        jobs_from_llm: result.job_postings.length,
         career_page: result.career_page_url,
         pages_fetched: successfulPages.length,
         config,
@@ -397,8 +399,8 @@ export async function enrichLead(
     return {
       success: true,
       enrichmentId,
-      contactsCount: result.contacts.length,
-      jobsCount: result.job_postings.length,
+      contactsCount: totalContacts,
+      jobsCount: totalJobs,
       firstContactName: firstContact?.name,
       hasEmail: result.contacts.some((c) => !!c.email),
       hasPhone: result.contacts.some((c) => !!c.phone),
