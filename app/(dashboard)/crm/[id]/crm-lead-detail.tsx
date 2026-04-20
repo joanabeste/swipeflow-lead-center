@@ -36,10 +36,11 @@ interface Props {
   statuses: CustomLeadStatus[];
   hq: HqLocation;
   callProviders: { phonemondo: boolean; webex: boolean };
+  senderName: string | null;
 }
 
 export function CrmLeadDetail({
-  lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq, callProviders,
+  lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
 }: Props) {
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
@@ -115,6 +116,7 @@ export function CrmLeadDetail({
             jobs={jobs}
             latestEnrichment={latestEnrichment}
             hq={hq}
+            senderName={senderName}
           />
         }
         right={

@@ -9,6 +9,7 @@ import { getWebexCredentials } from "@/lib/webex/auth";
 import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
 import { loadDecryptedSmtp } from "@/lib/email/user-credentials";
 import { sendEmail } from "@/lib/email/smtp";
+import { listTemplates, type EmailTemplate } from "@/lib/email/templates";
 import type { CallDirection, CallStatus } from "@/lib/types";
 
 export type CallProvider = "phonemondo" | "webex";
@@ -520,7 +521,16 @@ export async function updateCallNotes(callId: string, leadId: string, notes: str
   return { success: true };
 }
 
-// ─── E-Mail-Versand an Lead-Kontakt ──────────────────────────
+// ─── E-Mail-Versand + Vorlagen ───────────────────────────────
+
+/** Lädt die E-Mail-Vorlagen des aktuellen Users für den Send-Dialog. */
+export async function loadMyEmailTemplates(): Promise<EmailTemplate[]> {
+  const user = await currentUser();
+  if (!user) return [];
+  return listTemplates(user.id);
+}
+
+
 
 export async function sendLeadEmail(input: {
   leadId: string;

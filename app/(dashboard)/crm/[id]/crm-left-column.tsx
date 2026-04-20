@@ -14,13 +14,20 @@ interface Props {
   jobs: LeadJobPosting[];
   latestEnrichment: LeadEnrichment | null;
   hq: HqLocation;
+  senderName: string | null;
 }
 
-export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq }: Props) {
+export function CrmLeftColumn({ lead, contacts, jobs, latestEnrichment, hq, senderName }: Props) {
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
-      <CrmContactsCard leadId={lead.id} contacts={contacts} jobs={jobs} />
+      <CrmContactsCard
+        leadId={lead.id}
+        contacts={contacts}
+        jobs={jobs}
+        companyName={lead.company_name}
+        senderName={senderName}
+      />
       <CrmJobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />
       {lead.latitude != null && lead.longitude != null && (
         <CrmLocationMiniCard lat={lead.latitude} lng={lead.longitude} hq={hq} />

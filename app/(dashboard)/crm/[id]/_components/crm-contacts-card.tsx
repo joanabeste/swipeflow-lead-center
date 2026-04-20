@@ -11,8 +11,14 @@ import { Card } from "./crm-shared";
 import { SendEmailDialog } from "./send-email-dialog";
 
 export function CrmContactsCard({
-  leadId, contacts, jobs = [],
-}: { leadId: string; contacts: LeadContact[]; jobs?: LeadJobPosting[] }) {
+  leadId, contacts, jobs = [], companyName, senderName = null,
+}: {
+  leadId: string;
+  contacts: LeadContact[];
+  jobs?: LeadJobPosting[];
+  companyName: string;
+  senderName?: string | null;
+}) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [emailContact, setEmailContact] = useState<LeadContact | null>(null);
@@ -77,7 +83,10 @@ export function CrmContactsCard({
           leadId={leadId}
           contactId={emailContact.id}
           contactName={emailContact.name}
+          contactRole={emailContact.role ?? null}
+          companyName={companyName}
           toEmail={emailContact.email}
+          senderName={senderName}
           onClose={() => setEmailContact(null)}
         />
       )}

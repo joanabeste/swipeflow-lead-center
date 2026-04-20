@@ -20,6 +20,11 @@ import {
   deleteUserSmtp,
 } from "@/lib/email/user-credentials";
 import { verifySmtp } from "@/lib/email/smtp";
+import {
+  createTemplate as createTemplateHelper,
+  updateTemplate as updateTemplateHelper,
+  deleteTemplate as deleteTemplateHelper,
+} from "@/lib/email/templates";
 
 export async function saveFieldProfile(
   _prev: { error?: string } | undefined,
@@ -686,6 +691,71 @@ export async function deleteEmailSettings(): Promise<{ error?: string; success?:
   });
 
   revalidatePath("/einstellungen/email");
+  return { success: true };
+}
+
+// ─── E-Mail-Vorlagen ──────────────────────────────────────────
+
+function parseTemplateFormData(
+  formData: FormData,
+): { ok: true; input: { name: string; subject: string; body: string } } | { ok: false; error: string } {
+  const name = ((formData.get("name") as string) ?? "").trim();
+  const subject = ((formData.get("subject") as string) ?? "").trim();
+  const body = ((formData.get("body") as string) ?? "").trim();
+  if (!name) return { ok: false, error: "Name fehlt." };
+  if (!subject) return { ok: false, error: "Betreff fehlt." };
+  if (!body) return { ok: false, error: "Body fehlt." };
+  if (name.length > 100) return { ok: false, error: "Name zu lang (max. 100 Zeichen)." };
+  return { ok: true, input: { name, subject, body } };
+}
+
+export async function saveEmailTemplate(
+  _prev: { error?: string; success?: boolean } | undefined,
+  formData: FormData,
+): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const parsed = parseTemplateFormData(formData);
+  if (!parsed.ok) return { error: parsed.error };
+
+  const id = (formData.get("id") as string | null)?.trim() || null;
+  if (id) {
+    await updateTemplateHelper(id, user.id, parsed.input);
+    await logAudit({
+      userId: user.id,
+      action: "email.template.updated",
+      entityType: "email_template",
+      entityId: id,
+      details: { name: parsed.input.name },
+    });
+  } else {
+    await createTemplateHelper(user.id, parsed.input);
+    await logAudit({
+      userId: user.id,
+      action: "email.template.created",
+      entityType: "email_template",
+      details: { name: parsed.input.name },
+    });
+  }
+
+  revalidatePath("/einstellungen/email-vorlagen");
+  return { success: true };
+}
+
+export async function deleteEmailTemplate(id: string): Promise<{ error?: string; success?: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  await deleteTemplateHelper(id, user.id);
+  await logAudit({
+    userId: user.id,
+    action: "email.template.deleted",
+    entityType: "email_template",
+    entityId: id,
+  });
+  revalidatePath("/einstellungen/email-vorlagen");
   return { success: true };
 }
 

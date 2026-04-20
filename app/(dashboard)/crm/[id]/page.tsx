@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
 } from "@/lib/types";
@@ -87,6 +87,19 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     webex: !!webexCreds && (webexCreds.source === "env" || webexCreds.scopes.includes("spark:calls_write")),
   };
 
+  // Name des aktuellen Users für E-Mail-Template-Variable {{sender_name}}
+  const supabaseAuth = await createClient();
+  const { data: { user: authedUser } } = await supabaseAuth.auth.getUser();
+  let senderName: string | null = null;
+  if (authedUser) {
+    const { data: profile } = await db
+      .from("profiles")
+      .select("name")
+      .eq("id", authedUser.id)
+      .single();
+    senderName = (profile?.name as string | null) ?? null;
+  }
+
   return (
     <CrmLeadDetail
       lead={typedLead}
@@ -108,6 +121,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       }))}
       statuses={(statuses ?? []) as CustomLeadStatus[]}
       hq={hq}
+      senderName={senderName}
     />
   );
 }
