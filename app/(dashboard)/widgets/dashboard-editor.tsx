@@ -2,8 +2,25 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Settings, X, ChevronUp, ChevronDown, Check, RotateCcw } from "lucide-react";
-import { WIDGET_REGISTRY, defaultWidgetOrder } from "./registry";
+import { Settings, X, GripVertical, Check, RotateCcw } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { WIDGET_REGISTRY, defaultWidgetOrder, type WidgetMeta } from "./registry";
 import { saveDashboardWidgets } from "./actions";
 import { useToastContext } from "../toast-provider";
 import type { ServiceMode } from "@/lib/types";
@@ -44,18 +61,29 @@ function Modal({
   const [pending, startTransition] = useTransition();
   const [active, setActive] = useState<string[]>(initialOrder);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      // Kleiner Drag-Schwellwert, damit normale Clicks (z.B. „Entfernen"-X)
+      // nicht versehentlich als Drag interpretiert werden.
+      activationConstraint: { distance: 5 },
+    }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
   const available = WIDGET_REGISTRY.filter(
     (w) => !w.serviceMode || w.serviceMode === serviceMode,
   );
   const inactive = available.filter((w) => !active.includes(w.key));
 
-  function move(index: number, delta: -1 | 1) {
-    const target = index + delta;
-    if (target < 0 || target >= active.length) return;
-    const next = [...active];
-    [next[index], next[target]] = [next[target], next[index]];
-    setActive(next);
+  function handleDragEnd(event: DragEndEvent) {
+    const { active: dragActive, over } = event;
+    if (!over || dragActive.id === over.id) return;
+    const oldIndex = active.indexOf(dragActive.id as string);
+    const newIndex = active.indexOf(over.id as string);
+    if (oldIndex === -1 || newIndex === -1) return;
+    setActive(arrayMove(active, oldIndex, newIndex));
   }
+
   function remove(key: string) { setActive(active.filter((k) => k !== key)); }
   function add(key: string) { setActive([...active, key]); }
   function resetDefaults() { setActive(defaultWidgetOrder(serviceMode)); }
@@ -91,7 +119,7 @@ function Modal({
         <div className="space-y-5 p-6">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Aktive Widgets — Reihenfolge
+              Aktive Widgets — per Drag-and-Drop sortieren
             </h3>
             <ul className="mt-2 space-y-1.5">
               {active.length === 0 && (
@@ -99,44 +127,28 @@ function Modal({
                   Keine Widgets aktiv — füge unten welche hinzu oder nutze &bdquo;Standard wiederherstellen&ldquo;.
                 </li>
               )}
-              {active.map((key, i) => {
-                const meta = WIDGET_REGISTRY.find((w) => w.key === key);
-                if (!meta) return null;
-                return (
-                  <li
-                    key={key}
-                    className="flex items-center gap-2 rounded-md border border-gray-200 bg-white p-2.5 dark:border-[#2c2c2e] dark:bg-[#232325]"
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <button
-                        onClick={() => move(i, -1)}
-                        disabled={i === 0}
-                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 dark:hover:bg-white/5"
-                      >
-                        <ChevronUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => move(i, 1)}
-                        disabled={i === active.length - 1}
-                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30 dark:hover:bg-white/5"
-                      >
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium">{meta.label}</p>
-                      <p className="truncate text-xs text-gray-500 dark:text-gray-400">{meta.description}</p>
-                    </div>
-                    <button
-                      onClick={() => remove(key)}
-                      className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
-                      title="Entfernen"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                );
-              })}
+              {active.length > 0 && (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext items={active} strategy={verticalListSortingStrategy}>
+                    {active.map((key) => {
+                      const meta = WIDGET_REGISTRY.find((w) => w.key === key);
+                      if (!meta) return null;
+                      return (
+                        <SortableRow
+                          key={key}
+                          widgetKey={key}
+                          meta={meta}
+                          onRemove={() => remove(key)}
+                        />
+                      );
+                    })}
+                  </SortableContext>
+                </DndContext>
+              )}
             </ul>
           </div>
 
@@ -195,5 +207,54 @@ function Modal({
         </div>
       </div>
     </div>
+  );
+}
+
+function SortableRow({
+  widgetKey,
+  meta,
+  onRemove,
+}: {
+  widgetKey: string;
+  meta: WidgetMeta;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: widgetKey,
+  });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 rounded-md border border-gray-200 bg-white p-2.5 dark:border-[#2c2c2e] dark:bg-[#232325]"
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        className="cursor-grab touch-none rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 active:cursor-grabbing dark:hover:bg-white/5"
+        aria-label={`${meta.label} verschieben`}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">{meta.label}</p>
+        <p className="truncate text-xs text-gray-500 dark:text-gray-400">{meta.description}</p>
+      </div>
+      <button
+        onClick={onRemove}
+        className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+        title="Entfernen"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </li>
   );
 }
