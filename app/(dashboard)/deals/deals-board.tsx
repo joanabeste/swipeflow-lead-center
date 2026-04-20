@@ -18,6 +18,7 @@ import { formatAmount, isStale } from "@/lib/deals/types";
 import { updateDealAction } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { NewDealDialog } from "./new-deal-dialog";
+import { PipelineCharts } from "./pipeline-charts";
 
 type ViewMode = "kanban" | "table";
 
@@ -122,6 +123,9 @@ export function DealsBoard({
           Neuer Deal
         </button>
       </div>
+
+      {/* Charts */}
+      <PipelineCharts deals={filtered} stages={stages} />
 
       {/* View */}
       {view === "kanban" ? (

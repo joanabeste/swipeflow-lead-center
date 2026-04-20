@@ -7,6 +7,9 @@ import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
+import { listStages } from "@/lib/deals/server";
+import { listTeamMembers } from "../../deals/actions";
+import type { DealWithRelations } from "@/lib/deals/types";
 import { CrmLeadDetail } from "./crm-lead-detail";
 
 export default async function CrmLeadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -99,6 +102,62 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     webex: !!webexCreds && (webexCreds.source === "env" || webexCreds.scopes.includes("spark:calls_write")),
   };
 
+  // Deals für diese Firma + Stages + Team für den NewDealDialog
+  const [
+    { data: dealRows },
+    dealStages,
+    team,
+  ] = await Promise.all([
+    db
+      .from("deals")
+      .select(`
+        id, lead_id, title, description, amount_cents, currency, stage_id,
+        assigned_to, expected_close_date, actual_close_date, created_by,
+        created_at, updated_at,
+        leads!inner(company_name, domain),
+        deal_stages!inner(label, color, kind),
+        profiles:assigned_to(name, avatar_url)
+      `)
+      .eq("lead_id", id)
+      .order("updated_at", { ascending: false }),
+    listStages(),
+    listTeamMembers(),
+  ]);
+
+  // Mapping wie in lib/deals/server.ts — inline, um einen zweiten DB-Roundtrip zu sparen.
+  function firstOrNull<T>(v: T | T[] | null | undefined): T | null {
+    if (!v) return null;
+    return Array.isArray(v) ? (v[0] ?? null) : v;
+  }
+  const deals: DealWithRelations[] = (dealRows ?? []).map((r) => {
+    const row = r as Record<string, unknown>;
+    const lead = firstOrNull(row.leads as { company_name: string; domain: string | null } | { company_name: string; domain: string | null }[] | null);
+    const stage = firstOrNull(row.deal_stages as { label: string; color: string; kind: "open" | "won" | "lost" } | { label: string; color: string; kind: "open" | "won" | "lost" }[] | null);
+    const profile = firstOrNull(row.profiles as { name: string | null; avatar_url: string | null } | { name: string | null; avatar_url: string | null }[] | null);
+    return {
+      id: row.id as string,
+      leadId: row.lead_id as string,
+      title: row.title as string,
+      description: (row.description as string | null) ?? null,
+      amountCents: row.amount_cents as number,
+      currency: row.currency as string,
+      stageId: row.stage_id as string,
+      assignedTo: (row.assigned_to as string | null) ?? null,
+      expectedCloseDate: (row.expected_close_date as string | null) ?? null,
+      actualCloseDate: (row.actual_close_date as string | null) ?? null,
+      createdBy: (row.created_by as string | null) ?? null,
+      createdAt: row.created_at as string,
+      updatedAt: row.updated_at as string,
+      company_name: lead?.company_name ?? "—",
+      company_domain: lead?.domain ?? null,
+      stage_label: stage?.label ?? (row.stage_id as string),
+      stage_color: stage?.color ?? "#6b7280",
+      stage_kind: stage?.kind ?? "open",
+      assignee_name: profile?.name ?? null,
+      assignee_avatar_url: profile?.avatar_url ?? null,
+    };
+  });
+
   // Name des aktuellen Users für E-Mail-Template-Variable {{sender_name}}
   const supabaseAuth = await createClient();
   const { data: { user: authedUser } } = await supabaseAuth.auth.getUser();
@@ -135,6 +194,9 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       statuses={(statuses ?? []) as CustomLeadStatus[]}
       hq={hq}
       senderName={senderName}
+      deals={deals}
+      dealStages={dealStages}
+      team={team}
     />
   );
 }

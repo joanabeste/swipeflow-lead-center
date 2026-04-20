@@ -8,6 +8,7 @@ import type {
 } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
+import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
@@ -38,10 +39,14 @@ interface Props {
   hq: HqLocation;
   callProviders: { phonemondo: boolean; webex: boolean };
   senderName: string | null;
+  deals: DealWithRelations[];
+  dealStages: DealStage[];
+  team: { id: string; name: string; avatarUrl: string | null }[];
 }
 
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
+  deals, dealStages, team,
 }: Props) {
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
@@ -118,6 +123,9 @@ export function CrmLeadDetail({
             latestEnrichment={latestEnrichment}
             hq={hq}
             senderName={senderName}
+            deals={deals}
+            dealStages={dealStages}
+            team={team}
           />
         }
         right={
