@@ -10,6 +10,7 @@ import { ServiceModeProvider } from "@/lib/service-mode";
 import { ServiceModeSwitch } from "./service-mode-switch";
 import { ActiveEnrichmentBadge } from "./active-enrichment-badge";
 import { CallProvidersProvider } from "@/components/call-providers-context";
+import { ConfettiProvider } from "@/components/confetti";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
 import type { ServiceMode } from "@/lib/types";
@@ -41,6 +42,7 @@ export default async function DashboardLayout({
   return (
     <ServiceModeProvider initialMode={serviceMode}>
     <CallProvidersProvider value={callProviders}>
+    <ConfettiProvider>
     <ToastProvider>
     <div className="flex h-full">
       {/* Sidebar */}
@@ -89,6 +91,7 @@ export default async function DashboardLayout({
       </div>
     </div>
     </ToastProvider>
+    </ConfettiProvider>
     </CallProvidersProvider>
     </ServiceModeProvider>
   );

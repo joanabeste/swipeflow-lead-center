@@ -6,6 +6,7 @@ import { X, Building2, Check, Search } from "lucide-react";
 import type { DealStage } from "@/lib/deals/types";
 import { createDealAction, searchLeadsForDeal } from "./actions";
 import { useToastContext } from "../toast-provider";
+import { useConfetti } from "@/components/confetti";
 
 interface Props {
   stages: DealStage[];
@@ -17,6 +18,7 @@ interface Props {
 export function NewDealDialog({ stages, team, preselectedLead = null, onClose }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
+  const fireConfetti = useConfetti();
   const [pending, startTransition] = useTransition();
 
   const [selectedLead, setSelectedLead] = useState<{ id: string; company_name: string } | null>(
@@ -82,6 +84,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
         setError(res.error);
       } else {
         addToast("Deal angelegt.", "success");
+        if (stages.find((s) => s.id === stageId)?.kind === "won") fireConfetti();
         router.refresh();
         router.push(`/deals/${res.dealId}`);
       }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Plus, Target } from "lucide-react";
+import { Plus, Banknote } from "lucide-react";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import { formatAmount } from "@/lib/deals/types";
 import { NewDealDialog } from "../../../deals/new-deal-dialog";
@@ -27,7 +27,7 @@ export function CrmDealsCard({
     <Card>
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          <Target className="h-3.5 w-3.5" />
+          <Banknote className="h-3.5 w-3.5" />
           Deals ({deals.length})
         </h2>
         <button

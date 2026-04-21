@@ -41,3 +41,22 @@ html {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+/* Swipeflow-Confetti: fällt von oben mit individueller Rotation.
+   Rotations-Zielwert kommt per CSS-Custom-Property vom Element. */
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--confetti-drift, 0), 110vh, 0) rotate(var(--confetti-rotate, 540deg));
+    opacity: 0.85;
+  }
+}
+.animate-confetti-fall {
+  animation: confetti-fall cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+}

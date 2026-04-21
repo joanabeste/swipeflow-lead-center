@@ -15,6 +15,7 @@ import type {
 import { formatAmount, weightedForecastCents, DEAL_ACTIVITY_LABELS } from "@/lib/deals/types";
 import { updateDealAction, deleteDealAction, addDealNoteAction, deleteDealNoteAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
+import { useConfetti } from "@/components/confetti";
 
 interface Props {
   deal: DealWithRelations;
@@ -37,6 +38,7 @@ const ACTIVITY_ORDER: DealActivityType[] = ["call", "meeting", "email", "closing
 export function DealDetail({ deal, stages, team, changes, notes }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
+  const fireConfetti = useConfetti();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, startDelete] = useTransition();
@@ -78,6 +80,8 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
         addToast(res.error, "error");
       } else {
         addToast("Deal aktualisiert.", "success");
+        const newKind = stages.find((s) => s.id === stageId)?.kind;
+        if (newKind === "won" && deal.stage_kind !== "won") fireConfetti();
         setEditing(false);
         router.refresh();
       }

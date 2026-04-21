@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  Plus, LayoutGrid, List, TrendingUp, Trophy, Percent, Euro, Sparkles,
+  Plus, LayoutGrid, List, TrendingUp, Trophy, Percent, Euro, Sparkles, Search, ArrowDown, ArrowUp, ArrowUpDown, X,
 } from "lucide-react";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -19,8 +19,12 @@ import { updateDealAction } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { NewDealDialog } from "./new-deal-dialog";
 import { PipelineCharts } from "./pipeline-charts";
+import { useConfetti } from "@/components/confetti";
 
 type ViewMode = "kanban" | "table";
+type StageGroupFilter = "all" | "open" | "won" | "lost";
+type SortKey = "updated" | "title" | "stage" | "amount" | "probability" | "assignee" | "lastFollowup";
+type SortDir = "asc" | "desc";
 
 export function DealsBoard({
   deals,
@@ -33,12 +37,100 @@ export function DealsBoard({
 }) {
   const [view, setView] = useState<ViewMode>("table");
   const [filterAssignee, setFilterAssignee] = useState<string>("");
+  const [filterStageGroup, setFilterStageGroup] = useState<StageGroupFilter>("all");
+  const [filterStageId, setFilterStageId] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("updated");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [createOpen, setCreateOpen] = useState(false);
 
-  const filtered = useMemo(
-    () => deals.filter((d) => (filterAssignee ? d.assignedTo === filterAssignee : true)),
-    [deals, filterAssignee],
-  );
+  const stageById = useMemo(() => new Map(stages.map((s) => [s.id, s])), [stages]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return deals.filter((d) => {
+      if (filterAssignee && d.assignedTo !== filterAssignee) return false;
+      if (filterStageId && d.stageId !== filterStageId) return false;
+      if (filterStageGroup !== "all") {
+        const kind = stageById.get(d.stageId)?.kind ?? "open";
+        if (kind !== filterStageGroup) return false;
+      }
+      if (q) {
+        const hay = `${d.title} ${d.company_name}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [deals, filterAssignee, filterStageId, filterStageGroup, search, stageById]);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      switch (sortKey) {
+        case "title":
+          return a.title.localeCompare(b.title, "de") * dir;
+        case "stage": {
+          const oa = stageById.get(a.stageId)?.displayOrder ?? 0;
+          const ob = stageById.get(b.stageId)?.displayOrder ?? 0;
+          return (oa - ob) * dir;
+        }
+        case "amount":
+          return (a.amountCents - b.amountCents) * dir;
+        case "probability": {
+          // Nulls immer nach unten — unabhängig von der Sortierrichtung.
+          const pa = a.probability;
+          const pb = b.probability;
+          if (pa == null && pb == null) return 0;
+          if (pa == null) return 1;
+          if (pb == null) return -1;
+          return (pa - pb) * dir;
+        }
+        case "assignee":
+          return (a.assignee_name ?? "").localeCompare(b.assignee_name ?? "", "de") * dir;
+        case "lastFollowup": {
+          const va = a.lastFollowupAt ? new Date(a.lastFollowupAt).getTime() : null;
+          const vb = b.lastFollowupAt ? new Date(b.lastFollowupAt).getTime() : null;
+          if (va == null && vb == null) return 0;
+          if (va == null) return 1;
+          if (vb == null) return -1;
+          return (va - vb) * dir;
+        }
+        case "updated":
+        default:
+          return (new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime()) * dir;
+      }
+    });
+    return arr;
+  }, [filtered, sortKey, sortDir, stageById]);
+
+  function toggleSort(key: SortKey, defaultDir: SortDir = "desc") {
+    setSortKey((prev) => {
+      if (prev === key) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir(defaultDir);
+      return key;
+    });
+  }
+
+  function resetFilters() {
+    setFilterAssignee("");
+    setFilterStageGroup("all");
+    setFilterStageId("");
+    setSearch("");
+    setSortKey("updated");
+    setSortDir("desc");
+  }
+
+  const hasActiveFilter =
+    filterAssignee !== "" ||
+    filterStageGroup !== "all" ||
+    filterStageId !== "" ||
+    search.trim() !== "" ||
+    sortKey !== "updated" ||
+    sortDir !== "desc";
 
   const kpis = useMemo(() => computeKpis(filtered, stages), [filtered, stages]);
   const activeStages = stages.filter((s) => s.isActive);
@@ -135,6 +227,54 @@ export function DealsBoard({
           </button>
         </div>
 
+        <div className="relative min-w-[200px] flex-1 max-w-xs">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Titel oder Firma suchen…"
+            className="w-full rounded-md border border-gray-200 bg-white py-1 pl-8 pr-7 text-xs focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-[#2c2c2e] dark:bg-[#232325]"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/10"
+              aria-label="Suche leeren"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+
+        <select
+          value={filterStageGroup}
+          onChange={(e) => {
+            setFilterStageGroup(e.target.value as StageGroupFilter);
+            setFilterStageId("");
+          }}
+          className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs dark:border-[#2c2c2e] dark:bg-[#232325]"
+        >
+          <option value="all">Alle Phasen</option>
+          <option value="open">Nur offene</option>
+          <option value="won">Nur gewonnene</option>
+          <option value="lost">Nur verlorene</option>
+        </select>
+
+        <select
+          value={filterStageId}
+          onChange={(e) => setFilterStageId(e.target.value)}
+          className="rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs dark:border-[#2c2c2e] dark:bg-[#232325]"
+        >
+          <option value="">Alle Stages</option>
+          {stages
+            .filter((s) => filterStageGroup === "all" || s.kind === filterStageGroup)
+            .map((s) => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+        </select>
+
         <select
           value={filterAssignee}
           onChange={(e) => setFilterAssignee(e.target.value)}
@@ -145,6 +285,21 @@ export function DealsBoard({
             <option key={m.id} value={m.id}>{m.name || "Ohne Name"}</option>
           ))}
         </select>
+
+        {hasActiveFilter && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-400 dark:hover:bg-white/5"
+          >
+            <X className="h-3 w-3" />
+            Zurücksetzen
+          </button>
+        )}
+
+        <span className="text-[11px] text-gray-400">
+          {sorted.length} / {deals.length}
+        </span>
 
         <button
           type="button"
@@ -158,9 +313,15 @@ export function DealsBoard({
 
       {/* View — direkt nach Toolbar, Charts rutschen nach unten */}
       {view === "kanban" ? (
-        <KanbanView deals={filtered} stages={activeStages} />
+        <KanbanView deals={sorted} stages={activeStages} />
       ) : (
-        <TableView deals={filtered} stages={activeStages} />
+        <TableView
+          deals={sorted}
+          stages={activeStages}
+          sortKey={sortKey}
+          sortDir={sortDir}
+          onSort={toggleSort}
+        />
       )}
 
       {/* Charts zur Übersicht unten */}
@@ -287,6 +448,7 @@ function KpiCard({
 function KanbanView({ deals, stages }: { deals: DealWithRelations[]; stages: DealStage[] }) {
   const router = useRouter();
   const { addToast } = useToastContext();
+  const fireConfetti = useConfetti();
   const [, startTransition] = useTransition();
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -310,6 +472,8 @@ function KanbanView({ deals, stages }: { deals: DealWithRelations[]; stages: Dea
     if (effectiveStage(deal) === newStage) return;
 
     setOverrides((m) => ({ ...m, [dealId]: newStage }));
+    const previousKind = stages.find((s) => s.id === deal.stageId)?.kind;
+    const newKind = stages.find((s) => s.id === newStage)?.kind;
     startTransition(async () => {
       const res = await updateDealAction(dealId, { stageId: newStage });
       if ("error" in res) {
@@ -320,6 +484,7 @@ function KanbanView({ deals, stages }: { deals: DealWithRelations[]; stages: Dea
           return next;
         });
       } else {
+        if (newKind === "won" && previousKind !== "won") fireConfetti();
         router.refresh();
       }
     });
@@ -480,19 +645,31 @@ function AvatarChip({ name, avatarUrl }: { name: string; avatarUrl: string | nul
 
 // ─── Tabelle ──────────────────────────────────────────────────
 
-function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: DealStage[] }) {
+function TableView({
+  deals,
+  stages,
+  sortKey,
+  sortDir,
+  onSort,
+}: {
+  deals: DealWithRelations[];
+  stages: DealStage[];
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey, defaultDir?: SortDir) => void;
+}) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-[#2c2c2e] dark:text-gray-400">
-            <th className="px-3 py-2.5">Deal / Firma</th>
-            <th className="px-3 py-2.5">Stage</th>
-            <th className="px-3 py-2.5 text-right">Volumen</th>
-            <th className="px-3 py-2.5 text-right">Closing-%</th>
-            <th className="px-3 py-2.5">Zuständig</th>
+            <SortTh label="Deal / Firma" k="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="asc" />
+            <SortTh label="Stage" k="stage" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="asc" />
+            <SortTh label="Volumen" k="amount" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="desc" align="right" />
+            <SortTh label="Closing-%" k="probability" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="desc" align="right" />
+            <SortTh label="Zuständig" k="assignee" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="asc" />
             <th className="px-3 py-2.5">Nächster Schritt</th>
-            <th className="px-3 py-2.5">Letzter FollowUp</th>
+            <SortTh label="Letzter FollowUp" k="lastFollowup" sortKey={sortKey} sortDir={sortDir} onSort={onSort} defaultDir="desc" />
           </tr>
         </thead>
         <tbody>
@@ -566,5 +743,40 @@ function TableView({ deals, stages }: { deals: DealWithRelations[]; stages: Deal
         </tbody>
       </table>
     </div>
+  );
+}
+
+function SortTh({
+  label,
+  k,
+  sortKey,
+  sortDir,
+  onSort,
+  defaultDir = "desc",
+  align = "left",
+}: {
+  label: string;
+  k: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey, defaultDir?: SortDir) => void;
+  defaultDir?: SortDir;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === k;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""}`}>
+      <button
+        type="button"
+        onClick={() => onSort(k, defaultDir)}
+        className={`inline-flex items-center gap-1 ${
+          align === "right" ? "flex-row-reverse" : ""
+        } ${active ? "text-primary" : "hover:text-gray-700 dark:hover:text-gray-200"}`}
+      >
+        {label}
+        <Icon className={`h-3 w-3 ${active ? "opacity-100" : "opacity-40"}`} />
+      </button>
+    </th>
   );
 }
