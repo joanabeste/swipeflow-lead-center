@@ -1,6 +1,7 @@
 import { Briefcase, Mail, Phone, MapPin, User, ExternalLink } from "lucide-react";
 import type { Lead, LeadEnrichment } from "@/lib/types";
 import { Card, Row } from "./crm-shared";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 export function CrmCompanyCard({
   lead, latestEnrichment,
@@ -24,7 +25,7 @@ export function CrmCompanyCard({
       )}
       <dl className="mt-3 space-y-1.5 text-sm">
         {lead.phone && (
-          <Row icon={Phone} value={<a className="text-primary hover:underline" href={`tel:${lead.phone}`}>{lead.phone}</a>} />
+          <Row icon={Phone} value={<PhoneCallLink phone={lead.phone} leadId={lead.id} showIcon={false} className="text-primary hover:underline disabled:opacity-50" />} />
         )}
         {lead.email && (
           <Row icon={Mail} value={<a className="text-primary hover:underline" href={`mailto:${lead.email}`}>{lead.email}</a>} />

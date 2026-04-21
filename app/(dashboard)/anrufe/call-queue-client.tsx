@@ -24,6 +24,7 @@ import {
 } from "./actions";
 import { useToastContext } from "../toast-provider";
 import type { CallQueueSettings } from "@/lib/app-settings";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -641,13 +642,15 @@ export function CallQueueClient({
                           )}
                           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                             {(activeContact.phone ?? currentLead.phone) && (
-                              <a
-                                href={`tel:${activeContact.phone ?? currentLead.phone}`}
-                                className="inline-flex items-center gap-1 text-primary hover:underline"
+                              <PhoneCallLink
+                                phone={(activeContact.phone ?? currentLead.phone)!}
+                                leadId={currentLead.id}
+                                contactId={activeContact.id}
+                                className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
                               >
                                 <Phone className="h-3.5 w-3.5" />
                                 {activeContact.phone ?? currentLead.phone}
-                              </a>
+                              </PhoneCallLink>
                             )}
                             {activeContact.email && (
                               <a

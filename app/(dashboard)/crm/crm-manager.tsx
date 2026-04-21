@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, Trash2, Phone, StickyNote, MessageSquare, Plus } from "lucide-react";
+import { Download, Trash2, StickyNote, MessageSquare, Plus } from "lucide-react";
 import type { CustomLeadStatus } from "@/lib/types";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads } from "../leads/actions";
@@ -13,6 +13,7 @@ import { SearchBox } from "@/components/table/search-box";
 import { TablePagination } from "@/components/table/pagination";
 import { ColumnPicker } from "@/components/table/column-picker";
 import { SortableHeader } from "@/components/table/sortable-header";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 export interface CrmLead {
   id: string;
@@ -441,14 +442,11 @@ function CellRenderer({
       );
     case "phone":
       return lead.phone ? (
-        <a
-          href={`tel:${lead.phone}`}
-          onClick={(e) => e.stopPropagation()}
-          className="inline-flex items-center gap-1 text-primary hover:underline"
-        >
-          <Phone className="h-3 w-3" />
-          {lead.phone}
-        </a>
+        <PhoneCallLink
+          phone={lead.phone}
+          leadId={lead.id}
+          className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+        />
       ) : <span>–</span>;
     case "email":
       return lead.email ? (

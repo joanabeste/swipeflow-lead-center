@@ -53,6 +53,13 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
   const [nextStep, setNextStep] = useState(deal.nextStep ?? "");
   const [lastFollowupAt, setLastFollowupAt] = useState(deal.lastFollowupAt ?? "");
 
+  function handleStageChange(newStageId: string) {
+    setStageId(newStageId);
+    const newStage = stages.find((s) => s.id === newStageId);
+    if (newStage?.kind === "won") setProbability("100");
+    else if (newStage?.kind === "lost") setProbability("0");
+  }
+
   function handleSave() {
     startTransition(async () => {
       const probNum = probability.trim() === "" ? null : Number(probability);
@@ -195,7 +202,7 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
               {editing ? (
                 <select
                   value={stageId}
-                  onChange={(e) => setStageId(e.target.value)}
+                  onChange={(e) => handleStageChange(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
                 >
                   {activeStages.map((s) => (

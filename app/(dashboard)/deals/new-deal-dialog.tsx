@@ -36,8 +36,32 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
   const [lastFollowupAt, setLastFollowupAt] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
+  function handleStageChange(newStageId: string) {
+    setStageId(newStageId);
+    const newStage = stages.find((s) => s.id === newStageId);
+    if (newStage?.kind === "won") setProbability("100");
+    else if (newStage?.kind === "lost") setProbability("0");
+  }
+
+  function validate(): string | null {
+    if (!title.trim()) return "Bitte einen Titel eingeben.";
+    if (!amountRaw.trim()) return "Bitte ein Volumen eingeben.";
+    if (mode === "existing" && !selectedLead && !preselectedLead) {
+      return "Bitte eine bestehende Firma auswählen — oder auf „Neue Firma“ wechseln.";
+    }
+    if (mode === "new" && !newCompanyName.trim()) {
+      return "Bitte den Namen der neuen Firma eingeben.";
+    }
+    return null;
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setError(null);
     startTransition(async () => {
       const probNum = probability.trim() === "" ? null : Number(probability);
@@ -122,7 +146,6 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
                 <div>
                   <input
                     type="text"
-                    required
                     value={newCompanyName}
                     onChange={(e) => setNewCompanyName(e.target.value)}
                     placeholder="Neuer Firmenname"
@@ -148,7 +171,6 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
             <input
               id="d-title"
               type="text"
-              required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="z.B. Website-Relaunch"
@@ -162,7 +184,6 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
               <input
                 id="d-amount"
                 type="text"
-                required
                 value={amountRaw}
                 onChange={(e) => setAmountRaw(e.target.value)}
                 placeholder="3000"
@@ -176,7 +197,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
                 id="d-stage"
                 required
                 value={stageId}
-                onChange={(e) => setStageId(e.target.value)}
+                onChange={(e) => handleStageChange(e.target.value)}
                 className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
               >
                 {stages.map((s) => (
@@ -272,13 +293,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
             </button>
             <button
               type="submit"
-              disabled={
-                pending ||
-                !title.trim() ||
-                !amountRaw.trim() ||
-                (mode === "existing" && !selectedLead && !preselectedLead) ||
-                (mode === "new" && !newCompanyName.trim())
-              }
+              disabled={pending}
               className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               <Check className="h-3.5 w-3.5" />

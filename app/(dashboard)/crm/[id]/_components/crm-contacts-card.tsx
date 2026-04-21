@@ -9,6 +9,7 @@ import { addContact, updateContact, deleteContact } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import { Card } from "./crm-shared";
 import { SendEmailDialog } from "./send-email-dialog";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 function salutationPrefix(s: ContactSalutation | null): string {
   if (s === "herr") return "Hr. ";
@@ -166,9 +167,13 @@ function ContactRow({
               </a>
             )}
             {contact.phone && (
-              <a className="block truncate text-primary hover:underline" href={`tel:${contact.phone}`}>
-                {contact.phone}
-              </a>
+              <PhoneCallLink
+                phone={contact.phone}
+                leadId={leadId}
+                contactId={contact.id}
+                showIcon={false}
+                className="block truncate text-left text-primary hover:underline disabled:opacity-50"
+              />
             )}
           </div>
           {contact.source_url && (sourceJob ? (

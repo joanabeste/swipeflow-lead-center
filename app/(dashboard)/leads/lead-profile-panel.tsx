@@ -76,7 +76,7 @@ export function LeadProfilePanel({
   const leftContent = (
     <>
       <LeadMasterDataForm lead={lead} />
-      <LeadContactsList contacts={contacts} hasWebsite={hasWebsite} />
+      <LeadContactsList leadId={lead.id} contacts={contacts} hasWebsite={hasWebsite} />
       <LeadJobPostingsList jobPostings={jobPostings} latestEnrichment={latestEnrichment} hasWebsite={hasWebsite} />
     </>
   );

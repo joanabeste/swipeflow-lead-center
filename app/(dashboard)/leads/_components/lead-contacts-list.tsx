@@ -1,10 +1,11 @@
-import { User, Mail, Phone } from "lucide-react";
+import { User, Mail } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 export function LeadContactsList({
-  contacts, hasWebsite,
-}: { contacts: LeadContact[]; hasWebsite: boolean }) {
+  leadId, contacts, hasWebsite,
+}: { leadId: string; contacts: LeadContact[]; hasWebsite: boolean }) {
   const hrContacts = contacts.filter((c) => isHrContact(c.role));
   const otherContacts = contacts.filter((c) => !isHrContact(c.role));
   const ordered = [...hrContacts, ...otherContacts];
@@ -59,10 +60,12 @@ export function LeadContactsList({
                       </a>
                     )}
                     {contact.phone && (
-                      <a href={`tel:${contact.phone}`} className="inline-flex items-center gap-1 text-primary hover:underline">
-                        <Phone className="h-3 w-3" />
-                        {contact.phone}
-                      </a>
+                      <PhoneCallLink
+                        phone={contact.phone}
+                        leadId={leadId}
+                        contactId={contact.id}
+                        className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                      />
                     )}
                   </div>
                 </div>

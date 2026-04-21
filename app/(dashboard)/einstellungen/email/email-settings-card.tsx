@@ -131,9 +131,12 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
             <input
               id="username" name="username" type="text" required
               defaultValue={smtp?.username ?? ""}
-              placeholder="oft die E-Mail-Adresse"
+              placeholder="z. B. p123456p1 oder E-Mail-Adresse"
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              Bei Mittwald die <strong>Postfach-Nummer</strong> im Format <span className="font-mono">pXXXXXXpX</span> (z. B. <span className="font-mono">p123456p1</span>) — alternativ die E-Mail-Adresse, falls ein Login-Alias gesetzt wurde. Zu finden im mStudio unter <em>E-Mail → Postfächer</em>.
+            </p>
           </div>
 
           <div className="sm:col-span-2">

@@ -9,6 +9,9 @@ import { ToastProvider } from "./toast-provider";
 import { ServiceModeProvider } from "@/lib/service-mode";
 import { ServiceModeSwitch } from "./service-mode-switch";
 import { ActiveEnrichmentBadge } from "./active-enrichment-badge";
+import { CallProvidersProvider } from "@/components/call-providers-context";
+import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
+import { getWebexCredentials } from "@/lib/webex/auth";
 import type { ServiceMode } from "@/lib/types";
 
 export default async function DashboardLayout({
@@ -29,8 +32,15 @@ export default async function DashboardLayout({
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
   }
 
+  const webexCreds = user ? await getWebexCredentials() : null;
+  const callProviders = {
+    phonemondo: isPhoneMondoConfigured(),
+    webex: webexCreds !== null,
+  };
+
   return (
     <ServiceModeProvider initialMode={serviceMode}>
+    <CallProvidersProvider value={callProviders}>
     <ToastProvider>
     <div className="flex h-full">
       {/* Sidebar */}
@@ -79,6 +89,7 @@ export default async function DashboardLayout({
       </div>
     </div>
     </ToastProvider>
+    </CallProvidersProvider>
     </ServiceModeProvider>
   );
 }

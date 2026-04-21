@@ -6,13 +6,13 @@ import {
   Loader2,
   User,
   Mail,
-  Phone,
   ExternalLink,
   Briefcase,
   MapPin,
 } from "lucide-react";
 import type { LeadContact, LeadJobPosting, LeadEnrichment } from "@/lib/types";
 import { enrichLeadAction } from "./enrichment-actions";
+import { PhoneCallLink } from "@/components/phone-call-link";
 
 interface Props {
   leadId: string;
@@ -127,13 +127,12 @@ export function EnrichmentPanel({
                     </a>
                   )}
                   {contact.phone && (
-                    <a
-                      href={`tel:${contact.phone}`}
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      <Phone className="h-3 w-3" />
-                      {contact.phone}
-                    </a>
+                    <PhoneCallLink
+                      phone={contact.phone}
+                      leadId={leadId}
+                      contactId={contact.id}
+                      className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
+                    />
                   )}
                 </div>
               </div>
