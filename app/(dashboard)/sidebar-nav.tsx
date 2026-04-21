@@ -23,7 +23,7 @@ interface NavItem {
 // Einträge nach Workflow-Phase gruppiert — oben → daily home, dann
 // Akquise (roh reinholen), Vertrieb (bearbeiten), Verwaltung (Config).
 const topNav: NavItem[] = [
-  { href: "/", label: "Übersicht", icon: LayoutDashboard },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
 ];
 
 const akquiseNav: NavItem[] = [
