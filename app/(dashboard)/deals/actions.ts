@@ -58,28 +58,31 @@ export async function createDealAction(input: {
 
   const db = createServiceClient();
 
-  // Entweder bestehender Lead ODER neuen Lead inline anlegen
-  let leadId: string;
+  // Entkopplung: Deal hängt optional an einem Lead. Bei "Neue Firma" wird
+  // KEIN Lead angelegt — der Firmenname lebt als Snapshot auf dem Deal.
+  // Bei "Bestehende Firma" wird der Name zusätzlich als Snapshot gespeichert,
+  // damit der Deal überlebt, falls der Lead später im CRM gelöscht wird.
+  let leadId: string | null;
+  let companyName: string;
   if (input.leadId) {
-    leadId = input.leadId;
-  } else if (input.newCompanyName && input.newCompanyName.trim()) {
-    const { data: newLead, error: leadErr } = await db
+    const { data: lead } = await db
       .from("leads")
-      .insert({
-        company_name: input.newCompanyName.trim(),
-        status: "imported",
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
-    if (leadErr || !newLead) return { error: leadErr?.message ?? "Konnte Firma nicht anlegen." };
-    leadId = newLead.id as string;
+      .select("id, company_name")
+      .eq("id", input.leadId)
+      .maybeSingle();
+    if (!lead) return { error: "Ausgewählte Firma nicht gefunden." };
+    leadId = lead.id as string;
+    companyName = (lead.company_name as string | null) ?? "—";
+  } else if (input.newCompanyName && input.newCompanyName.trim()) {
+    leadId = null;
+    companyName = input.newCompanyName.trim();
   } else {
     return { error: "Firma muss ausgewählt oder neu angelegt werden." };
   }
 
   const res = await createDealHelper({
     leadId,
+    companyName,
     title,
     description: input.description.trim() || null,
     amountCents: cents,
@@ -98,11 +101,11 @@ export async function createDealAction(input: {
     action: "deal.created",
     entityType: "deal",
     entityId: res.id,
-    details: { title, amount_cents: cents, stage: input.stageId, lead_id: leadId },
+    details: { title, amount_cents: cents, stage: input.stageId, lead_id: leadId, company_name: companyName },
   });
 
   revalidatePath("/deals");
-  revalidatePath(`/crm/${leadId}`);
+  if (leadId) revalidatePath(`/crm/${leadId}`);
   return { success: true, dealId: res.id };
 }
 

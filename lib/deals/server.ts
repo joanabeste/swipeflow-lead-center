@@ -61,8 +61,9 @@ const DEAL_SELECT = `
   id, lead_id, title, description, amount_cents, currency, stage_id,
   assigned_to, expected_close_date, actual_close_date,
   probability, next_step, last_followup_at,
+  company_name,
   created_by, created_at, updated_at,
-  leads!inner(company_name, domain),
+  leads(company_name, domain),
   deal_stages!inner(label, color, kind),
   profiles:assigned_to(name, avatar_url)
 `;
@@ -87,7 +88,8 @@ export async function getDeal(id: string): Promise<DealWithRelations | null> {
 }
 
 export async function createDeal(input: {
-  leadId: string;
+  leadId: string | null;
+  companyName: string;
   title: string;
   description?: string | null;
   amountCents: number;
@@ -104,6 +106,7 @@ export async function createDeal(input: {
     .from("deals")
     .insert({
       lead_id: input.leadId,
+      company_name: input.companyName,
       title: input.title,
       description: input.description ?? null,
       amount_cents: input.amountCents,
@@ -347,7 +350,7 @@ function mapStageRow(r: StageRow): DealStage {
 type JoinRow<T> = T | T[] | null;
 type DealRelRow = {
   id: string;
-  lead_id: string;
+  lead_id: string | null;
   title: string;
   description: string | null;
   amount_cents: number;
@@ -359,6 +362,7 @@ type DealRelRow = {
   probability: number | null;
   next_step: string | null;
   last_followup_at: string | null;
+  company_name: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -394,7 +398,9 @@ function mapDealRelRow(r: unknown): DealWithRelations {
     createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    company_name: lead?.company_name ?? "—",
+    // Snapshot auf dem Deal hat Vorrang — bleibt auch stehen, wenn der Lead
+    // gelöscht wurde (FK ON DELETE SET NULL).
+    company_name: row.company_name ?? lead?.company_name ?? "—",
     company_domain: lead?.domain ?? null,
     stage_label: stage?.label ?? row.stage_id,
     stage_color: stage?.color ?? "#6b7280",

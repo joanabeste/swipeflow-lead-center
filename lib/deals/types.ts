@@ -12,7 +12,7 @@ export interface DealStage {
 
 export interface Deal {
   id: string;
-  leadId: string;
+  leadId: string | null;
   title: string;
   description: string | null;
   amountCents: number;

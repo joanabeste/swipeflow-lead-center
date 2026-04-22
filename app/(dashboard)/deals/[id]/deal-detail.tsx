@@ -120,13 +120,23 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
               ) : (
                 <h1 className="text-xl font-bold">{deal.title}</h1>
               )}
-              <Link
-                href={`/crm/${deal.leadId}`}
-                className="mt-1 inline-flex items-center gap-1 text-sm text-gray-600 hover:underline dark:text-gray-300"
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                {deal.company_name}
-              </Link>
+              {deal.leadId ? (
+                <Link
+                  href={`/crm/${deal.leadId}`}
+                  className="mt-1 inline-flex items-center gap-1 text-sm text-gray-600 hover:underline dark:text-gray-300"
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  {deal.company_name}
+                </Link>
+              ) : (
+                <p
+                  className="mt-1 inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-300"
+                  title="Firma ist nicht im CRM hinterlegt"
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  {deal.company_name}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {editing ? (
