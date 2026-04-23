@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
@@ -226,6 +227,10 @@ function LandingPageDialog({
   );
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Mount-Guard: createPortal braucht `document`, das auf dem Server nicht
+  // existiert. Erst nach dem ersten Client-Render rendern wir das Modal.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const selectedIndustry = industries.find((i) => i.id === industryId) ?? null;
   const selectedContact = contacts.find((c) => c.id === contactId) ?? null;
@@ -325,7 +330,9 @@ function LandingPageDialog({
 
   const embedUrl = toLoomEmbedUrl(loomUrl);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
@@ -521,7 +528,8 @@ function LandingPageDialog({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
