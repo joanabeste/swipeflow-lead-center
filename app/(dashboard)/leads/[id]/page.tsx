@@ -21,7 +21,7 @@ export default async function LeadDetailPage({ params }: Props) {
     { data: enrichments },
     hq,
   ] = await Promise.all([
-    db.from("leads").select("*").eq("id", id).single(),
+    db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
     db.from("lead_changes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     db.from("lead_contacts").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),

@@ -12,22 +12,23 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   const sevenDaysIso = sevenDaysAgo.toISOString();
 
   const baseQueries = [
-    db.from("leads").select("*", { count: "exact", head: true }),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "imported"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "enriched"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "enrichment_pending"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "qualified"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "exported"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "cancelled"),
-    db.from("leads").select("*", { count: "exact", head: true }).eq("blacklist_hit", true),
+    db.from("leads").select("*", { count: "exact", head: true }).is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "imported").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "enriched").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "enrichment_pending").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "qualified").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "exported").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("status", "cancelled").is("deleted_at", null),
+    db.from("leads").select("*", { count: "exact", head: true }).eq("blacklist_hit", true).is("deleted_at", null),
     db.from("lead_enrichments").select("*", { count: "exact", head: true }).eq("status", "completed"),
     db.from("lead_enrichments").select("*", { count: "exact", head: true }).eq("status", "failed"),
-    db.from("leads").select("id, company_name, status, updated_at").order("updated_at", { ascending: false }).limit(8),
+    db.from("leads").select("id, company_name, status, updated_at").is("deleted_at", null).order("updated_at", { ascending: false }).limit(8),
     db.from("audit_logs").select("*, profiles(name)").order("created_at", { ascending: false }).limit(6),
     // CRM-Queue: alle Leads mit crm_status_id = todo
     db.from("leads").select("id, company_name, city, phone, crm_status_id, updated_at")
       .eq("status", "qualified")
       .eq("crm_status_id", "todo")
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(10),
     // Anrufe heute (alle User)
@@ -46,9 +47,9 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   let noSslCount = 0, notMobileCount = 0, outdatedDesignCount = 0;
   if (serviceMode === "webdev") {
     const [{ count: noSsl }, { count: notMobile }, { count: outdated }] = await Promise.all([
-      db.from("leads").select("*", { count: "exact", head: true }).eq("has_ssl", false),
-      db.from("leads").select("*", { count: "exact", head: true }).eq("is_mobile_friendly", false),
-      db.from("leads").select("*", { count: "exact", head: true }).eq("website_age_estimate", "veraltet"),
+      db.from("leads").select("*", { count: "exact", head: true }).eq("has_ssl", false).is("deleted_at", null),
+      db.from("leads").select("*", { count: "exact", head: true }).eq("is_mobile_friendly", false).is("deleted_at", null),
+      db.from("leads").select("*", { count: "exact", head: true }).eq("website_age_estimate", "veraltet").is("deleted_at", null),
     ]);
     noSslCount = noSsl ?? 0;
     notMobileCount = notMobile ?? 0;
@@ -76,26 +77,26 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     db.from("lead_notes").select("*", { count: "exact", head: true })
       .eq("created_by", userId).gte("created_at", todayIso),
     db.from("leads").select("*", { count: "exact", head: true })
-      .eq("status", "qualified").eq("crm_status_id", "todo"),
+      .eq("status", "qualified").eq("crm_status_id", "todo").is("deleted_at", null),
     db.from("lead_calls").select("direction, status, started_at")
       .gte("started_at", sevenDaysIso),
     db.from("lead_enrichments").select("status, created_at")
       .gte("created_at", sevenDaysIso),
     db.from("leads").select("crm_status_id")
-      .eq("status", "qualified"),
+      .eq("status", "qualified").is("deleted_at", null),
     db.from("custom_lead_statuses").select("id, label, color, display_order")
       .eq("is_active", true).order("display_order", { ascending: true }),
     // Follow-Up: qualifizierte Leads mit CRM-Status "todo", die länger als
     // 7 Tage nicht angerufen wurden (oder noch nie). Wir holen einen größeren
     // Pool und filtern clientseitig mit der Call-Historie.
     db.from("leads").select("id, company_name, city, phone, updated_at")
-      .eq("status", "qualified").eq("crm_status_id", "todo")
+      .eq("status", "qualified").eq("crm_status_id", "todo").is("deleted_at", null)
       .order("updated_at", { ascending: true }).limit(50),
     // Team-Leaderboard heute: alle Calls heute mit Ersteller.
     db.from("lead_calls").select("created_by, direction, status, started_at")
       .gte("started_at", todayIso),
     // Offene Deals gruppiert nach Stage (open kind), mit Amount.
-    db.from("deals").select("stage_id, amount_cents"),
+    db.from("deals").select("stage_id, amount_cents").is("deleted_at", null),
     db.from("deal_stages").select("id, label, color, kind, display_order")
       .eq("is_active", true).order("display_order", { ascending: true }),
     // E-Mails 7 Tage: sent/failed pro Tag.
@@ -107,7 +108,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     // Abgeschlossene Deals der letzten 12 Monate (für Trend-Widget).
     db.from("deals").select("stage_id, amount_cents, actual_close_date")
       .gte("actual_close_date", twelveMonthsAgoIso)
-      .not("actual_close_date", "is", null),
+      .not("actual_close_date", "is", null)
+      .is("deleted_at", null),
   ]);
 
   // Namen für Call-Ersteller

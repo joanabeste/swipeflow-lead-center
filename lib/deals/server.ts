@@ -73,6 +73,7 @@ export async function listDeals(): Promise<DealWithRelations[]> {
   const { data } = await db
     .from("deals")
     .select(DEAL_SELECT)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   return (data ?? []).map(mapDealRelRow);
 }
@@ -83,6 +84,7 @@ export async function getDeal(id: string): Promise<DealWithRelations | null> {
     .from("deals")
     .select(DEAL_SELECT)
     .eq("id", id)
+    .is("deleted_at", null)
     .maybeSingle();
   return data ? mapDealRelRow(data) : null;
 }
@@ -241,7 +243,13 @@ export async function updateDeal(
 
 export async function deleteDeal(id: string): Promise<void> {
   const db = createServiceClient();
-  await db.from("deals").delete().eq("id", id);
+  // Soft-Delete: 30 Tage im Papierkorb. pg_cron purged danach endgültig
+  // (Migration 040). deal_changes + deal_notes bleiben bis zum endgültigen
+  // Löschen erhalten (damit Wiederherstellung die History mitbringt).
+  await db
+    .from("deals")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", id);
 }
 
 // ─── Deal-Notes / Activities ──────────────────────────────────

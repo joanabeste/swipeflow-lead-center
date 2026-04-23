@@ -66,18 +66,25 @@ export async function deleteLead(leadId: string) {
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { error } = await db.from("leads").delete().eq("id", leadId);
+  // Soft-Delete: Lead 30 Tage im Papierkorb. Endgültige Löschung übernimmt
+  // pg_cron (Migration 040).
+  const { error } = await db
+    .from("leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", leadId);
 
   if (error) return { error: error.message };
 
   await logAudit({
     userId: user?.id ?? null,
-    action: "lead.deleted",
+    action: "lead.trashed",
     entityType: "lead",
     entityId: leadId,
   });
 
   revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath("/einstellungen/papierkorb");
   return { success: true };
 }
 
@@ -146,6 +153,7 @@ export async function findSimilarLeads(leadId: string) {
     .from("leads")
     .select("id, company_name, domain, city, status")
     .neq("id", leadId)
+    .is("deleted_at", null)
     .limit(100);
 
   if (!candidates) return [];
@@ -168,6 +176,7 @@ export async function searchLeads(query: string) {
   const { data } = await db
     .from("leads")
     .select("id, company_name, domain, city, status")
+    .is("deleted_at", null)
     .or(`company_name.ilike.${q},domain.ilike.${q},city.ilike.${q},email.ilike.${q},phone.ilike.${q}`)
     .limit(8);
 
@@ -191,17 +200,22 @@ export async function bulkDeleteLeads(leadIds: string[]) {
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { error } = await db.from("leads").delete().in("id", leadIds);
+  const { error } = await db
+    .from("leads")
+    .update({ deleted_at: new Date().toISOString() })
+    .in("id", leadIds);
   if (error) return { error: error.message };
 
   await logAudit({
     userId: user?.id ?? null,
-    action: "lead.bulk_delete",
+    action: "lead.bulk_trashed",
     entityType: "lead",
     details: { lead_count: leadIds.length },
   });
 
   revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath("/einstellungen/papierkorb");
   return { success: true };
 }
 

@@ -176,6 +176,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
     )
     .in("crm_status_id", statusIds)
     .not("phone", "is", null)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: true })
     .limit(100);
 

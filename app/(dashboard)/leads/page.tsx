@@ -32,7 +32,10 @@ export default async function LeadsPage({ searchParams }: Props) {
     visibleColumns = profile?.lead_table_columns as string[] | null;
   }
 
-  let query = supabase.from("leads").select("*", { count: "exact" });
+  let query = supabase
+    .from("leads")
+    .select("*", { count: "exact" })
+    .is("deleted_at", null);
 
   if (params.q) {
     query = query.or(

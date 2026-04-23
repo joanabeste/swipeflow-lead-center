@@ -27,6 +27,7 @@ export async function findLeadByPhone(
       .from("leads")
       .select("id, phone, updated_at")
       .ilike("phone", `%${suffix}%`)
+      .is("deleted_at", null)
       .limit(20),
     db
       .from("lead_contacts")

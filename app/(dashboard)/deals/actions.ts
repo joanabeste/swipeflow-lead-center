@@ -69,6 +69,7 @@ export async function createDealAction(input: {
       .from("leads")
       .select("id, company_name")
       .eq("id", input.leadId)
+      .is("deleted_at", null)
       .maybeSingle();
     if (!lead) return { error: "Ausgewählte Firma nicht gefunden." };
     leadId = lead.id as string;
@@ -172,11 +173,12 @@ export async function deleteDealAction(dealId: string): Promise<{ success: true 
   await deleteDealHelper(dealId);
   await logAudit({
     userId: user.id,
-    action: "deal.deleted",
+    action: "deal.trashed",
     entityType: "deal",
     entityId: dealId,
   });
   revalidatePath("/deals");
+  revalidatePath("/einstellungen/papierkorb");
   return { success: true };
 }
 
@@ -319,6 +321,7 @@ export async function searchLeadsForDeal(query: string): Promise<{
   const { data } = await db
     .from("leads")
     .select("id, company_name, city")
+    .is("deleted_at", null)
     .ilike("company_name", `%${q}%`)
     .order("company_name", { ascending: true })
     .limit(10);

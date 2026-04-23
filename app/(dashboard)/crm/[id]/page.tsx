@@ -30,7 +30,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     { data: auditLogs },
     hq,
   ] = await Promise.all([
-    db.from("leads").select("*").eq("id", id).single(),
+    db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
     db.from("custom_lead_statuses").select("*").order("display_order"),
     db.from("lead_contacts").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
@@ -118,12 +118,14 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
         id, lead_id, title, description, amount_cents, currency, stage_id,
         assigned_to, expected_close_date, actual_close_date,
         probability, next_step, last_followup_at,
+        company_name,
         created_by, created_at, updated_at,
-        leads!inner(company_name, domain),
+        leads(company_name, domain),
         deal_stages!inner(label, color, kind),
         profiles:assigned_to(name, avatar_url)
       `)
       .eq("lead_id", id)
+      .is("deleted_at", null)
       .order("updated_at", { ascending: false }),
     listStages(),
     listTeamMembers(),

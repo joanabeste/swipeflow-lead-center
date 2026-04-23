@@ -50,7 +50,10 @@ export default async function CrmPage({
   const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
   const notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
 
-  let query = db.from("leads").select("*", { count: "exact" });
+  let query = db
+    .from("leads")
+    .select("*", { count: "exact" })
+    .is("deleted_at", null);
 
   // CRM-Scope: qualified ODER hat mind. einen Call
   if (calledLeadIds.length > 0) {
