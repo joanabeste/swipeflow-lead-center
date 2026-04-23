@@ -351,7 +351,12 @@ export function CallStats7dWidget({ data }: { data: DashboardData }) {
     <Card>
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Anrufe (7 Tage)</p>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+            Anrufe (7 Tage)
+            <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-white/5 dark:text-gray-400">
+              Team
+            </span>
+          </p>
           <p className="mt-0.5 text-lg font-bold">{data.callsTotal7d} gesamt</p>
         </div>
         <div className="flex gap-3 text-xs">
