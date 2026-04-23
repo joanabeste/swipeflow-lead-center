@@ -89,12 +89,16 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
   }
 
   function handleDelete() {
-    if (!confirm(`Deal „${deal.title}" wirklich löschen?`)) return;
+    if (!confirm(`Deal „${deal.title}" in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.`)) return;
     startDelete(async () => {
       const res = await deleteDealAction(deal.id);
       if ("error" in res) addToast(res.error, "error");
       else {
-        addToast("Deal gelöscht.", "success");
+        addToast(
+          `Deal „${deal.title}" im Papierkorb — 30 Tage wiederherstellbar.`,
+          "success",
+          { action: { label: "Papierkorb öffnen", href: "/einstellungen/papierkorb" } },
+        );
         router.push("/deals");
       }
     });

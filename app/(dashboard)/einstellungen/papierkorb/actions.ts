@@ -156,3 +156,84 @@ export async function purgeDeal(dealId: string): Promise<{ success: true } | { e
   revalidatePath("/einstellungen/papierkorb");
   return { success: true };
 }
+
+// ─── Bulk-Actions ─────────────────────────────────────────────
+
+export async function bulkRestoreLeads(ids: string[]): Promise<{ success: true; count: number } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (ids.length === 0) return { success: true, count: 0 };
+  const db = createServiceClient();
+  const { error } = await db.from("leads").update({ deleted_at: null }).in("id", ids);
+  if (error) return { error: error.message };
+  await logAudit({
+    userId: user.id,
+    action: "lead.bulk_restored",
+    entityType: "lead",
+    details: { lead_count: ids.length },
+  });
+  revalidatePath("/einstellungen/papierkorb");
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  return { success: true, count: ids.length };
+}
+
+export async function bulkRestoreDeals(ids: string[]): Promise<{ success: true; count: number } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (ids.length === 0) return { success: true, count: 0 };
+  const db = createServiceClient();
+  const { error } = await db.from("deals").update({ deleted_at: null }).in("id", ids);
+  if (error) return { error: error.message };
+  await logAudit({
+    userId: user.id,
+    action: "deal.bulk_restored",
+    entityType: "deal",
+    details: { deal_count: ids.length },
+  });
+  revalidatePath("/einstellungen/papierkorb");
+  revalidatePath("/deals");
+  return { success: true, count: ids.length };
+}
+
+export async function bulkPurgeLeads(ids: string[]): Promise<{ success: true; count: number } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (ids.length === 0) return { success: true, count: 0 };
+  const db = createServiceClient();
+  const { error } = await db
+    .from("leads")
+    .delete()
+    .in("id", ids)
+    .not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+  await logAudit({
+    userId: user.id,
+    action: "lead.bulk_purged",
+    entityType: "lead",
+    details: { lead_count: ids.length },
+  });
+  revalidatePath("/einstellungen/papierkorb");
+  return { success: true, count: ids.length };
+}
+
+export async function bulkPurgeDeals(ids: string[]): Promise<{ success: true; count: number } | { error: string }> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (ids.length === 0) return { success: true, count: 0 };
+  const db = createServiceClient();
+  const { error } = await db
+    .from("deals")
+    .delete()
+    .in("id", ids)
+    .not("deleted_at", "is", null);
+  if (error) return { error: error.message };
+  await logAudit({
+    userId: user.id,
+    action: "deal.bulk_purged",
+    entityType: "deal",
+    details: { deal_count: ids.length },
+  });
+  revalidatePath("/einstellungen/papierkorb");
+  return { success: true, count: ids.length };
+}

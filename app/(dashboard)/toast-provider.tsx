@@ -1,11 +1,12 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { useToast, type Toast } from "@/lib/use-toast";
+import Link from "next/link";
+import { useToast, type Toast, type ToastOptions } from "@/lib/use-toast";
 import { Check, AlertTriangle, Info, X } from "lucide-react";
 
 const ToastContext = createContext<{
-  addToast: (message: string, type?: Toast["type"]) => void;
+  addToast: (message: string, type?: Toast["type"], options?: ToastOptions) => void;
 }>({ addToast: () => {} });
 
 export function useToastContext() {
@@ -35,6 +36,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             {toast.type === "error" && <AlertTriangle className="h-4 w-4 flex-shrink-0" />}
             {toast.type === "info" && <Info className="h-4 w-4 flex-shrink-0" />}
             <p className="text-sm font-medium">{toast.message}</p>
+            {toast.action && (
+              <Link
+                href={toast.action.href}
+                onClick={() => removeToast(toast.id)}
+                className="ml-1 rounded-md border border-current/30 px-2 py-0.5 text-xs font-semibold underline-offset-2 hover:underline"
+              >
+                {toast.action.label}
+              </Link>
+            )}
             <button
               onClick={() => removeToast(toast.id)}
               className="ml-2 flex-shrink-0 opacity-50 hover:opacity-100"

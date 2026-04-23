@@ -300,14 +300,18 @@ export function LeadTable({
           </button>
           <button
             onClick={() => {
-              if (confirm(`${selected.size} Lead(s) endgültig löschen?`)) {
+              if (confirm(`${selected.size} Lead(s) in den Papierkorb verschieben? Du kannst sie 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.`)) {
                 const count = selected.size;
                 startBulkTransition(async () => {
                   const res = await bulkDeleteLeads(Array.from(selected));
                   if (res.error) {
                     addToast(`Fehler: ${res.error}`, "error");
                   } else {
-                    addToast(`${count} Lead(s) gelöscht`);
+                    addToast(
+                      `${count} Lead${count === 1 ? "" : "s"} im Papierkorb — 30 Tage wiederherstellbar.`,
+                      "success",
+                      { action: { label: "Papierkorb öffnen", href: "/einstellungen/papierkorb" } },
+                    );
                     setSelected(new Set());
                   }
                 });

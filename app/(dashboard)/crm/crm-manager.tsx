@@ -126,13 +126,17 @@ export function CrmManager({
   }
 
   function handleBulkDelete() {
-    if (!confirm(`${selected.size} Lead(s) endgültig löschen?`)) return;
+    if (!confirm(`${selected.size} Firma/Firmen in den Papierkorb verschieben? Du kannst sie 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.`)) return;
     const ids = Array.from(selected);
     startTransition(async () => {
       const res = await bulkDeleteLeads(ids);
       if (res.error) addToast(`Fehler: ${res.error}`, "error");
       else {
-        addToast(`${ids.length} Lead(s) gelöscht`);
+        addToast(
+          `${ids.length} ${ids.length === 1 ? "Firma" : "Firmen"} im Papierkorb — 30 Tage wiederherstellbar.`,
+          "success",
+          { action: { label: "Papierkorb öffnen", href: "/einstellungen/papierkorb" } },
+        );
         setSelected(new Set());
         router.refresh();
       }
