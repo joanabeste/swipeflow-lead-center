@@ -28,7 +28,11 @@ export default async function LandingPageBySlug({ params }: Props) {
   }).catch(() => {});
 
   const embedUrl = toLoomEmbedUrl(page.loom_url);
+  const loomSrc = embedUrl
+    ? `${embedUrl}?hideEmbedTopBar=true&hide_owner=true&hide_share=true&hide_title=true`
+    : null;
   const primary = page.primary_color ?? "#0f172a";
+  const hasBrandColor = !!page.primary_color;
   const embedDomain = hdrs.get("host") ?? "";
   const calendlySrc = page.calendly_url
     ? `${page.calendly_url}${page.calendly_url.includes("?") ? "&" : "?"}embed_domain=${encodeURIComponent(embedDomain)}&embed_type=Inline&hide_gdpr_banner=1`
@@ -36,7 +40,7 @@ export default async function LandingPageBySlug({ params }: Props) {
 
   return (
     <main
-      className="mx-auto max-w-3xl px-6 py-16 sm:py-24"
+      className="mx-auto max-w-4xl px-6 py-12 sm:py-20"
       style={{ ["--lp-primary" as string]: primary }}
     >
       {page.logo_url && (
@@ -44,17 +48,26 @@ export default async function LandingPageBySlug({ params }: Props) {
         <img
           src={page.logo_url}
           alt=""
-          className="mb-10 h-12 w-auto object-contain"
+          className="mb-8 h-14 w-auto object-contain"
         />
       )}
+      {page.company_name && (
+        <span
+          className="inline-block rounded-full px-3 py-1 text-xs font-medium tracking-wide text-white"
+          style={{ backgroundColor: "var(--lp-primary)" }}
+        >
+          Persönlich für {page.company_name}
+        </span>
+      )}
       {page.greeting && (
-        <p className="text-sm font-medium tracking-wide text-gray-500">
+        <p className="mt-4 text-sm font-medium tracking-wide text-gray-500">
           {page.greeting}
         </p>
       )}
       {page.headline && (
-        <h1 className="mt-3 inline-block border-b-4 pb-2 text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl"
-          style={{ borderColor: "var(--lp-primary)" }}
+        <h1
+          className="mt-3 text-3xl font-bold leading-tight tracking-tight sm:text-4xl"
+          style={{ color: hasBrandColor ? "var(--lp-primary)" : undefined }}
         >
           {page.headline}
         </h1>
@@ -65,11 +78,11 @@ export default async function LandingPageBySlug({ params }: Props) {
         </p>
       )}
 
-      {embedUrl && (
+      {loomSrc && (
         <div className="mt-10 overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
           <div className="relative aspect-video w-full">
             <iframe
-              src={embedUrl}
+              src={loomSrc}
               title="Erklär-Video"
               allow="fullscreen"
               allowFullScreen
@@ -125,27 +138,35 @@ export default async function LandingPageBySlug({ params }: Props) {
       )}
 
       {page.outro_text && (
-        <p className="mt-14 whitespace-pre-line border-t border-gray-100 pt-8 text-base leading-relaxed text-gray-700">
+        <p className="mt-14 whitespace-pre-line text-base leading-relaxed text-gray-700">
           {page.outro_text}
         </p>
       )}
 
       {calendlySrc && (
-        <section className="mt-14">
-          <h2 className="text-lg font-semibold text-gray-900">Termin vereinbaren</h2>
-          <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200">
+        <section className="mt-20">
+          <p
+            className="text-center text-xs font-semibold uppercase tracking-widest"
+            style={{ color: "var(--lp-primary)" }}
+          >
+            Nächster Schritt
+          </p>
+          <h2 className="mt-2 text-center text-2xl font-bold text-gray-900 sm:text-3xl">
+            Termin vereinbaren
+          </h2>
+          <div className="mt-8">
             <iframe
               src={calendlySrc}
               title="Termin buchen"
               loading="lazy"
               className="block w-full"
-              style={{ height: "700px", border: 0 }}
+              style={{ height: "950px", border: 0 }}
             />
           </div>
         </section>
       )}
 
-      <footer className="mt-16 border-t border-gray-100 pt-6 text-xs text-gray-400">
+      <footer className="mt-12 text-xs text-gray-400">
         {page.company_name && <span>Persönlich zusammengestellt für {page.company_name}.</span>}
       </footer>
     </main>
