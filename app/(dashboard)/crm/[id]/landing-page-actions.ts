@@ -37,6 +37,7 @@ export async function createLandingPageAction(input: {
   leadId: string;
   contactId: string | null;
   industryId: string | null;
+  companyName: string | null;
   greeting: string;
   headline: string;
   introText: string;
@@ -54,6 +55,7 @@ export async function createLandingPageAction(input: {
     leadId: input.leadId,
     contactId: input.contactId,
     industryId: input.industryId,
+    companyName: input.companyName,
     greeting: cleaned.greeting,
     headline: cleaned.headline,
     introText: cleaned.introText,

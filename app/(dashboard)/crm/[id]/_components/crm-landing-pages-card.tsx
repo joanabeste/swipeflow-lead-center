@@ -313,7 +313,10 @@ function LandingPageDialog({
         if ("error" in res) setError(res.error);
         else onUpdated();
       } else {
-        const res = await createLandingPageAction(basePayload);
+        const res = await createLandingPageAction({
+          ...basePayload,
+          companyName,
+        });
         if ("error" in res) setError(res.error);
         else onCreated(res.slug);
       }

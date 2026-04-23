@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { generateSlug } from "./slug";
+import { generateSlug, randomSuffix, slugifyCompanyName } from "./slug";
 import type { CaseStudy, Industry, LandingPage, LandingPageWithRelations } from "./types";
 
 // ─── Read-Helpers ────────────────────────────────────────────
@@ -92,6 +92,7 @@ export async function createLandingPage(input: {
   leadId: string | null;
   contactId: string | null;
   industryId: string | null;
+  companyName: string | null;
   greeting: string;
   headline: string;
   introText: string;
@@ -103,9 +104,19 @@ export async function createLandingPage(input: {
 }): Promise<{ id: string; slug: string } | { error: string }> {
   const db = createServiceClient();
 
-  // Slug-Kollisions-Retry: bis zu 5 Versuche, dann geben wir auf.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const slug = generateSlug();
+  // Slug-Strategie:
+  //  1. Versuch: Slug aus Firmenname (z. B. "handwerk-mueller-gmbh")
+  //  2.–5. Versuch: gleicher Basis-Slug + 4-char Suffix (…-a3f9) für Kollisionen
+  //  6. Versuch (Fallback): rein zufälliger 8-char Slug
+  const baseSlug = input.companyName ? slugifyCompanyName(input.companyName) : "";
+  const attempts: string[] = [];
+  if (baseSlug) {
+    attempts.push(baseSlug);
+    for (let i = 0; i < 4; i++) attempts.push(`${baseSlug}-${randomSuffix()}`);
+  }
+  attempts.push(generateSlug());
+
+  for (const slug of attempts) {
     const { data, error } = await db
       .from("landing_pages")
       .insert({
