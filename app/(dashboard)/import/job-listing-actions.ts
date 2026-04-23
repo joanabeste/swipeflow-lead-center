@@ -61,8 +61,12 @@ interface ContactDraft {
 
 /**
  * Sammelt aus allen Zeilen einer Firma die EINDEUTIGEN Ansprechpartner.
- * Dedup-Key: email (lowercased) — falls email fehlt, fällt auf name (lowercased) zurück.
- * Erster Treffer gewinnt.
+ *
+ * Dedup-Key: `name|email` — Composite, damit zwei verschiedene Personen, die
+ * sich eine Sammel-E-Mail (`bewerbung@…`) teilen, beide importiert werden.
+ * Früher war der Key nur die E-Mail — dadurch fielen Kontakte raus, sobald
+ * irgendeine frühere Zeile dieselbe E-Mail belegt hatte (z. B. Miriam Zenz
+ * bei VINCI mit `bewerbung@eurovia.de`).
  *
  * Ergänzt als Fallback den aus der Beschreibung extrahierten Kontakt der
  * ersten Zeile, falls überhaupt kein Kontakt in den CSV-Spalten gesetzt ist.
@@ -84,8 +88,8 @@ function dedupeContacts(
       name: rawName,
       email: listing.email,
     });
-    const key = (listing.email ?? rawName).toLowerCase().trim();
-    if (!key || seen.has(key)) continue;
+    const key = `${rawName.toLowerCase().trim()}|${(listing.email ?? "").toLowerCase().trim()}`;
+    if (seen.has(key)) continue;
     seen.set(key, {
       name: rawName,
       email: listing.email,
@@ -409,22 +413,36 @@ async function upsertContactsAndJobs(
   let jobsAdded = 0;
 
   if (contactDrafts.length > 0) {
-    // Bestehende Kontakte für Dedup laden.
+    // Bestehende Kontakte für Dedup laden. Composite-Key `name|email` —
+    // zwei Personen dürfen dieselbe Sammel-E-Mail haben, solange der Name
+    // unterschiedlich ist. Zusätzlich wird pro Name geblockt, damit derselbe
+    // Name nicht doppelt mit verschiedenen E-Mails reinkommt.
     const { data: existingContacts } = await db
       .from("lead_contacts")
       .select("name, email")
       .eq("lead_id", leadId);
-    const existingKeys = new Set<string>();
+    const existingCompositeKeys = new Set<string>();
+    const existingNameKeys = new Set<string>();
     for (const c of existingContacts ?? []) {
-      if (c.email) existingKeys.add(String(c.email).toLowerCase());
-      if (c.name) existingKeys.add(String(c.name).toLowerCase().trim());
+      const name = c.name ? String(c.name).toLowerCase().trim() : "";
+      const email = c.email ? String(c.email).toLowerCase().trim() : "";
+      if (name) {
+        existingNameKeys.add(name);
+        existingCompositeKeys.add(`${name}|${email}`);
+      }
     }
 
     const toInsert = contactDrafts
       .filter((c) => {
-        const emailKey = c.email?.toLowerCase();
         const nameKey = c.name.toLowerCase().trim();
-        return !(emailKey && existingKeys.has(emailKey)) && !existingKeys.has(nameKey);
+        const emailKey = c.email?.toLowerCase().trim() ?? "";
+        const composite = `${nameKey}|${emailKey}`;
+        // Gleicher Name + gleiche E-Mail → exakte Dublette, skippen.
+        if (existingCompositeKeys.has(composite)) return false;
+        // Gleicher Name mit (evtl.) anderer E-Mail → auch skippen, weil
+        // derselbe Mensch nicht zweimal angelegt werden soll.
+        if (existingNameKeys.has(nameKey)) return false;
+        return true;
       })
       .map((c) => ({
         lead_id: leadId,
