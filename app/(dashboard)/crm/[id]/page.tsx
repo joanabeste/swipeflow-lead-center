@@ -11,6 +11,7 @@ import { getWebexCredentials } from "@/lib/webex/auth";
 import { listStages } from "@/lib/deals/server";
 import { listTeamMembers } from "../../deals/actions";
 import type { DealWithRelations } from "@/lib/deals/types";
+import { listCaseStudies, listIndustries, listLandingPagesForLead } from "@/lib/landing-pages/server";
 import { CrmLeadDetail } from "./crm-lead-detail";
 
 export default async function CrmLeadPage({ params }: { params: Promise<{ id: string }> }) {
@@ -105,6 +106,13 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
     phonemondo: isPhoneMondoConfigured(),
     webex: !!webexCreds && (webexCreds.source === "env" || webexCreds.scopes.includes("spark:calls_write")),
   };
+
+  // Landing-Pages + Branchen + Case-Studies für den Generator im Lead-Detail
+  const [industries, caseStudies, landingPages] = await Promise.all([
+    listIndustries(true),
+    listCaseStudies(true),
+    listLandingPagesForLead(id),
+  ]);
 
   // Deals für diese Firma + Stages + Team für den NewDealDialog
   const [
@@ -218,6 +226,9 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       deals={deals}
       dealStages={dealStages}
       team={team}
+      industries={industries}
+      caseStudies={caseStudies}
+      landingPages={landingPages}
     />
   );
 }

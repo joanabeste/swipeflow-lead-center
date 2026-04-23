@@ -10,6 +10,7 @@ import type {
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
+import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
@@ -48,11 +49,14 @@ interface Props {
   deals: DealWithRelations[];
   dealStages: DealStage[];
   team: { id: string; name: string; avatarUrl: string | null }[];
+  industries: Industry[];
+  caseStudies: CaseStudy[];
+  landingPages: LandingPage[];
 }
 
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
-  deals, dealStages, team,
+  deals, dealStages, team, industries, caseStudies, landingPages,
 }: Props) {
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
@@ -132,6 +136,9 @@ export function CrmLeadDetail({
             deals={deals}
             dealStages={dealStages}
             team={team}
+            industries={industries}
+            caseStudies={caseStudies}
+            landingPages={landingPages}
           />
         }
         right={
