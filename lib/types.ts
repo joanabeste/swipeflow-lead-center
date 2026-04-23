@@ -69,6 +69,10 @@ export interface Lead {
   latitude: number | null;
   longitude: number | null;
   geocoded_at: string | null;
+  /** Corporate-Identity-Cache für Landing-Pages: Primärfarbe (Hex) aus Lead-Website. */
+  primary_color: string | null;
+  /** Corporate-Identity-Cache für Landing-Pages: Logo-URL aus Lead-Website (Favicon/Apple-Touch-Icon). */
+  logo_url: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

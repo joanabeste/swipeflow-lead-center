@@ -28,16 +28,34 @@ export default async function LandingPageBySlug({ params }: Props) {
   }).catch(() => {});
 
   const embedUrl = toLoomEmbedUrl(page.loom_url);
+  const primary = page.primary_color ?? "#0f172a";
+  const embedDomain = hdrs.get("host") ?? "";
+  const calendlySrc = page.calendly_url
+    ? `${page.calendly_url}${page.calendly_url.includes("?") ? "&" : "?"}embed_domain=${encodeURIComponent(embedDomain)}&embed_type=Inline&hide_gdpr_banner=1`
+    : null;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-16 sm:py-24">
+    <main
+      className="mx-auto max-w-3xl px-6 py-16 sm:py-24"
+      style={{ ["--lp-primary" as string]: primary }}
+    >
+      {page.logo_url && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={page.logo_url}
+          alt=""
+          className="mb-10 h-12 w-auto object-contain"
+        />
+      )}
       {page.greeting && (
         <p className="text-sm font-medium tracking-wide text-gray-500">
           {page.greeting}
         </p>
       )}
       {page.headline && (
-        <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl">
+        <h1 className="mt-3 inline-block border-b-4 pb-2 text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl"
+          style={{ borderColor: "var(--lp-primary)" }}
+        >
           {page.headline}
         </h1>
       )}
@@ -93,7 +111,8 @@ export default async function LandingPageBySlug({ params }: Props) {
                       href={cs.link_url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-gray-900 underline underline-offset-2 hover:no-underline"
+                      className="mt-4 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
+                      style={{ color: "var(--lp-primary)" }}
                     >
                       Mehr erfahren →
                     </a>
@@ -109,6 +128,21 @@ export default async function LandingPageBySlug({ params }: Props) {
         <p className="mt-14 whitespace-pre-line border-t border-gray-100 pt-8 text-base leading-relaxed text-gray-700">
           {page.outro_text}
         </p>
+      )}
+
+      {calendlySrc && (
+        <section className="mt-14">
+          <h2 className="text-lg font-semibold text-gray-900">Termin vereinbaren</h2>
+          <div className="mt-5 overflow-hidden rounded-2xl border border-gray-200">
+            <iframe
+              src={calendlySrc}
+              title="Termin buchen"
+              loading="lazy"
+              className="block w-full"
+              style={{ height: "700px", border: 0 }}
+            />
+          </div>
+        </section>
       )}
 
       <footer className="mt-16 border-t border-gray-100 pt-6 text-xs text-gray-400">

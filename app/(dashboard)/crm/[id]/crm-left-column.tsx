@@ -56,6 +56,12 @@ export function CrmLeftColumn({
         industries={industries}
         caseStudies={caseStudies}
         landingPages={landingPages}
+        brand={{
+          primaryColor: lead.primary_color,
+          logoUrl: lead.logo_url,
+          website: lead.website,
+          domain: lead.domain,
+        }}
       />
       <CrmJobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />
       {lead.latitude != null && lead.longitude != null && (

@@ -8,6 +8,7 @@ export interface Industry {
   intro_template: string;
   outro_template: string | null;
   loom_url: string | null;
+  calendly_url: string | null;
 }
 
 export interface CaseStudy {
@@ -36,6 +37,9 @@ export interface LandingPage {
   loom_url: string | null;
   outro_text: string | null;
   case_study_ids: string[];
+  calendly_url: string | null;
+  primary_color: string | null;
+  logo_url: string | null;
   view_count: number;
   last_viewed_at: string | null;
   created_by: string | null;

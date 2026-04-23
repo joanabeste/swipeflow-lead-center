@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2 } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { buildDefaultSnapshot, toLoomEmbedUrl } from "@/lib/landing-pages/generator";
@@ -12,8 +12,16 @@ import { Card } from "./crm-shared";
 import {
   createLandingPageAction,
   deleteLandingPageAction,
+  extractLeadBrandAction,
   updateLandingPageAction,
 } from "../landing-page-actions";
+
+interface LeadBrand {
+  primaryColor: string | null;
+  logoUrl: string | null;
+  website: string | null;
+  domain: string | null;
+}
 
 interface Props {
   leadId: string;
@@ -23,6 +31,7 @@ interface Props {
   industries: Industry[];
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
+  brand: LeadBrand;
 }
 
 export function CrmLandingPagesCard({
@@ -33,6 +42,7 @@ export function CrmLandingPagesCard({
   industries,
   caseStudies,
   landingPages,
+  brand,
 }: Props) {
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const { addToast } = useToastContext();
@@ -166,6 +176,7 @@ export function CrmLandingPagesCard({
           contacts={contacts}
           industries={industries}
           caseStudies={caseStudies}
+          brand={brand}
           state={dialog}
           onClose={() => setDialogState(null)}
           onCreated={(slug) => {
@@ -193,6 +204,7 @@ function LandingPageDialog({
   contacts,
   industries,
   caseStudies,
+  brand,
   state,
   onClose,
   onCreated,
@@ -204,6 +216,7 @@ function LandingPageDialog({
   contacts: LeadContact[];
   industries: Industry[];
   caseStudies: CaseStudy[];
+  brand: LeadBrand;
   state: DialogState;
   onClose: () => void;
   onCreated: (slug: string) => void;
@@ -222,6 +235,12 @@ function LandingPageDialog({
   const [introText, setIntroText] = useState(existing?.intro_text ?? "");
   const [outroText, setOutroText] = useState(existing?.outro_text ?? "");
   const [loomUrl, setLoomUrl] = useState(existing?.loom_url ?? "");
+  const [calendlyUrl, setCalendlyUrl] = useState(existing?.calendly_url ?? "");
+  const [primaryColor, setPrimaryColor] = useState(
+    existing?.primary_color ?? brand.primaryColor ?? "",
+  );
+  const [logoUrl, setLogoUrl] = useState(existing?.logo_url ?? brand.logoUrl ?? "");
+  const [brandLoading, setBrandLoading] = useState(false);
   const [caseStudyIds, setCaseStudyIds] = useState<string[]>(
     existing?.case_study_ids ?? [],
   );
@@ -263,6 +282,7 @@ function LandingPageDialog({
     setIntroText(draft.intro_text);
     setOutroText(draft.outro_text ?? "");
     setLoomUrl(draft.loom_url ?? "");
+    setCalendlyUrl(draft.calendly_url ?? "");
     setCaseStudyIds(draft.case_study_ids);
   }
 
@@ -276,6 +296,40 @@ function LandingPageDialog({
     didAutofill.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIndustry]);
+
+  // Brand-Auto-Extract: einmalig beim ersten Create-Open, wenn der Lead noch
+  // nichts cached hat und eine Website/Domain existiert. Ohne `forceRefresh`
+  // ist das billig — der nächste Dialog nutzt den Cache.
+  const didBrandExtract = useRef(
+    state.mode === "edit" || !!brand.primaryColor || !!brand.logoUrl,
+  );
+  useEffect(() => {
+    if (didBrandExtract.current) return;
+    if (!brand.website && !brand.domain) return;
+    didBrandExtract.current = true;
+    (async () => {
+      setBrandLoading(true);
+      const res = await extractLeadBrandAction({ leadId, forceRefresh: false });
+      setBrandLoading(false);
+      if ("success" in res) {
+        if (res.primaryColor && !primaryColor) setPrimaryColor(res.primaryColor);
+        if (res.logoUrl && !logoUrl) setLogoUrl(res.logoUrl);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function refreshBrand() {
+    setBrandLoading(true);
+    const res = await extractLeadBrandAction({ leadId, forceRefresh: true });
+    setBrandLoading(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    setPrimaryColor(res.primaryColor ?? "");
+    setLogoUrl(res.logoUrl ?? "");
+  }
 
   function toggleStudy(id: string) {
     setCaseStudyIds((prev) =>
@@ -308,6 +362,9 @@ function LandingPageDialog({
       loomUrl: loomUrl.trim() || null,
       outroText: outroText.trim() || null,
       caseStudyIds,
+      calendlyUrl: calendlyUrl.trim() || null,
+      primaryColor: primaryColor.trim() || null,
+      logoUrl: logoUrl.trim() || null,
     };
     startTransition(async () => {
       if (state.mode === "edit") {
@@ -445,6 +502,77 @@ function LandingPageDialog({
               className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
             />
           </Field>
+
+          <div className="space-y-3 rounded-md border border-gray-100 p-3 dark:border-[#2c2c2e]">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Design &amp; Termin
+              </p>
+              <button
+                type="button"
+                onClick={refreshBrand}
+                disabled={brandLoading || (!brand.website && !brand.domain)}
+                title={
+                  !brand.website && !brand.domain
+                    ? "Lead hat weder Website noch Domain."
+                    : "Farbe & Logo aus der Website des Leads neu auslesen."
+                }
+                className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:text-gray-300 dark:hover:bg-white/5"
+              >
+                <Wand2 className="h-3 w-3" />
+                {brandLoading ? "lese…" : "Brand auslesen"}
+              </button>
+            </div>
+
+            <Field label="Calendly-URL (optional)">
+              <input
+                type="url"
+                value={calendlyUrl}
+                onChange={(e) => setCalendlyUrl(e.target.value)}
+                placeholder="https://calendly.com/…"
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+              />
+            </Field>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Primärfarbe (Hex)">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={primaryColor}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    placeholder="#ff5500"
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 font-mono text-xs dark:border-[#2c2c2e] dark:bg-[#232325]"
+                  />
+                  <input
+                    type="color"
+                    value={/^#[0-9a-f]{6}$/i.test(primaryColor) ? primaryColor : "#0f172a"}
+                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    className="h-8 w-10 shrink-0 cursor-pointer rounded border border-gray-300 dark:border-[#2c2c2e]"
+                  />
+                </div>
+              </Field>
+              <Field label="Logo-URL">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://…"
+                    className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#232325]"
+                  />
+                  {logoUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoUrl}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded border border-gray-200 object-contain dark:border-[#2c2c2e]"
+                    />
+                  )}
+                </div>
+              </Field>
+            </div>
+          </div>
 
           <div>
             <p className="mb-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">

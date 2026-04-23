@@ -138,6 +138,7 @@ function IndustryRow({
     introTemplate: string;
     outroTemplate: string | null;
     loomUrl: string | null;
+    calendlyUrl: string | null;
   }) => void;
   pending: boolean;
 }) {
@@ -289,6 +290,7 @@ function TemplateEditor({
     introTemplate: string;
     outroTemplate: string | null;
     loomUrl: string | null;
+    calendlyUrl: string | null;
   }) => void;
   pending: boolean;
 }) {
@@ -297,13 +299,15 @@ function TemplateEditor({
   const [intro, setIntro] = useState(industry.intro_template);
   const [outro, setOutro] = useState(industry.outro_template ?? "");
   const [loom, setLoom] = useState(industry.loom_url ?? "");
+  const [calendly, setCalendly] = useState(industry.calendly_url ?? "");
 
   const dirty =
     greeting !== industry.greeting_template ||
     headline !== industry.headline_template ||
     intro !== industry.intro_template ||
     outro !== (industry.outro_template ?? "") ||
-    loom !== (industry.loom_url ?? "");
+    loom !== (industry.loom_url ?? "") ||
+    calendly !== (industry.calendly_url ?? "");
 
   return (
     <div className="space-y-3">
@@ -334,6 +338,15 @@ function TemplateEditor({
             value={loom}
             onChange={(e) => setLoom(e.target.value)}
             placeholder="https://www.loom.com/share/…"
+            className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+          />
+        </Field>
+        <Field label="Calendly-URL (Default)">
+          <input
+            type="url"
+            value={calendly}
+            onChange={(e) => setCalendly(e.target.value)}
+            placeholder="https://calendly.com/…"
             className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
           />
         </Field>
@@ -377,6 +390,7 @@ function TemplateEditor({
               introTemplate: intro,
               outroTemplate: outro.trim() ? outro : null,
               loomUrl: loom.trim() ? loom.trim() : null,
+              calendlyUrl: calendly.trim() ? calendly.trim() : null,
             })
           }
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50"

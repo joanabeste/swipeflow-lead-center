@@ -99,6 +99,9 @@ export async function createLandingPage(input: {
   loomUrl: string | null;
   outroText: string | null;
   caseStudyIds: string[];
+  calendlyUrl: string | null;
+  primaryColor: string | null;
+  logoUrl: string | null;
   expiresAt: string | null;
   createdBy: string | null;
 }): Promise<{ id: string; slug: string } | { error: string }> {
@@ -130,6 +133,9 @@ export async function createLandingPage(input: {
         loom_url: input.loomUrl,
         outro_text: input.outroText,
         case_study_ids: input.caseStudyIds,
+        calendly_url: input.calendlyUrl,
+        primary_color: input.primaryColor,
+        logo_url: input.logoUrl,
         expires_at: input.expiresAt,
         created_by: input.createdBy,
       })
@@ -196,6 +202,9 @@ export async function updateLandingPage(
     loom_url: string | null;
     outro_text: string | null;
     case_study_ids: string[];
+    calendly_url: string | null;
+    primary_color: string | null;
+    logo_url: string | null;
     expires_at: string | null;
   }>,
 ): Promise<{ error?: string }> {

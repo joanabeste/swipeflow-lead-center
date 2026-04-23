@@ -35,6 +35,7 @@ export interface SnapshotDraft {
   intro_text: string;
   outro_text: string | null;
   loom_url: string | null;
+  calendly_url: string | null;
   case_study_ids: string[];
 }
 
@@ -64,6 +65,7 @@ export function buildDefaultSnapshot(input: SnapshotInput): SnapshotDraft {
       ? renderTemplate(input.industry.outro_template, ctx)
       : null,
     loom_url: input.industry.loom_url,
+    calendly_url: input.industry.calendly_url,
     case_study_ids: preselectedIds,
   };
 }

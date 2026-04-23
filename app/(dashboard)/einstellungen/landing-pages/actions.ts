@@ -22,6 +22,7 @@ export async function saveIndustryAction(input: {
   introTemplate?: string;
   outroTemplate?: string | null;
   loomUrl?: string | null;
+  calendlyUrl?: string | null;
 }): Promise<{ success: true } | { error: string }> {
   const user = await requireUser();
   if (!user) return { error: "Nicht angemeldet." };
@@ -44,6 +45,7 @@ export async function saveIndustryAction(input: {
   if (input.introTemplate !== undefined) payload.intro_template = input.introTemplate;
   if (input.outroTemplate !== undefined) payload.outro_template = input.outroTemplate;
   if (input.loomUrl !== undefined) payload.loom_url = input.loomUrl;
+  if (input.calendlyUrl !== undefined) payload.calendly_url = input.calendlyUrl;
 
   const { error } = await db.from("industries").upsert(payload);
   if (error) return { error: error.message };
