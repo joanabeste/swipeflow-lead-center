@@ -411,29 +411,33 @@ export async function addContact(input: {
   email?: string | null;
   phone?: string | null;
   salutation?: "herr" | "frau" | null;
-}) {
+}): Promise<{ success: true; contactId: string } | { error: string }> {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   if (!input.name.trim()) return { error: "Name fehlt." };
   const { guessSalutationFromName } = await import("@/lib/contacts/salutation-from-name");
   const db = createServiceClient();
-  const { error } = await db.from("lead_contacts").insert({
-    lead_id: input.leadId,
-    name: input.name.trim(),
-    role: input.role?.trim() || null,
-    email: input.email?.trim() || null,
-    phone: input.phone?.trim() || null,
-    // Wenn nicht explizit gesetzt, Heuristik aus dem Vornamen probieren —
-    // so hat der User im Normalfall nichts zu tun.
-    salutation: input.salutation ?? guessSalutationFromName(input.name),
-    source_url: null,
-  });
-  if (error) {
+  const { data, error } = await db
+    .from("lead_contacts")
+    .insert({
+      lead_id: input.leadId,
+      name: input.name.trim(),
+      role: input.role?.trim() || null,
+      email: input.email?.trim() || null,
+      phone: input.phone?.trim() || null,
+      // Wenn nicht explizit gesetzt, Heuristik aus dem Vornamen probieren —
+      // so hat der User im Normalfall nichts zu tun.
+      salutation: input.salutation ?? guessSalutationFromName(input.name),
+      source_url: null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
     console.error("[addContact] failed:", error);
-    return { error: `DB-Fehler: ${error.message}` };
+    return { error: error?.message ? `DB-Fehler: ${error.message}` : "Konnte Kontakt nicht anlegen." };
   }
   revalidatePath(`/crm/${input.leadId}`);
-  return { success: true };
+  return { success: true, contactId: data.id as string };
 }
 
 export async function updateContact(contactId: string, leadId: string, input: {

@@ -266,8 +266,9 @@ function ContactForm({
       const res = contact
         ? await updateContact(contact.id, leadId, { name, role, email, phone, salutation })
         : await addContact({ leadId, name, role, email, phone, salutation });
-      if (res.error) addToast(res.error, "error");
-      else {
+      if ("error" in res && res.error) {
+        addToast(res.error, "error");
+      } else {
         addToast(contact ? "Kontakt aktualisiert" : "Kontakt angelegt", "success");
         onClose();
         router.refresh();

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2 } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2, UserPlus } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { buildDefaultSnapshot, toLoomEmbedUrl } from "@/lib/landing-pages/generator";
@@ -15,6 +15,7 @@ import {
   extractLeadBrandAction,
   updateLandingPageAction,
 } from "../landing-page-actions";
+import { addContact } from "../../actions";
 
 interface LeadBrand {
   primaryColor: string | null;
@@ -224,9 +225,25 @@ function LandingPageDialog({
 }) {
   const existing = state.mode === "edit" ? state.page : null;
 
+  // Ansprechpartner, die im Dialog frisch angelegt wurden. Werden mit den
+  // aus-dem-Lead geladenen zusammengefuehrt, damit der Dropdown den neuen
+  // Kontakt sofort zeigt, ohne auf router.refresh() zu warten.
+  const [newContacts, setNewContacts] = useState<LeadContact[]>([]);
+  const allContacts = useMemo(
+    () => [...contacts, ...newContacts],
+    [contacts, newContacts],
+  );
+
   const [contactId, setContactId] = useState<string | "">(
     existing?.contact_id ?? contacts[0]?.id ?? "",
   );
+  const [contactFormOpen, setContactFormOpen] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactRole, setNewContactRole] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactSalutation, setNewContactSalutation] = useState<"" | "herr" | "frau">("");
+  const [newContactSaving, setNewContactSaving] = useState(false);
   const [industryId, setIndustryId] = useState<string>(
     existing?.industry_id ?? industries[0]?.id ?? "",
   );
@@ -252,7 +269,49 @@ function LandingPageDialog({
   useEffect(() => setMounted(true), []);
 
   const selectedIndustry = industries.find((i) => i.id === industryId) ?? null;
-  const selectedContact = contacts.find((c) => c.id === contactId) ?? null;
+  const selectedContact = allContacts.find((c) => c.id === contactId) ?? null;
+
+  async function submitNewContact() {
+    const name = newContactName.trim();
+    if (!name) {
+      setError("Name des neuen Kontakts fehlt.");
+      return;
+    }
+    setError(null);
+    setNewContactSaving(true);
+    const res = await addContact({
+      leadId,
+      name,
+      role: newContactRole.trim() || null,
+      email: newContactEmail.trim() || null,
+      phone: newContactPhone.trim() || null,
+      salutation: newContactSalutation || null,
+    });
+    setNewContactSaving(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    const created: LeadContact = {
+      id: res.contactId,
+      lead_id: leadId,
+      name,
+      role: newContactRole.trim() || null,
+      email: newContactEmail.trim() || null,
+      phone: newContactPhone.trim() || null,
+      salutation: newContactSalutation || null,
+      source_url: null,
+      created_at: new Date().toISOString(),
+    };
+    setNewContacts((prev) => [...prev, created]);
+    setContactId(res.contactId);
+    setContactFormOpen(false);
+    setNewContactName("");
+    setNewContactRole("");
+    setNewContactEmail("");
+    setNewContactPhone("");
+    setNewContactSalutation("");
+  }
 
   const availableStudies = useMemo(
     () =>
@@ -414,20 +473,31 @@ function LandingPageDialog({
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Kontakt">
-              <select
-                value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
-              >
-                <option value="">— ohne Kontakt —</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.salutation === "herr" ? "Hr. " : c.salutation === "frau" ? "Fr. " : ""}
-                    {c.name}
-                    {c.role ? ` · ${c.role}` : ""}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center gap-2">
+                <select
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                >
+                  <option value="">— ohne Kontakt —</option>
+                  {allContacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.salutation === "herr" ? "Hr. " : c.salutation === "frau" ? "Fr. " : ""}
+                      {c.name}
+                      {c.role ? ` · ${c.role}` : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setContactFormOpen((v) => !v)}
+                  title="Neuen Ansprechpartner anlegen"
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-gray-200 px-2 py-1.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e] dark:text-gray-300 dark:hover:bg-white/5"
+                >
+                  <UserPlus className="h-3 w-3" />
+                  Neu
+                </button>
+              </div>
             </Field>
             <Field label="Branche">
               <select
@@ -441,6 +511,71 @@ function LandingPageDialog({
               </select>
             </Field>
           </div>
+
+          {contactFormOpen && (
+            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/40 p-3 dark:border-amber-900/40 dark:bg-amber-900/10">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300">
+                  Neuer Ansprechpartner
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setContactFormOpen(false)}
+                  className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="text"
+                  value={newContactName}
+                  onChange={(e) => setNewContactName(e.target.value)}
+                  placeholder="Name"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+                <input
+                  type="text"
+                  value={newContactRole}
+                  onChange={(e) => setNewContactRole(e.target.value)}
+                  placeholder="Rolle (optional)"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+                <input
+                  type="email"
+                  value={newContactEmail}
+                  onChange={(e) => setNewContactEmail(e.target.value)}
+                  placeholder="E-Mail (optional)"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+                <input
+                  type="tel"
+                  value={newContactPhone}
+                  onChange={(e) => setNewContactPhone(e.target.value)}
+                  placeholder="Telefon (optional)"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                />
+                <select
+                  value={newContactSalutation}
+                  onChange={(e) => setNewContactSalutation(e.target.value as "" | "herr" | "frau")}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                >
+                  <option value="">Anrede automatisch erkennen</option>
+                  <option value="herr">Herr</option>
+                  <option value="frau">Frau</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={submitNewContact}
+                  disabled={newContactSaving || !newContactName.trim()}
+                  className="inline-flex items-center justify-center gap-1 rounded bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+                >
+                  <Save className="h-3 w-3" />
+                  {newContactSaving ? "Speichere…" : "Kontakt anlegen"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div>
             <button

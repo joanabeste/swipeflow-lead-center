@@ -166,8 +166,30 @@ export default async function LandingPageBySlug({ params }: Props) {
         </section>
       )}
 
-      <footer className="mt-12 text-xs text-gray-400">
-        {page.company_name && <span>Persönlich zusammengestellt für {page.company_name}.</span>}
+      <footer className="mt-12 flex flex-col items-start gap-2 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between">
+        {page.company_name ? (
+          <span>Persönlich zusammengestellt für {page.company_name}.</span>
+        ) : (
+          <span />
+        )}
+        <nav className="flex items-center gap-4">
+          <a
+            href="https://swipeflow.de/impressum"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:text-gray-600"
+          >
+            Impressum
+          </a>
+          <a
+            href="https://swipeflow.de/datenschutz"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:text-gray-600"
+          >
+            Datenschutz
+          </a>
+        </nav>
       </footer>
     </main>
   );
