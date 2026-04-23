@@ -34,7 +34,7 @@ function makePieces(): Piece[] {
 }
 
 function ConfettiBurst() {
-  const pieces = useMemo(makePieces, []);
+  const pieces = useMemo(() => makePieces(), []);
   return (
     <div className="pointer-events-none fixed inset-0 z-[100] overflow-hidden" aria-hidden>
       {pieces.map((p) => (

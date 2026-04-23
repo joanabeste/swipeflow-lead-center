@@ -67,7 +67,10 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function CountdownBadge({ expiresAt }: { expiresAt: string }) {
-  const daysLeft = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 86400_000));
+  // useState mit lazy-Initializer ist der React-gesegnete Escape-Hatch für
+  // impure Initialwerte (Date.now darf nicht direkt im Render).
+  const [nowMs] = useState(() => Date.now());
+  const daysLeft = Math.max(0, Math.ceil((new Date(expiresAt).getTime() - nowMs) / 86400_000));
   const tone =
     daysLeft <= 3
       ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
