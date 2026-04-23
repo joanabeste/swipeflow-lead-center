@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { ServiceMode } from "@/lib/types";
+import { toBerlinDayKey } from "@/lib/date/day-key";
 
 /** Lädt einmal alle für Dashboard-Widgets nötigen Daten zentral. */
 export async function loadDashboardData(userId: string, serviceMode: ServiceMode) {
@@ -126,16 +127,14 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   const callerNameById = new Map<string, string>();
   for (const p of callProfiles ?? []) callerNameById.set(p.id, p.name);
 
-  // Calls 7d — aggregiere pro Tag
+  // Calls 7d — aggregiere pro Tag in Berlin-Zeit (siehe day-key.ts)
   const dayBuckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    d.setHours(0, 0, 0, 0);
-    const key = d.toISOString().slice(0, 10);
-    dayBuckets[key] = { outbound: 0, inbound: 0, missed: 0 };
+    dayBuckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0 };
   }
   for (const c of (calls7d.data ?? []) as Array<{ direction: string; status: string; started_at: string }>) {
-    const key = c.started_at.slice(0, 10);
+    const key = toBerlinDayKey(c.started_at);
     if (!dayBuckets[key]) continue;
     if (c.status === "missed") dayBuckets[key].missed++;
     else if (c.direction === "inbound") dayBuckets[key].inbound++;
@@ -144,16 +143,14 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   const callsByDay = Object.entries(dayBuckets).map(([date, v]) => ({ date, ...v }));
   const callsTotal7d = callsByDay.reduce((s, d) => s + d.outbound + d.inbound + d.missed, 0);
 
-  // Enrichments 7d
+  // Enrichments 7d (Berlin-Zeit)
   const enrichBuckets: Record<string, { completed: number; failed: number }> = {};
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    d.setHours(0, 0, 0, 0);
-    const key = d.toISOString().slice(0, 10);
-    enrichBuckets[key] = { completed: 0, failed: 0 };
+    enrichBuckets[toBerlinDayKey(d)] = { completed: 0, failed: 0 };
   }
   for (const e of (enrichments7d.data ?? []) as Array<{ status: string; created_at: string }>) {
-    const key = e.created_at.slice(0, 10);
+    const key = toBerlinDayKey(e.created_at);
     if (!enrichBuckets[key]) continue;
     if (e.status === "completed") enrichBuckets[key].completed++;
     else if (e.status === "failed") enrichBuckets[key].failed++;
@@ -258,17 +255,16 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     { count: 0, amountCents: 0 },
   );
 
-  // Anrufe 90 Tage — tägliche Aggregation.
-  // Ergibt 90 Einträge mit direction-Breakdown; der Client filtert/aggregiert
-  // später auf 7/30/90 Tage bzw. wöchentliche Bündel.
+  // Anrufe 90 Tage — tägliche Aggregation in Berlin-Zeit. Ergibt 90 Einträge
+  // mit direction-Breakdown; der Client filtert/aggregiert später auf
+  // 7/30/90 Tage bzw. wöchentliche Bündel.
   const callsByDay90Buckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
   for (let i = 89; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    d.setHours(0, 0, 0, 0);
-    callsByDay90Buckets[d.toISOString().slice(0, 10)] = { outbound: 0, inbound: 0, missed: 0 };
+    callsByDay90Buckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0 };
   }
   for (const c of (calls90d.data ?? []) as Array<{ direction: string; status: string; started_at: string }>) {
-    const key = c.started_at.slice(0, 10);
+    const key = toBerlinDayKey(c.started_at);
     const bucket = callsByDay90Buckets[key];
     if (!bucket) continue;
     if (c.status === "missed") bucket.missed++;
@@ -305,17 +301,16 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   }
   const dealsByMonth12 = Object.entries(dealsByMonth12Buckets).map(([month, v]) => ({ month, ...v }));
 
-  // E-Mail-Performance 7d: sent/failed pro Tag.
+  // E-Mail-Performance 7d: sent/failed pro Tag (Berlin-Zeit).
   const emailBuckets: Record<string, { sent: number; failed: number }> = {};
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    d.setHours(0, 0, 0, 0);
-    emailBuckets[d.toISOString().slice(0, 10)] = { sent: 0, failed: 0 };
+    emailBuckets[toBerlinDayKey(d)] = { sent: 0, failed: 0 };
   }
   let emailsSent7d = 0;
   let emailsFailed7d = 0;
   for (const e of (emails7d.data ?? []) as Array<{ status: string; sent_at: string }>) {
-    const key = e.sent_at.slice(0, 10);
+    const key = toBerlinDayKey(e.sent_at);
     if (!emailBuckets[key]) continue;
     if (e.status === "sent") { emailBuckets[key].sent++; emailsSent7d++; }
     else if (e.status === "failed") { emailBuckets[key].failed++; emailsFailed7d++; }
