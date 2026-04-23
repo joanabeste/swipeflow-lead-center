@@ -343,9 +343,11 @@ export async function enrichLead(
       .eq("is_active", true);
 
     if (cancelRules && cancelRules.length > 0) {
-      console.log("[CANCEL_CHECK]", lead.company_name, "leadId:", leadId,
-        "totalJobs:", totalJobs, "totalContacts:", totalContacts,
-        "llm_jobs:", result.job_postings.length, "llm_contacts:", result.contacts.length);
+      if (process.env.ENRICH_DEBUG) {
+        console.log("[CANCEL_CHECK]", lead.company_name, "leadId:", leadId,
+          "totalJobs:", totalJobs, "totalContacts:", totalContacts,
+          "llm_jobs:", result.job_postings.length, "llm_contacts:", result.contacts.length);
+      }
 
       // Enrichment-Daten für Cancel-Check aufbereiten — Counts inkl. BA-Import.
       const enrichedLead: Record<string, unknown> = {

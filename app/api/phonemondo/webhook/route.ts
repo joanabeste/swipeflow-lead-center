@@ -50,13 +50,14 @@ export async function POST(request: Request) {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  // TEMP: Payload-Sichtung — loggt rohe Keys + Werte, damit wir die tatsächliche
-  // Event-Shape von PhoneMondo mit unserem PhoneMondoWebhookEvent-Interface
-  // abgleichen können. Nach ein paar echten Events wieder entfernen.
-  console.log("[phonemondo:webhook:payload]", {
-    keys: Object.keys(event as unknown as Record<string, unknown>),
-    event,
-  });
+  // Debug-Payload-Sichtung per Env-Flag. Früher dauerhaft aktiv — jetzt nur
+  // wenn PHONEMONDO_WEBHOOK_DEBUG=1, damit Prod-Logs nicht rauschen.
+  if (process.env.PHONEMONDO_WEBHOOK_DEBUG) {
+    console.log("[phonemondo:webhook:payload]", {
+      keys: Object.keys(event as unknown as Record<string, unknown>),
+      event,
+    });
+  }
 
   if (!event.call_id) {
     return new Response("Missing call_id", { status: 400 });

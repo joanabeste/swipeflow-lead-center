@@ -63,12 +63,3 @@ export const SETTINGS_GROUPS: SettingsNavGroup[] = [
   },
 ];
 
-export const SETTINGS_ITEMS: SettingsNavItem[] = SETTINGS_GROUPS.flatMap((g) => g.items);
-
-export function getSettingsMeta(pathname: string): { group: string; label: string } | null {
-  for (const group of SETTINGS_GROUPS) {
-    const hit = group.items.find((i) => i.href === pathname);
-    if (hit) return { group: group.label, label: hit.label };
-  }
-  return null;
-}

@@ -4,10 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SETTINGS_GROUPS } from "./settings-groups";
 
-// Re-Export für Bestands-Konsumenten (die vorher aus dem Client-Modul importiert haben).
-export { SETTINGS_GROUPS, SETTINGS_ITEMS, getSettingsMeta } from "./settings-groups";
-export type { SettingsNavItem, SettingsNavGroup } from "./settings-groups";
-
 export function SettingsSidebar() {
   const pathname = usePathname();
   const router = useRouter();
