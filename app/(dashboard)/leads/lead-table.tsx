@@ -411,6 +411,16 @@ export function LeadTable({
                           >
                             {status.label}
                           </span>
+                        ) : col.key === "domain" && lead.domain ? (
+                          <a
+                            href={`https://${lead.domain}`}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-primary hover:underline"
+                          >
+                            {lead.domain}
+                          </a>
                         ) : (
                           getCellValue(lead, col.key)
                         )}
