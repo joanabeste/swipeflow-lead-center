@@ -280,8 +280,11 @@ export function LeadTable({
             onClick={() => {
               const ids = Array.from(selected);
               const count = ids.length;
+              const defaultCrmId = serviceMode === "webdev"
+                ? "webdesign-manuelle-ueberpruefung"
+                : "recruiting-manuelle-ueberpruefung";
               startBulkTransition(async () => {
-                const res = await bulkUpdateStatus(ids, "qualified");
+                const res = await bulkUpdateStatus(ids, "qualified", defaultCrmId);
                 if (res.error) {
                   addToast(`Fehler: ${res.error}`, "error");
                   return;

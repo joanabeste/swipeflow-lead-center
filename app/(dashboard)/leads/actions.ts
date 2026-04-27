@@ -280,13 +280,24 @@ export async function bulkUpdateStatus(
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // crm_status_id wird IMMER explizit ueberschrieben, um FK-Fehler durch
+  // alte Trigger/Defaults (z.B. crm_status_id := 'todo') zu vermeiden.
+  // Ist der gewuenschte Wert kein gueltiger Status, fallen wir auf NULL zurueck.
+  let resolvedCrmStatusId: string | null = crmStatusId ?? null;
+  if (resolvedCrmStatusId) {
+    const { data: exists } = await db
+      .from("custom_lead_statuses")
+      .select("id")
+      .eq("id", resolvedCrmStatusId)
+      .maybeSingle();
+    if (!exists) resolvedCrmStatusId = null;
+  }
+
   const payload: Record<string, unknown> = {
     status,
+    crm_status_id: resolvedCrmStatusId,
     updated_at: new Date().toISOString(),
   };
-  if (crmStatusId !== undefined) {
-    payload.crm_status_id = crmStatusId;
-  }
 
   const { error } = await db
     .from("leads")
@@ -302,7 +313,7 @@ export async function bulkUpdateStatus(
     details: {
       lead_count: leadIds.length,
       new_status: status,
-      ...(crmStatusId !== undefined ? { crm_status_id: crmStatusId } : {}),
+      crm_status_id: resolvedCrmStatusId,
     },
   });
 
