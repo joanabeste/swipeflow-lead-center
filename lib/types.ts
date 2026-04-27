@@ -175,6 +175,8 @@ export interface ExportLog {
 
 // ─── CRM ─────────────────────────────────────────────────────────
 
+export type LeadLearningSignal = "positive" | "negative";
+
 export interface CustomLeadStatus {
   id: string;
   label: string;
@@ -182,6 +184,9 @@ export interface CustomLeadStatus {
   description: string | null;
   display_order: number;
   is_active: boolean;
+  /** Trainingssignal fuer die KI-Scoring-Review:
+   *  'positive' = Lead war relevant, 'negative' = Lead war nicht passend, null = ignorieren. */
+  learning_signal: LeadLearningSignal | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -397,6 +402,31 @@ export const DEFAULT_WEBDEV_SCORING: WebdevScoringConfig = {
   check_outdated_html: true,
   allow_leads_without_website: true,
 };
+
+// ─── Lernende Scoring-Vorschlaege ────────────────────────────────
+
+export type LeadVertical = "webdesign" | "recruiting";
+export type ScoringSuggestionStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "superseded";
+
+export interface ScoringSuggestion {
+  id: string;
+  vertical: LeadVertical;
+  current_config: WebdevScoringConfig | RecruitingScoringConfig;
+  suggested_config: WebdevScoringConfig | RecruitingScoringConfig;
+  reasoning: string;
+  key_observations: string[];
+  positive_sample_count: number;
+  negative_sample_count: number;
+  llm_model: string;
+  status: ScoringSuggestionStatus;
+  created_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
 
 // ============================================================
 // Cancel-Rules (Ausschlussregeln)

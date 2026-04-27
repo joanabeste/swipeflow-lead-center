@@ -321,6 +321,9 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
   const description = ((formData.get("description") as string) || "").trim() || null;
   const displayOrder = parseInt((formData.get("display_order") as string) || "0", 10) || 0;
   const isActive = formData.get("is_active") === "on";
+  const rawSignal = ((formData.get("learning_signal") as string) || "").trim();
+  const learningSignal: "positive" | "negative" | null =
+    rawSignal === "positive" || rawSignal === "negative" ? rawSignal : null;
 
   if (!label) return { error: "Label fehlt." };
 
@@ -331,6 +334,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
         label, color, description,
         display_order: displayOrder,
         is_active: isActive,
+        learning_signal: learningSignal,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -340,7 +344,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       action: "custom_lead_status.updated",
       entityType: "custom_lead_status",
       entityId: id,
-      details: { label },
+      details: { label, learning_signal: learningSignal },
     });
   } else {
     // Neuer Eintrag — ID aus Label ableiten; bei Kollision Suffix anhängen.
@@ -354,6 +358,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       id: newId, label, color, description,
       display_order: displayOrder,
       is_active: isActive,
+      learning_signal: learningSignal,
       created_by: check.user.id,
     });
     if (error) return { error: error.message };
@@ -362,7 +367,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       action: "custom_lead_status.created",
       entityType: "custom_lead_status",
       entityId: newId,
-      details: { label },
+      details: { label, learning_signal: learningSignal },
     });
   }
 
@@ -388,6 +393,123 @@ export async function deleteCrmStatus(id: string) {
 
   revalidatePath("/einstellungen");
   revalidatePath("/crm");
+  return { success: true };
+}
+
+// ─── KI-Scoring-Vorschlaege ──────────────────────────────────
+
+export async function triggerScoringReview(): Promise<
+  { success: true; result: unknown } | { error: string }
+> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error as string };
+
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return { error: "CRON_SECRET fehlt in den Environment-Variablen." };
+
+  const base = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  try {
+    const res = await fetch(`${base}/api/cron/scoring-review`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: AbortSignal.timeout(290_000),
+    });
+    const data = await res.json().catch(() => ({ error: "Non-JSON-Response" }));
+    if (!res.ok) return { error: data.error ?? `HTTP ${res.status}` };
+    revalidatePath("/einstellungen/scoring-vorschlaege");
+    revalidatePath("/einstellungen/webdesign-bewertung");
+    revalidatePath("/einstellungen/recruiting-bewertung");
+    return { success: true, result: data };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Review fehlgeschlagen" };
+  }
+}
+
+export async function acceptScoringSuggestion(
+  id: string,
+): Promise<{ error?: string; success?: boolean }> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  const { data: suggestion, error: loadError } = await db
+    .from("scoring_suggestions")
+    .select("id, vertical, suggested_config, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (loadError) return { error: loadError.message };
+  if (!suggestion) return { error: "Vorschlag nicht gefunden." };
+  if (suggestion.status !== "pending") {
+    return { error: `Vorschlag ist bereits ${suggestion.status}.` };
+  }
+
+  const cfg = suggestion.suggested_config as Record<string, unknown>;
+  const now = new Date().toISOString();
+
+  if (suggestion.vertical === "webdesign") {
+    const { error } = await db.from("webdev_scoring_config").upsert(
+      { id: 1, ...cfg, updated_by: check.user.id, updated_at: now },
+      { onConflict: "id" },
+    );
+    if (error) return { error: error.message };
+  } else if (suggestion.vertical === "recruiting") {
+    const { error } = await db.from("recruiting_scoring_config").upsert(
+      { id: 1, ...cfg, updated_by: check.user.id, updated_at: now },
+      { onConflict: "id" },
+    );
+    if (error) return { error: error.message };
+  } else {
+    return { error: `Unbekannte Vertikale: ${suggestion.vertical}` };
+  }
+
+  const { error: markError } = await db
+    .from("scoring_suggestions")
+    .update({ status: "accepted", reviewed_by: check.user.id, reviewed_at: now })
+    .eq("id", id);
+  if (markError) return { error: markError.message };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "scoring.suggestion_accepted",
+    entityType: "scoring_suggestion",
+    entityId: id,
+    details: { vertical: suggestion.vertical, applied_config: cfg },
+  });
+
+  revalidatePath("/einstellungen/scoring-vorschlaege");
+  revalidatePath("/einstellungen/webdesign-bewertung");
+  revalidatePath("/einstellungen/recruiting-bewertung");
+  return { success: true };
+}
+
+export async function rejectScoringSuggestion(
+  id: string,
+): Promise<{ error?: string; success?: boolean }> {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("scoring_suggestions")
+    .update({
+      status: "rejected",
+      reviewed_by: check.user.id,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "scoring.suggestion_rejected",
+    entityType: "scoring_suggestion",
+    entityId: id,
+  });
+
+  revalidatePath("/einstellungen/scoring-vorschlaege");
   return { success: true };
 }
 

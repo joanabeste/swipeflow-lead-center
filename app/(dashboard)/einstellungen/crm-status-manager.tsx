@@ -75,7 +75,19 @@ function StatusRow({
           style={{ backgroundColor: status.color }}
         />
         <div>
-          <p className="text-sm font-medium">{status.label}</p>
+          <p className="text-sm font-medium">
+            {status.label}
+            {status.learning_signal === "positive" && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                KI: gute Leads
+              </span>
+            )}
+            {status.learning_signal === "negative" && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                KI: schlechte Leads
+              </span>
+            )}
+          </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             ID: {status.id} · Reihenfolge: {status.display_order}
             {!status.is_active && " · Inaktiv"}
@@ -172,6 +184,24 @@ function StatusForm({
             defaultValue={status?.description ?? ""}
             className="mt-1 w-full rounded-md border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#161618]"
           />
+        </label>
+        <label className="text-sm md:col-span-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Trainingssignal fuer KI-Scoring-Review
+          </span>
+          <select
+            name="learning_signal"
+            defaultValue={status?.learning_signal ?? ""}
+            className="mt-1 w-full rounded-md border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#161618]"
+          >
+            <option value="">Kein Signal (ignorieren)</option>
+            <option value="positive">Positiv — gute Leads</option>
+            <option value="negative">Negativ — schlechte Leads</option>
+          </select>
+          <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
+            Leads in diesem Status fliessen mit in die woechentliche KI-Auswertung ein, die
+            Anpassungen an der Scoring-Konfiguration vorschlaegt.
+          </span>
         </label>
       </div>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
