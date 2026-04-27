@@ -111,6 +111,15 @@ function stripDiacritics(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
 }
 
+// Diakritika-stripped-Spiegel der Wörterbücher: erlaubt "Jorg" → "jörg" → herr,
+// auch wenn der Input ohne Akzent kommt und die Wörterbuch-Form Akzente hat.
+const MALE_NAMES_STRIPPED: Set<string> = new Set(
+  Array.from(MALE_NAMES, stripDiacritics),
+);
+const FEMALE_NAMES_STRIPPED: Set<string> = new Set(
+  Array.from(FEMALE_NAMES, stripDiacritics),
+);
+
 /** Liefert das erste Wort (lowercased, ohne trailing Punkte/Kommas). */
 function firstLoweredWord(fullName: string): string {
   const w = fullName.trim().split(/\s+/)[0] ?? "";
@@ -223,7 +232,11 @@ export function extractLastName(fullName: string | null | undefined): string | n
   return null;
 }
 
-/** Lookup mit Diakritika-Fallback (Schicht D). */
+/** Lookup mit Diakritika-Fallback (Schicht D).
+ *  Schritt 1: Direkter Lookup im Original-Wörterbuch.
+ *  Schritt 2: Wenn der Input Diakritika enthält, mit gestripptem Input nochmal.
+ *  Schritt 3: Auch der umgekehrte Fall — Input ohne Diakritika, Wörterbuch-Form
+ *  mit Diakritika (z. B. "Jorg" → "jörg"). Dafür sind die *_STRIPPED-Sets da. */
 function lookupName(lower: string): "herr" | "frau" | null {
   if (!lower) return null;
   if (MALE_NAMES.has(lower)) return "herr";
@@ -233,6 +246,8 @@ function lookupName(lower: string): "herr" | "frau" | null {
     if (MALE_NAMES.has(stripped)) return "herr";
     if (FEMALE_NAMES.has(stripped)) return "frau";
   }
+  if (MALE_NAMES_STRIPPED.has(stripped)) return "herr";
+  if (FEMALE_NAMES_STRIPPED.has(stripped)) return "frau";
   return null;
 }
 
