@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown,
 } from "lucide-react";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus } from "@/lib/types";
+import { bulkRestoreCrmStatus } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead } from "./actions";
 import { ResizableColumns } from "@/components/resizable-columns";
@@ -38,6 +39,8 @@ interface Props {
   contacts: LeadContact[];
   jobPostings: LeadJobPosting[];
   latestEnrichment: LeadEnrichment | null;
+  /** Wird für das Aussortier-Banner gebraucht (zeigt Label + Wiederherstellen). */
+  customStatuses?: CustomLeadStatus[];
   hq: HqLocation;
   backHref?: string;
   backLabel?: string;
@@ -50,6 +53,7 @@ interface Props {
 
 export function LeadProfilePanel({
   lead, changes, contacts, jobPostings, latestEnrichment, hq,
+  customStatuses = [],
   backHref = "/leads",
   backLabel = "Zurück zur Liste",
   headerExtras,
@@ -71,6 +75,18 @@ export function LeadProfilePanel({
 
   const hasWebsite = !!(lead.website || lead.domain);
   const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
+
+  // Aussortier-Banner: ist der zugewiesene CRM-Status archived markiert?
+  const archivedStatus = lead.crm_status_id
+    ? customStatuses.find((s) => s.id === lead.crm_status_id && s.is_archived)
+    : null;
+  const [unarchivePending, startUnarchive] = useTransition();
+  function handleUnarchive() {
+    startUnarchive(async () => {
+      const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
+      if (!("error" in res) || !res.error) router.refresh();
+    });
+  }
 
   function handleStatusChange(newStatus: LeadStatus) {
     setCurrentStatus(newStatus);
@@ -189,6 +205,29 @@ export function LeadProfilePanel({
           )}
         </p>
       </div>
+
+      {/* Banner: Aussortiert (CRM-Status mit is_archived). */}
+      {archivedStatus && (
+        <div className="mt-4 flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-900/15">
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">
+              Aussortiert · {archivedStatus.label}
+            </p>
+            <p className="mt-0.5 text-xs text-red-700/90 dark:text-red-400/90">
+              Erscheint nicht in Neue Leads oder im CRM. Wird der KI als Negativ-Signal gemeldet.
+            </p>
+          </div>
+          <button
+            onClick={handleUnarchive}
+            disabled={unarchivePending}
+            className="inline-flex items-center gap-1 rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-900/30"
+          >
+            {unarchivePending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+            Wiederherstellen
+          </button>
+        </div>
+      )}
 
       {/* Banner: Cancel / Blacklist */}
       {(lead.cancel_reason || (lead.blacklist_hit && lead.blacklist_reason)) && (

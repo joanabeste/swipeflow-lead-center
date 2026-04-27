@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus } from "@/lib/types";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
@@ -23,6 +23,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
     { data: contacts },
     { data: jobPostings },
     { data: enrichments },
+    { data: customStatuses },
     hq,
   ] = await Promise.all([
     db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
@@ -30,6 +31,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
     db.from("lead_contacts").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_enrichments").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1),
+    db.from("custom_lead_statuses").select("*"),
     getHqLocation(),
   ]);
 
@@ -62,6 +64,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
       contacts={(contacts as LeadContact[]) ?? []}
       jobPostings={(jobPostings as LeadJobPosting[]) ?? []}
       latestEnrichment={(enrichments?.[0] as LeadEnrichment) ?? null}
+      customStatuses={(customStatuses as CustomLeadStatus[]) ?? []}
       hq={hq}
       backHref={backHref}
     />

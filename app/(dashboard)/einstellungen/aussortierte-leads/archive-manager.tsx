@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Building2, RotateCcw, Briefcase, Globe } from "lucide-react";
 import { useToastContext } from "../../toast-provider";
 import { restoreArchivedLead, type ArchivedLead } from "./actions";
@@ -86,7 +87,10 @@ export function ArchiveManager({ leads }: Props) {
               {filtered.map((l) => (
                 <tr key={l.id} className="border-b border-gray-100 last:border-b-0 dark:border-[#2c2c2e]">
                   <td className="px-4 py-2">
-                    <div className="flex items-center gap-2">
+                    <Link
+                      href={`/leads/${l.id}?from=${encodeURIComponent("from=einstellungen/aussortierte-leads")}`}
+                      className="flex items-center gap-2 hover:text-primary"
+                    >
                       <Building2 className="h-3.5 w-3.5 text-gray-400" />
                       <div className="min-w-0">
                         <p className="truncate font-medium">{l.company_name}</p>
@@ -94,7 +98,7 @@ export function ArchiveManager({ leads }: Props) {
                           {[l.domain, l.city].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </div>
-                    </div>
+                    </Link>
                   </td>
                   <td className="px-4 py-2">
                     <span
