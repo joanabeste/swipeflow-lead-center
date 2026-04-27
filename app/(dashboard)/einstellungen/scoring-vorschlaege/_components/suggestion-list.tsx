@@ -57,10 +57,32 @@ export function SuggestionList({
       const res = await triggerScoringReview();
       if ("error" in res) {
         setReviewError(res.error);
-      } else {
-        setReviewMessage("Review abgeschlossen — siehe Ergebnisse unten.");
-        router.refresh();
+        return;
       }
+
+      // Pro Vertikale eine sprechende Zeile bauen, damit der User sieht,
+      // ob ein Vorschlag erzeugt wurde, etwas uebersprungen wurde (z. B. zu
+      // wenig Trainings-Daten) oder ein Fehler auftrat.
+      const lines: string[] = [];
+      const results = res.result.results;
+      for (const v of ["webdesign", "recruiting"] as const) {
+        const out = results[v];
+        const label = VERTICAL_LABEL[v] ?? v;
+        if (!out) continue;
+        if (out.kind === "suggested") {
+          lines.push(`${label}: Vorschlag generiert (${out.positiveCount} positive · ${out.negativeCount} negative).`);
+        } else if (out.kind === "skipped") {
+          lines.push(`${label}: ${out.reason}`);
+        } else {
+          lines.push(`${label}: Fehler — ${out.error}`);
+        }
+      }
+      const anySuggested = Object.values(results).some((o) => o?.kind === "suggested");
+      const anyError = Object.values(results).some((o) => o?.kind === "error");
+      const message = lines.join(" · ");
+      if (anyError) setReviewError(message);
+      else setReviewMessage(message || "Review abgeschlossen.");
+      if (anySuggested) router.refresh();
     });
   }
 
