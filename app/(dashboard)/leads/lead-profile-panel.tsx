@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead } from "./actions";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
+import { EnrichmentDiagnosisModal } from "./enrichment-diagnosis-modal";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { useServiceMode } from "@/lib/service-mode";
 import { LeadMasterDataForm } from "./_components/lead-master-data-form";
@@ -63,6 +64,10 @@ export function LeadProfilePanel({
   const [statusPending, startStatusTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
+  const [diagnosisOpen, setDiagnosisOpen] = useState(false);
+
+  const enrichmentRunning = latestEnrichment?.status === "running";
+  const enrichmentFailed = latestEnrichment?.status === "failed";
 
   const hasWebsite = !!(lead.website || lead.domain);
   const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
@@ -114,6 +119,20 @@ export function LeadProfilePanel({
         </button>
         <div className="flex items-center gap-2">
           {headerExtras}
+          {(enrichmentRunning || enrichmentFailed) && latestEnrichment && (
+            <button
+              onClick={() => setDiagnosisOpen(true)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
+                enrichmentRunning
+                  ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50"
+                  : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+              }`}
+              title={enrichmentRunning ? "Anreicherung läuft — Diagnose öffnen" : "Anreicherung fehlgeschlagen — Details ansehen"}
+            >
+              {enrichmentRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
+              {enrichmentRunning ? "Anreicherung läuft" : "Anreicherung fehlgeschlagen"}
+            </button>
+          )}
           <button
             onClick={() => setEnrichModalOpen(true)}
             disabled={!hasWebsite}
@@ -207,6 +226,14 @@ export function LeadProfilePanel({
           defaultConfig={{ ...DEFAULT_ENRICHMENT_CONFIG }}
           serviceMode={serviceMode}
           onClose={() => setEnrichModalOpen(false)}
+        />
+      )}
+
+      {diagnosisOpen && latestEnrichment && (
+        <EnrichmentDiagnosisModal
+          enrichment={latestEnrichment}
+          leadId={lead.id}
+          onClose={() => setDiagnosisOpen(false)}
         />
       )}
     </div>

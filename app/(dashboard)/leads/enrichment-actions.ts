@@ -27,6 +27,44 @@ export async function enrichLeadAction(
   return { success: true };
 }
 
+export async function abortEnrichment(enrichmentId: string, leadId: string) {
+  const db = createServiceClient();
+
+  const { data: enrichment } = await db
+    .from("lead_enrichments")
+    .select("status")
+    .eq("id", enrichmentId)
+    .single();
+
+  if (!enrichment) return { error: "Anreicherung nicht gefunden." };
+  if (enrichment.status !== "running") return { error: "Anreicherung läuft nicht mehr." };
+
+  const now = new Date().toISOString();
+
+  await db
+    .from("lead_enrichments")
+    .update({
+      status: "failed",
+      error_message: "Manuell als fehlgeschlagen markiert (hängender Job)",
+      completed_at: now,
+    })
+    .eq("id", enrichmentId);
+
+  // Lead-Status nur zurücksetzen, wenn er noch auf enrichment_pending steht.
+  await db
+    .from("leads")
+    .update({ status: "imported", updated_at: now })
+    .eq("id", leadId)
+    .eq("status", "enrichment_pending");
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${leadId}`);
+
+  return { success: true };
+}
+
 export async function getEnrichmentData(leadId: string) {
   const db = createServiceClient();
 
