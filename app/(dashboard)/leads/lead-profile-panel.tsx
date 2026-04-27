@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
@@ -109,7 +109,7 @@ export function LeadProfilePanel({
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <button
           onClick={() => router.push(backHref)}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -117,50 +117,64 @@ export function LeadProfilePanel({
           <ArrowLeft className="h-4 w-4" />
           {backLabel}
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {headerExtras}
+
+          {/* Anreicherungs-Status als dezenter Indikator (gleiche Hoehe wie Aktionen). */}
           {(enrichmentRunning || enrichmentFailed) && latestEnrichment && (
             <button
               onClick={() => setDiagnosisOpen(true)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${
+              className={`inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium ${
                 enrichmentRunning
-                  ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:hover:bg-yellow-900/50"
-                  : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50"
+                  ? "border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-300 dark:hover:bg-yellow-900/40"
+                  : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
               }`}
               title={enrichmentRunning ? "Anreicherung läuft — Diagnose öffnen" : "Anreicherung fehlgeschlagen — Details ansehen"}
             >
               {enrichmentRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Activity className="h-3 w-3" />}
-              {enrichmentRunning ? "Anreicherung läuft" : "Anreicherung fehlgeschlagen"}
+              <span className="hidden sm:inline">
+                {enrichmentRunning ? "Anreicherung läuft" : "Fehlgeschlagen"}
+              </span>
             </button>
           )}
+
+          {/* Anreichern — primary action */}
           <button
             onClick={() => setEnrichModalOpen(true)}
             disabled={!hasWebsite}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-900 px-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
             title={!hasWebsite ? "Keine Website/Domain vorhanden" : undefined}
           >
             <Sparkles className="h-3.5 w-3.5" />
             {contacts.length > 0 ? "Erneut anreichern" : "Anreichern"}
           </button>
-          <select
-            value={currentStatus}
-            onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
-            disabled={statusPending}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium border-0 focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
-          >
-            {statusOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {statusPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+
+          {/* Status-Dropdown — als farbiger Pill mit Caret + spinning Loader bei pending. */}
+          <div className="relative">
+            <select
+              value={currentStatus}
+              onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
+              disabled={statusPending}
+              className={`h-8 cursor-pointer appearance-none rounded-lg border-0 pl-3 pr-7 text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
+            >
+              {statusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70">
+              {statusPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
+            </span>
+          </div>
+
+          {/* Loeschen — destructive, etwas separiert. */}
           <button
             onClick={handleDelete}
             disabled={deletePending}
             title="Lead in den Papierkorb verschieben"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/10"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm text-red-500 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/10 dark:hover:border-red-900/40"
           >
             {deletePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            Löschen
+            <span className="hidden sm:inline">Löschen</span>
           </button>
         </div>
       </div>
