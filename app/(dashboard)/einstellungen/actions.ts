@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
-import type { EnrichmentConfig, ServiceMode, WebdevStrictness } from "@/lib/types";
+import type { EnrichmentConfig, ServiceMode, WebdevStrictness, LeadVertical } from "@/lib/types";
+import { generateScoringSuggestion, type ReviewOutcome } from "@/lib/learning/scoring-reviewer";
 import {
   saveHqLocation as saveHqLocationHelper,
   saveCallQueueSettings as saveCallQueueSettingsHelper,
@@ -407,32 +408,28 @@ export async function deleteCrmStatus(id: string) {
 // ─── KI-Scoring-Vorschlaege ──────────────────────────────────
 
 export async function triggerScoringReview(): Promise<
-  { success: true; result: unknown } | { error: string }
+  { success: true; result: { results: Record<LeadVertical, ReviewOutcome> } } | { error: string }
 > {
   const check = await ensureAdmin();
   if ("error" in check) return { error: check.error as string };
 
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return { error: "CRON_SECRET fehlt in den Environment-Variablen." };
-
-  const base = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  try {
-    const res = await fetch(`${base}/api/cron/scoring-review`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${secret}` },
-      signal: AbortSignal.timeout(290_000),
-    });
-    const data = await res.json().catch(() => ({ error: "Non-JSON-Response" }));
-    if (!res.ok) return { error: data.error ?? `HTTP ${res.status}` };
-    revalidatePath("/einstellungen/scoring-vorschlaege");
-    revalidatePath("/einstellungen/webdesign-bewertung");
-    revalidatePath("/einstellungen/recruiting-bewertung");
-    return { success: true, result: data };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Review fehlgeschlagen" };
+  // Direktaufruf statt interner fetch — wir sind bereits im Server-Kontext mit
+  // Admin-Auth. Der HTTP-Roundtrip auf den Cron-Endpoint scheiterte in
+  // Production an Vercel-Auth/Routing und endete im "Non-JSON-Response"-Catch.
+  const db = createServiceClient();
+  const verticals: LeadVertical[] = ["webdesign", "recruiting"];
+  const results: Record<LeadVertical, ReviewOutcome> = {} as Record<LeadVertical, ReviewOutcome>;
+  for (const v of verticals) {
+    try {
+      results[v] = await generateScoringSuggestion(v, db);
+    } catch (e) {
+      results[v] = { kind: "error", error: e instanceof Error ? e.message : "Unbekannter Fehler" };
+    }
   }
+  revalidatePath("/einstellungen/scoring-vorschlaege");
+  revalidatePath("/einstellungen/webdesign-bewertung");
+  revalidatePath("/einstellungen/recruiting-bewertung");
+  return { success: true, result: { results } };
 }
 
 export async function acceptScoringSuggestion(
@@ -544,7 +541,15 @@ export async function triggerRecordingSync(): Promise<
       headers: { Authorization: `Bearer ${secret}` },
       signal: AbortSignal.timeout(60_000),
     });
-    const data = await res.json().catch(() => ({ error: "Non-JSON-Response" }));
+    const text = await res.text();
+    let data: { error?: string } & Record<string, unknown> = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      // Non-JSON: meist HTML 401/500-Page. Snippet zurueckgeben, damit sichtbar ist was kam.
+      const snippet = text.slice(0, 200).replace(/\s+/g, " ").trim();
+      return { error: `HTTP ${res.status}${snippet ? `: ${snippet}` : ""}` };
+    }
     if (!res.ok) return { error: data.error ?? `HTTP ${res.status}` };
     return { success: true, result: data };
   } catch (e) {
