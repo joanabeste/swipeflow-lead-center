@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import type { Lead, LeadStatus } from "@/lib/types";
+import type { Lead, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { LeadTableWrapper } from "./lead-table-wrapper";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 
@@ -74,6 +74,12 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   const enrichmentDefaults = await getAllEnrichmentDefaults();
 
+  const { data: customStatuses } = await supabase
+    .from("custom_lead_statuses")
+    .select("*")
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
+
   // Toggle-Link baut URL mit gedrehtem include_crm-Param.
   const toggleParams = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -113,6 +119,7 @@ export default async function LeadsPage({ searchParams }: Props) {
         currentFilters={columnFilters}
         visibleColumns={visibleColumns}
         enrichmentDefaults={enrichmentDefaults}
+        customStatuses={(customStatuses as CustomLeadStatus[]) ?? []}
       />
     </div>
   );

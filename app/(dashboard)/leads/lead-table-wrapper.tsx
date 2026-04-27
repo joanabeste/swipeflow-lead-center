@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Lead, EnrichmentConfig, ServiceMode } from "@/lib/types";
+import type { Lead, EnrichmentConfig, ServiceMode, CustomLeadStatus } from "@/lib/types";
 import { LeadTable } from "./lead-table";
 import { EnrichmentConfigModal } from "./enrichment-config-modal";
 
@@ -16,11 +16,12 @@ interface Props {
   currentFilters: Record<string, string>;
   visibleColumns: string[] | null;
   enrichmentDefaults: Record<ServiceMode, EnrichmentConfig>;
+  customStatuses: CustomLeadStatus[];
 }
 
 export function LeadTableWrapper(props: Props) {
   const [enrichModalIds, setEnrichModalIds] = useState<string[] | null>(null);
-  const { enrichmentDefaults, ...tableProps } = props;
+  const { enrichmentDefaults, customStatuses, ...tableProps } = props;
 
   return (
     <>
@@ -33,6 +34,7 @@ export function LeadTableWrapper(props: Props) {
           leadIds={enrichModalIds}
           onClose={() => setEnrichModalIds(null)}
           defaults={enrichmentDefaults}
+          customStatuses={customStatuses}
         />
       )}
     </>

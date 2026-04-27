@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
-import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus } from "@/lib/types";
+import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
@@ -13,6 +13,16 @@ interface Props {
   leadIds: string[];
   onClose: () => void;
   defaults: Record<ServiceMode, EnrichmentConfig>;
+  customStatuses: CustomLeadStatus[];
+}
+
+function defaultCrmStatusFor(mode: ServiceMode, list: CustomLeadStatus[]): string | null {
+  const targetId = mode === "recruiting"
+    ? "recruiting-manuelle-ueberpruefung"
+    : "webdesign-manuelle-ueberpruefung";
+  if (list.some((s) => s.id === targetId)) return targetId;
+  const prefix = mode === "recruiting" ? "Recruiting" : "Webdesign";
+  return list.find((s) => s.label.startsWith(prefix))?.id ?? null;
 }
 
 interface EnrichResult {
@@ -43,7 +53,7 @@ const POST_ENRICH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: "exported", label: "Exportiert" },
 ];
 
-export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
+export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatuses }: Props) {
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
 
@@ -51,6 +61,9 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const [config, setConfig] = useState<EnrichmentConfig>({ ...defaults[serviceMode] });
   const [showDetailFields, setShowDetailFields] = useState(false);
   const [detailFields, setDetailFields] = useState<Set<CompanyDetailField>>(new Set());
+  const [targetCrmStatusId, setTargetCrmStatusId] = useState<string | null>(
+    () => defaultCrmStatusFor(serviceMode, customStatuses),
+  );
 
   // Reset-State-on-Prop-Change ohne useEffect (React-19-Pattern):
   // Vergleich des vorherigen Modus mit dem aktuellen und setState während
@@ -62,6 +75,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
     setConfig({ ...defaults[serviceMode] });
     setShowDetailFields(false);
     setDetailFields(new Set());
+    setTargetCrmStatusId(defaultCrmStatusFor(serviceMode, customStatuses));
   }
   const [results, setResults] = useState<EnrichResult[]>([]);
   const [currentLead, setCurrentLead] = useState<string>("");
@@ -181,10 +195,16 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
 
   async function handleQualify(ids: string[]) {
     setQualifying(true);
-    await bulkUpdateStatus(ids, targetStatus);
+    await bulkUpdateStatus(ids, targetStatus, targetCrmStatusId);
     setQualifying(false);
     const label = POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label ?? targetStatus;
-    addToast(`${ids.length} Lead(s) auf „${label}“ gesetzt`, "success");
+    const crmLabel = targetCrmStatusId
+      ? customStatuses.find((s) => s.id === targetCrmStatusId)?.label ?? null
+      : null;
+    addToast(
+      `${ids.length} Lead(s) auf „${label}“ gesetzt${crmLabel ? ` · CRM: ${crmLabel}` : ""}`,
+      "success",
+    );
     onClose();
   }
 
@@ -317,6 +337,29 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
                   {POST_ENRICH_STATUS_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* CRM-Status nach Qualifizierung */}
+              <div className="rounded-md border border-gray-200 px-3 py-2.5 dark:border-[#2c2c2e]">
+                <label htmlFor="target-crm-status" className="block text-sm font-medium">
+                  CRM-Status nach Qualifizierung
+                </label>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Wird gesetzt, sobald die Leads ins CRM verschoben werden. Default ist {serviceMode === "recruiting" ? "„Recruiting – Manuelle Überprüfung“" : "„Webdesign — Manuelle Überprüfung“"}.
+                </p>
+                <select
+                  id="target-crm-status"
+                  value={targetCrmStatusId ?? ""}
+                  onChange={(e) => setTargetCrmStatusId(e.target.value === "" ? null : e.target.value)}
+                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-[#232325] dark:text-gray-100"
+                >
+                  <option value="">Kein CRM-Status</option>
+                  {customStatuses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
                     </option>
                   ))}
                 </select>

@@ -271,14 +271,26 @@ export async function bulkAddToBlacklist(leadIds: string[]) {
   return { success: true, added };
 }
 
-export async function bulkUpdateStatus(leadIds: string[], status: string) {
+export async function bulkUpdateStatus(
+  leadIds: string[],
+  status: string,
+  crmStatusId?: string | null,
+) {
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  const payload: Record<string, unknown> = {
+    status,
+    updated_at: new Date().toISOString(),
+  };
+  if (crmStatusId !== undefined) {
+    payload.crm_status_id = crmStatusId;
+  }
+
   const { error } = await db
     .from("leads")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(payload)
     .in("id", leadIds);
 
   if (error) return { error: error.message };
@@ -287,9 +299,14 @@ export async function bulkUpdateStatus(leadIds: string[], status: string) {
     userId: user?.id ?? null,
     action: "lead.bulk_status_update",
     entityType: "lead",
-    details: { lead_count: leadIds.length, new_status: status },
+    details: {
+      lead_count: leadIds.length,
+      new_status: status,
+      ...(crmStatusId !== undefined ? { crm_status_id: crmStatusId } : {}),
+    },
   });
 
   revalidatePath("/leads");
+  revalidatePath("/crm");
   return { success: true };
 }
