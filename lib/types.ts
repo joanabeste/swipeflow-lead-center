@@ -187,6 +187,9 @@ export interface CustomLeadStatus {
   /** Trainingssignal fuer die KI-Scoring-Review:
    *  'positive' = Lead war relevant, 'negative' = Lead war nicht passend, null = ignorieren. */
   learning_signal: LeadLearningSignal | null;
+  /** Aussortier-Flag: Leads in einem archivierten Status werden aus /leads und /crm
+   *  ausgeblendet und sind nur in den Settings unter „Aussortierte Leads" sichtbar. */
+  is_archived: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;

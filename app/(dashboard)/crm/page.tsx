@@ -50,6 +50,9 @@ export default async function CrmPage({
   const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
   const notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
 
+  // Aussortierte Status (is_archived=true) gehoeren NICHT ins CRM-Board.
+  const archivedStatusIds = statuses.filter((s) => s.is_archived).map((s) => s.id);
+
   let query = db
     .from("leads")
     .select("*", { count: "exact" })
@@ -60,6 +63,10 @@ export default async function CrmPage({
     query = query.or(`status.eq.qualified,id.in.(${calledLeadIds.join(",")})`);
   } else {
     query = query.eq("status", "qualified");
+  }
+
+  if (archivedStatusIds.length > 0) {
+    query = query.not("crm_status_id", "in", `(${archivedStatusIds.join(",")})`);
   }
 
   if (sp.crm_status) query = query.eq("crm_status_id", sp.crm_status);

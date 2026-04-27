@@ -6,7 +6,7 @@
 // bekommen keinen echten Array zurück — `SETTINGS_GROUPS.map is not a function`.
 
 import {
-  MapPin, Tag, Sparkles, ListChecks, Briefcase, Globe, Phone, Mic, Users, PhoneOutgoing, Mail, FileText, Banknote, Trash2, Megaphone, Brain,
+  MapPin, Tag, Sparkles, ListChecks, Briefcase, Globe, Phone, Mic, Users, PhoneOutgoing, Mail, FileText, Banknote, Trash2, Megaphone, Brain, Archive,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -66,6 +66,7 @@ export const SETTINGS_GROUPS: SettingsNavGroup[] = [
     label: "Verwaltung",
     items: [
       { href: "/einstellungen/papierkorb", label: "Papierkorb", icon: Trash2 },
+      { href: "/einstellungen/aussortierte-leads", label: "Aussortierte Leads", icon: Archive },
     ],
   },
 ];

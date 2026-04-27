@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { parseCSV } from "@/lib/csv/parser";
 import { normalizeLeadRow } from "@/lib/csv/normalizer";
-import { findInternalDuplicates, findDbDuplicates } from "@/lib/csv/dedup";
+import { findInternalDuplicates, findDbDuplicatesDetailed } from "@/lib/csv/dedup";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
@@ -76,8 +76,8 @@ export async function processImport(
   // Interne Duplikate finden
   const internalDups = findInternalDuplicates(mappedRows);
 
-  // DB-Duplikate finden
-  const dbDups = await findDbDuplicates(db, mappedRows);
+  // DB-Duplikate finden (mit archived-Flag fuer aussortierte Leads).
+  const dbDups = await findDbDuplicatesDetailed(db, mappedRows);
 
   // Blacklist-Regeln, Einträge und Cancel-Rules in einem Rutsch laden (gecacht für gesamten Import)
   const ctx = await loadImportContext(db);
@@ -92,6 +92,7 @@ export async function processImport(
   let skippedCount = 0;
   let duplicateCount = 0;
   let updatedCount = 0;
+  let archivedCount = 0;
   let errorCount = 0;
   const errors: { row: number; field: string; message: string }[] = [];
 
@@ -123,8 +124,16 @@ export async function processImport(
     }
 
     // DB-Duplikat → Bestehenden Lead aktualisieren statt überspringen
-    const existingLeadId = dbDups.get(i);
-    if (existingLeadId) {
+    const dupMatch = dbDups.get(i);
+    const existingLeadId = dupMatch?.leadId;
+    if (dupMatch && existingLeadId) {
+      // Aussortierte Leads: KEIN Update, KEIN Insert — Status „Passt nicht" bleibt stabil,
+      // damit das KI-Negativ-Signal nicht versehentlich ueberschrieben wird.
+      if (dupMatch.archived) {
+        archivedCount++;
+        skippedCount++;
+        continue;
+      }
       const { data: existingLead } = await db.from("leads").select("*").eq("id", existingLeadId).single();
       if (existingLead) {
         const updates: Record<string, string | null> = {};
@@ -256,6 +265,7 @@ export async function processImport(
       imported: importedCount,
       skipped: skippedCount,
       duplicates: duplicateCount,
+      archived: archivedCount,
       errors: errorCount,
     },
   });
@@ -270,6 +280,7 @@ export async function processImport(
     skipped: skippedCount,
     duplicates: duplicateCount,
     updated: updatedCount,
+    archived: archivedCount,
     errors: errorCount,
   };
 }

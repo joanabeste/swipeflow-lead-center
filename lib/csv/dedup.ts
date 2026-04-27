@@ -138,18 +138,44 @@ export function findInternalDuplicates(
   return duplicates;
 }
 
+export interface DuplicateMatch {
+  leadId: string;
+  /** true, wenn der Treffer ein aussortierter Lead ist (CRM-Status mit is_archived=true).
+   *  Solche Leads werden im Import komplett uebersprungen, kein Update. */
+  archived: boolean;
+}
+
 /** Prüft Duplikate gegen die bestehende Datenbank (mit Fuzzy-Matching).
  * Gibt eine Map zurück: CSV-Zeilen-Index → bestehende Lead-ID */
 export async function findDbDuplicates(
   supabase: SupabaseClient,
   rows: Record<string, string | null>[],
 ): Promise<Map<number, string>> {
-  const duplicates = new Map<number, string>();
+  const detailed = await findDbDuplicatesDetailed(supabase, rows);
+  const map = new Map<number, string>();
+  for (const [idx, m] of detailed) map.set(idx, m.leadId);
+  return map;
+}
 
-  // Alle existierenden Leads laden (ID, Domain, Name, Stadt)
+/** Wie findDbDuplicates, gibt aber pro Treffer auch zurueck, ob der bestehende
+ *  Lead in einem aussortierten CRM-Status liegt. */
+export async function findDbDuplicatesDetailed(
+  supabase: SupabaseClient,
+  rows: Record<string, string | null>[],
+): Promise<Map<number, DuplicateMatch>> {
+  const duplicates = new Map<number, DuplicateMatch>();
+
+  // IDs aller archivierten Status laden — fuer das Archived-Flag im Treffer.
+  const { data: archivedRows } = await supabase
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("is_archived", true);
+  const archivedSet = new Set((archivedRows ?? []).map((r) => r.id as string));
+
+  // Alle existierenden Leads laden (ID, Domain, Name, Stadt, CRM-Status)
   const { data: existingLeads } = await supabase
     .from("leads")
-    .select("id, domain, company_name, city");
+    .select("id, domain, company_name, city, crm_status_id");
 
   if (!existingLeads || existingLeads.length === 0) return duplicates;
 
@@ -157,13 +183,20 @@ export async function findDbDuplicates(
     .filter((l) => l.domain)
     .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.domain!) }));
 
+  function buildMatch(lead: { id: string; crm_status_id: string | null }): DuplicateMatch {
+    return {
+      leadId: lead.id,
+      archived: lead.crm_status_id != null && archivedSet.has(lead.crm_status_id),
+    };
+  }
+
   rows.forEach((row, index) => {
     // Domain-Match
     if (row.domain) {
       const d = normalizeDomain(row.domain);
       const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
       if (match) {
-        duplicates.set(index, match.id);
+        duplicates.set(index, buildMatch(match));
         return;
       }
     }
@@ -177,7 +210,7 @@ export async function findDbDuplicates(
         return sameCity && isFuzzyMatch(row.company_name!, existing.company_name);
       });
       if (match) {
-        duplicates.set(index, match.id);
+        duplicates.set(index, buildMatch(match));
       }
     }
   });

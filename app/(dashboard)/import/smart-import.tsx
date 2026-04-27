@@ -67,6 +67,7 @@ export function SmartImport({ templates, forcedFormat }: Props) {
     jobs?: number;
     skipped?: number;
     duplicates?: number;
+    archived?: number;
     errors?: number;
     error?: string;
   } | null>(null);
@@ -367,6 +368,12 @@ export function SmartImport({ templates, forcedFormat }: Props) {
                   <div className="rounded-lg border border-gray-200 px-4 py-2 text-center dark:border-[#2c2c2e]">
                     <p className="text-xl font-bold">{result.duplicates}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Duplikate</p>
+                  </div>
+                )}
+                {result.archived != null && result.archived > 0 && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-center dark:border-red-900/40 dark:bg-red-900/10">
+                    <p className="text-xl font-bold text-red-700 dark:text-red-400">{result.archived}</p>
+                    <p className="text-xs text-red-600 dark:text-red-300">Bereits aussortiert</p>
                   </div>
                 )}
                 {result.skipped != null && result.skipped > 0 && (
