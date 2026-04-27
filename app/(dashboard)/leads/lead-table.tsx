@@ -24,7 +24,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 
 const ALL_COLUMNS = [
   { key: "company_name", label: "Firma", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "domain", label: "Domain", defaultVisible: false, modes: ["recruiting", "webdev"] },
+  { key: "domain", label: "Domain", defaultVisible: true, modes: ["recruiting", "webdev"] },
   { key: "city", label: "Ort", defaultVisible: true, modes: ["recruiting", "webdev"] },
   { key: "zip", label: "PLZ", defaultVisible: false, modes: ["recruiting", "webdev"] },
   { key: "industry", label: "Branche", defaultVisible: true, modes: ["recruiting"] },

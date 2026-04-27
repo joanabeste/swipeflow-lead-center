@@ -35,7 +35,7 @@ export interface CrmLead {
 
 const ALL_COLUMNS: { key: string; label: string; defaultVisible: boolean; filterable?: boolean }[] = [
   { key: "company_name", label: "Firma", defaultVisible: true, filterable: true },
-  { key: "domain", label: "Domain", defaultVisible: false, filterable: true },
+  { key: "domain", label: "Domain", defaultVisible: true, filterable: true },
   { key: "city", label: "Ort", defaultVisible: true, filterable: true },
   { key: "zip", label: "PLZ", defaultVisible: false, filterable: true },
   { key: "industry", label: "Branche", defaultVisible: true, filterable: true },
@@ -436,14 +436,7 @@ function CellRenderer({
 }) {
   switch (colKey) {
     case "company_name":
-      return (
-        <div>
-          <span>{lead.company_name}</span>
-          {lead.domain && (
-            <span className="ml-2 text-xs text-gray-500 dark:text-gray-500">{lead.domain}</span>
-          )}
-        </div>
-      );
+      return <span>{lead.company_name}</span>;
     case "phone":
       return lead.phone ? (
         <PhoneCallLink
@@ -502,6 +495,18 @@ function CellRenderer({
       return <span>{formatDate(lead.updated_at)}</span>;
     case "created_at":
       return <span>{formatDate(lead.created_at)}</span>;
+    case "domain":
+      return lead.domain ? (
+        <a
+          href={`https://${lead.domain}`}
+          target="_blank"
+          rel="noreferrer noopener"
+          onClick={(e) => e.stopPropagation()}
+          className="text-primary hover:underline"
+        >
+          {lead.domain}
+        </a>
+      ) : <span>–</span>;
     default: {
       const v = lead[colKey as keyof CrmLead];
       if (v == null) return <span>–</span>;
