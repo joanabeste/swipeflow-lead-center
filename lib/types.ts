@@ -190,6 +190,9 @@ export interface CustomLeadStatus {
   /** Aussortier-Flag: Leads in einem archivierten Status werden aus /leads und /crm
    *  ausgeblendet und sind nur in den Settings unter „Aussortierte Leads" sichtbar. */
   is_archived: boolean;
+  /** Vertikale-Bindung. NULL = beide / agnostisch. Wird vom KI-Scoring-Reviewer
+   *  genutzt, um Trainings-Status pro Vertikale zu isolieren. */
+  vertical: LeadVertical | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;

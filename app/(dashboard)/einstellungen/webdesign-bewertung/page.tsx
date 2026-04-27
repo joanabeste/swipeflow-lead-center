@@ -3,6 +3,7 @@ import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
 import { PageHeader } from "../_components/ui";
 import { WebdevScoringForm } from "../_components/webdev-scoring-form";
 import { PendingSuggestionBanner } from "../_components/pending-suggestion-banner";
+import { LearningSourceHint } from "../_components/learning-source-hint";
 
 export default async function WebdesignBewertungPage() {
   const config = await getWebdevScoringConfig();
@@ -15,6 +16,7 @@ export default async function WebdesignBewertungPage() {
         subtitle="Strenge der KI-Bewertung und welche Kriterien als Issue zählen."
       />
       <PendingSuggestionBanner vertical="webdesign" />
+      <LearningSourceHint vertical="webdesign" />
       <WebdevScoringForm config={config} />
     </div>
   );

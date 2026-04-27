@@ -84,11 +84,16 @@ async function loadCurrentConfig(
   return { ...DEFAULT_RECRUITING_SCORING, ...(data ?? {}) } as RecruitingScoringConfig;
 }
 
-async function loadStatusBuckets(db: SupabaseClient): Promise<{ positive: string[]; negative: string[] }> {
+async function loadStatusBuckets(
+  db: SupabaseClient,
+  vertical: LeadVertical,
+): Promise<{ positive: string[]; negative: string[] }> {
+  // vertikal-spezifische Status ODER vertikal-agnostische (vertical IS NULL).
   const { data } = await db
     .from("custom_lead_statuses")
     .select("id, learning_signal")
-    .not("learning_signal", "is", null);
+    .not("learning_signal", "is", null)
+    .or(`vertical.is.null,vertical.eq.${vertical}`);
   const positive: string[] = [];
   const negative: string[] = [];
   for (const row of data ?? []) {
@@ -349,7 +354,7 @@ export async function generateScoringSuggestion(
   vertical: LeadVertical,
   db: SupabaseClient,
 ): Promise<ReviewOutcome> {
-  const buckets = await loadStatusBuckets(db);
+  const buckets = await loadStatusBuckets(db, vertical);
   const samples = await loadSamples(db, vertical, buckets.positive, buckets.negative);
   const positiveCount = samples.positives.length;
   const negativeCount = samples.negatives.length;

@@ -324,6 +324,9 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
   const rawSignal = ((formData.get("learning_signal") as string) || "").trim();
   const learningSignal: "positive" | "negative" | null =
     rawSignal === "positive" || rawSignal === "negative" ? rawSignal : null;
+  const rawVertical = ((formData.get("vertical") as string) || "").trim();
+  const vertical: "webdesign" | "recruiting" | null =
+    rawVertical === "webdesign" || rawVertical === "recruiting" ? rawVertical : null;
 
   if (!label) return { error: "Label fehlt." };
 
@@ -335,6 +338,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
         display_order: displayOrder,
         is_active: isActive,
         learning_signal: learningSignal,
+        vertical,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -344,7 +348,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       action: "custom_lead_status.updated",
       entityType: "custom_lead_status",
       entityId: id,
-      details: { label, learning_signal: learningSignal },
+      details: { label, learning_signal: learningSignal, vertical },
     });
   } else {
     // Neuer Eintrag — ID aus Label ableiten; bei Kollision Suffix anhängen.
@@ -359,6 +363,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       display_order: displayOrder,
       is_active: isActive,
       learning_signal: learningSignal,
+      vertical,
       created_by: check.user.id,
     });
     if (error) return { error: error.message };
@@ -367,7 +372,7 @@ export async function saveCrmStatus(_prev: unknown, formData: FormData) {
       action: "custom_lead_status.created",
       entityType: "custom_lead_status",
       entityId: newId,
-      details: { label, learning_signal: learningSignal },
+      details: { label, learning_signal: learningSignal, vertical },
     });
   }
 

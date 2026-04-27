@@ -77,6 +77,11 @@ function StatusRow({
         <div>
           <p className="text-sm font-medium">
             {status.label}
+            {status.vertical && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-300">
+                {status.vertical === "webdesign" ? "Webdesign" : "Recruiting"}
+              </span>
+            )}
             {status.learning_signal === "positive" && (
               <span className="ml-2 inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                 KI: gute Leads
@@ -184,6 +189,23 @@ function StatusForm({
             defaultValue={status?.description ?? ""}
             className="mt-1 w-full rounded-md border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#161618]"
           />
+        </label>
+        <label className="text-sm md:col-span-2">
+          <span className="text-xs text-gray-500 dark:text-gray-400">Vertikale</span>
+          <select
+            name="vertical"
+            defaultValue={status?.vertical ?? ""}
+            className="mt-1 w-full rounded-md border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#161618]"
+          >
+            <option value="">Beide / Vertikal-agnostisch</option>
+            <option value="recruiting">Recruiting</option>
+            <option value="webdesign">Webdesign</option>
+          </select>
+          <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
+            Bestimmt, in welche Bewertungs-KI dieser Status als Trainingssignal einfliesst.
+            Recruiting- und Webdesign-Bewertung sehen jeweils nur die zu ihrer Vertikalen
+            passenden Status (plus alle „Beide").
+          </span>
         </label>
         <label className="text-sm md:col-span-2">
           <span className="text-xs text-gray-500 dark:text-gray-400">
