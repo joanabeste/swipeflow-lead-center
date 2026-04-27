@@ -48,10 +48,13 @@ export function CallQueueClient({
   const [currentIndex, setCurrentIndex] = useState(0);
   // Nach router.refresh() (z. B. CRM-Status-Toggle oben) kommt eine frische
   // initialQueue-Prop rein — sonst bliebe die Liste ohne Hard-Reload stale.
-  useEffect(() => {
+  // React-19-Pattern: Prop-Diff im Render statt setState-im-Effect.
+  const [prevInitialQueue, setPrevInitialQueue] = useState(initialQueue);
+  if (prevInitialQueue !== initialQueue) {
+    setPrevInitialQueue(initialQueue);
     setQueue(initialQueue);
     setCurrentIndex(0);
-  }, [initialQueue]);
+  }
   const [mode, setMode] = useState<QueueMode>("idle");
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const [autoAdvanceSec, setAutoAdvanceSec] = useState<number | null>(null);
@@ -82,17 +85,18 @@ export function CallQueueClient({
   // Werden lazy nachgeladen, damit die Queue-Liste schlank bleibt.
   const [leadDetails, setLeadDetails] = useState<ActiveLeadDetails | null>(null);
   const [leadDetailsLoading, setLeadDetailsLoading] = useState(false);
+  // Stale-Daten beim Lead-Wechsel via Prop-Diff im Render verwerfen — vermeidet
+  // setState-im-Effect und das kurze Aufflackern alter Notizen/Anrufe.
+  const [prevLeadId, setPrevLeadId] = useState<string | null>(currentLead?.id ?? null);
+  if (prevLeadId !== (currentLead?.id ?? null)) {
+    setPrevLeadId(currentLead?.id ?? null);
+    setLeadDetails(null);
+    setLeadDetailsLoading(!!currentLead);
+  }
   useEffect(() => {
-    if (!currentLead) {
-      setLeadDetails(null);
-      return;
-    }
+    if (!currentLead) return;
     const leadId = currentLead.id;
     let cancelled = false;
-    // Stale Daten beim Lead-Wechsel sofort verwerfen, sonst werden kurz
-    // Notizen/Anrufe vom vorigen Lead angezeigt, was irreführend wirkt.
-    setLeadDetails(null);
-    setLeadDetailsLoading(true);
     loadActiveLeadDetails(leadId).then((res) => {
       if (cancelled) return;
       setLeadDetails(res);

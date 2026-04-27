@@ -37,13 +37,26 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             {toast.type === "info" && <Info className="h-4 w-4 flex-shrink-0" />}
             <p className="text-sm font-medium">{toast.message}</p>
             {toast.action && (
-              <Link
-                href={toast.action.href}
-                onClick={() => removeToast(toast.id)}
-                className="ml-1 rounded-md border border-current/30 px-2 py-0.5 text-xs font-semibold underline-offset-2 hover:underline"
-              >
-                {toast.action.label}
-              </Link>
+              toast.action.onClick ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    toast.action?.onClick?.();
+                    removeToast(toast.id);
+                  }}
+                  className="ml-1 rounded-md border border-current/30 px-2 py-0.5 text-xs font-semibold underline-offset-2 hover:underline"
+                >
+                  {toast.action.label}
+                </button>
+              ) : toast.action.href ? (
+                <Link
+                  href={toast.action.href}
+                  onClick={() => removeToast(toast.id)}
+                  className="ml-1 rounded-md border border-current/30 px-2 py-0.5 text-xs font-semibold underline-offset-2 hover:underline"
+                >
+                  {toast.action.label}
+                </Link>
+              ) : null
             )}
             <button
               onClick={() => removeToast(toast.id)}

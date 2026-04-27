@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function SearchBox({
   defaultValue,
@@ -17,27 +17,27 @@ export function SearchBox({
   debounceMs?: number;
 }) {
   const [value, setValue] = useState(defaultValue);
-  const lastSubmitted = useRef(defaultValue);
+  const [prevDefault, setPrevDefault] = useState(defaultValue);
 
-  useEffect(() => {
+  // React-19-Pattern: Prop-Change-Reset waehrend des Renders, kein Effect.
+  // Wenn die Prop wechselt, setzen wir auch den prevDefault — der Debounce-
+  // Effect erkennt dann, dass `value === prevDefault` ist und unterdrueckt
+  // ein Re-Submit (wir haben den Wert gerade *vom Parent* erhalten).
+  if (prevDefault !== defaultValue) {
+    setPrevDefault(defaultValue);
     setValue(defaultValue);
-    lastSubmitted.current = defaultValue;
-  }, [defaultValue]);
+  }
 
   useEffect(() => {
-    if (value === lastSubmitted.current) return;
-    const id = setTimeout(() => {
-      lastSubmitted.current = value;
-      onSubmit(value);
-    }, debounceMs);
+    if (value === prevDefault) return;
+    const id = setTimeout(() => onSubmit(value), debounceMs);
     return () => clearTimeout(id);
-  }, [value, debounceMs, onSubmit]);
+  }, [value, prevDefault, debounceMs, onSubmit]);
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        lastSubmitted.current = value;
         onSubmit(value);
       }}
       className="flex-1"

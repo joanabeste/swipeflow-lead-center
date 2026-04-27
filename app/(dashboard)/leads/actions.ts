@@ -183,18 +183,6 @@ export async function searchLeads(query: string) {
   return data ?? [];
 }
 
-export async function saveColumnPreferences(columns: string[]) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const db = createServiceClient();
-  await db
-    .from("profiles")
-    .update({ lead_table_columns: columns })
-    .eq("id", user.id);
-}
-
 export async function bulkDeleteLeads(leadIds: string[]) {
   const supabase = await createClient();
   const db = createServiceClient();
@@ -280,24 +268,27 @@ export async function bulkUpdateStatus(
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // crm_status_id wird IMMER explizit ueberschrieben, um FK-Fehler durch
-  // alte Trigger/Defaults (z.B. crm_status_id := 'todo') zu vermeiden.
-  // Ist der gewuenschte Wert kein gueltiger Status, fallen wir auf NULL zurueck.
-  let resolvedCrmStatusId: string | null = crmStatusId ?? null;
-  if (resolvedCrmStatusId) {
-    const { data: exists } = await db
-      .from("custom_lead_statuses")
-      .select("id")
-      .eq("id", resolvedCrmStatusId)
-      .maybeSingle();
-    if (!exists) resolvedCrmStatusId = null;
-  }
-
+  // Drei-Zustands-Semantik:
+  //   undefined → crm_status_id nicht anfassen (z.B. Setzen-Button im Toolbar)
+  //   null      → crm_status_id explizit auf NULL setzen
+  //   string    → gegen custom_lead_statuses validieren, Fallback NULL bei ungueltiger ID
   const payload: Record<string, unknown> = {
     status,
-    crm_status_id: resolvedCrmStatusId,
     updated_at: new Date().toISOString(),
   };
+  let resolvedCrmStatusId: string | null | undefined = undefined;
+  if (crmStatusId !== undefined) {
+    resolvedCrmStatusId = crmStatusId;
+    if (resolvedCrmStatusId !== null) {
+      const { data: exists } = await db
+        .from("custom_lead_statuses")
+        .select("id")
+        .eq("id", resolvedCrmStatusId)
+        .maybeSingle();
+      if (!exists) resolvedCrmStatusId = null;
+    }
+    payload.crm_status_id = resolvedCrmStatusId;
+  }
 
   const { error } = await db
     .from("leads")
@@ -313,11 +304,116 @@ export async function bulkUpdateStatus(
     details: {
       lead_count: leadIds.length,
       new_status: status,
-      crm_status_id: resolvedCrmStatusId,
+      ...(resolvedCrmStatusId !== undefined ? { crm_status_id: resolvedCrmStatusId } : {}),
     },
   });
 
   revalidatePath("/leads");
   revalidatePath("/crm");
+  return { success: true };
+}
+
+// Aussortieren / Wiederherstellen aus der Lead-Liste heraus (Bulk + Single).
+// Setzt nur crm_status_id; status bleibt unangetastet, damit der Lead in
+// /einstellungen/aussortierte-leads landet, ohne den System-Status zu verfaelschen.
+
+export async function bulkArchiveLeads(
+  leadIds: string[],
+  serviceMode: "recruiting" | "webdev",
+): Promise<{ success: true; previous: { id: string; crm_status_id: string | null }[] } | { error: string }> {
+  if (leadIds.length === 0) return { success: true, previous: [] };
+  const supabase = await createClient();
+  const db = createServiceClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const targetId = serviceMode === "webdev"
+    ? "webdesign-passt-nicht"
+    : "recruiting-passt-nicht";
+
+  const { data: exists } = await db
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("id", targetId)
+    .maybeSingle();
+  if (!exists) {
+    return { error: `Status „${targetId}" existiert nicht — Migration 049 muss in Supabase ausgefuehrt werden.` };
+  }
+
+  // Vor-Stand fuer Undo merken
+  const { data: before } = await db
+    .from("leads")
+    .select("id, crm_status_id")
+    .in("id", leadIds);
+
+  const { error } = await db
+    .from("leads")
+    .update({ crm_status_id: targetId, updated_at: new Date().toISOString() })
+    .in("id", leadIds);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: user?.id ?? null,
+    action: "lead.bulk_archived",
+    entityType: "lead",
+    details: { lead_count: leadIds.length, crm_status_id: targetId, service_mode: serviceMode },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath("/einstellungen/aussortierte-leads");
+  return { success: true, previous: (before ?? []) as { id: string; crm_status_id: string | null }[] };
+}
+
+/** Setzt crm_status_id eines oder mehrerer Leads zurueck — nutzt der Undo-Pfad
+ *  des Aussortier-Toasts. Akzeptiert pro Lead einen Vorgaenger-Wert (null
+ *  erlaubt). FK wird vor dem Schreiben validiert. */
+export async function bulkRestoreCrmStatus(
+  entries: { id: string; crm_status_id: string | null }[],
+): Promise<{ success: true } | { error: string }> {
+  if (entries.length === 0) return { success: true };
+  const supabase = await createClient();
+  const db = createServiceClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Eindeutige Ziel-IDs sammeln und gegen DB validieren.
+  const candidateIds = Array.from(
+    new Set(entries.map((e) => e.crm_status_id).filter((v): v is string => !!v)),
+  );
+  let validIds = new Set<string>();
+  if (candidateIds.length > 0) {
+    const { data } = await db
+      .from("custom_lead_statuses")
+      .select("id")
+      .in("id", candidateIds);
+    validIds = new Set((data ?? []).map((r) => r.id as string));
+  }
+
+  // Pro Ziel-Wert ein Update — wenige Werte, viele IDs ist der Normalfall.
+  const groups = new Map<string | null, string[]>();
+  for (const e of entries) {
+    const target = e.crm_status_id && validIds.has(e.crm_status_id) ? e.crm_status_id : null;
+    const arr = groups.get(target) ?? [];
+    arr.push(e.id);
+    groups.set(target, arr);
+  }
+
+  for (const [target, ids] of groups) {
+    const { error } = await db
+      .from("leads")
+      .update({ crm_status_id: target, updated_at: new Date().toISOString() })
+      .in("id", ids);
+    if (error) return { error: error.message };
+  }
+
+  await logAudit({
+    userId: user?.id ?? null,
+    action: "lead.bulk_archive_undone",
+    entityType: "lead",
+    details: { lead_count: entries.length },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath("/einstellungen/aussortierte-leads");
   return { success: true };
 }

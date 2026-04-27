@@ -92,6 +92,11 @@ function StatusRow({
                 KI: schlechte Leads
               </span>
             )}
+            {status.is_archived && (
+              <span className="ml-2 inline-flex items-center rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                Archiv
+              </span>
+            )}
           </p>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             ID: {status.id} · Reihenfolge: {status.display_order}
@@ -204,7 +209,7 @@ function StatusForm({
           <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
             Bestimmt, in welche Bewertungs-KI dieser Status als Trainingssignal einfliesst.
             Recruiting- und Webdesign-Bewertung sehen jeweils nur die zu ihrer Vertikalen
-            passenden Status (plus alle „Beide").
+            passenden Status (plus alle &bdquo;Beide&ldquo;).
           </span>
         </label>
         <label className="text-sm md:col-span-2">
@@ -223,6 +228,22 @@ function StatusForm({
           <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
             Leads in diesem Status fliessen mit in die woechentliche KI-Auswertung ein, die
             Anpassungen an der Scoring-Konfiguration vorschlaegt.
+          </span>
+        </label>
+        <label className="inline-flex items-start gap-2 self-start text-sm md:col-span-2">
+          <input
+            type="checkbox"
+            name="is_archived"
+            defaultChecked={status?.is_archived ?? false}
+            className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+          />
+          <span>
+            <span className="font-medium">Aussortier-Status (Archiv)</span>
+            <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">
+              Leads in diesem Status verschwinden aus &bdquo;Neue Leads&ldquo; und dem CRM-Board und
+              tauchen nur noch unter Einstellungen &rarr; Aussortierte Leads auf. Geeignet fuer
+              dauerhaft &bdquo;Passt nicht&ldquo;-Markierungen mit Negativ-Trainingssignal.
+            </span>
           </span>
         </label>
       </div>

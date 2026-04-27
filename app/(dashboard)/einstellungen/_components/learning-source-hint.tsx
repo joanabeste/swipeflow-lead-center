@@ -42,7 +42,7 @@ export async function LearningSourceHint({ vertical }: { vertical: LeadVertical 
               <Link href="/einstellungen/crm-status" className="underline">
                 CRM-Status-Einstellungen
               </Link>{" "}
-              ein Signal („Positiv" / „Negativ"), damit die KI Stichproben sammeln kann.
+              ein Signal (&bdquo;Positiv&ldquo; / &bdquo;Negativ&ldquo;), damit die KI Stichproben sammeln kann.
             </p>
           ) : (
             <div className="mt-3 space-y-2">

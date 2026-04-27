@@ -4,7 +4,10 @@ import { useState, useCallback } from "react";
 
 export interface ToastAction {
   label: string;
-  href: string;
+  /** Wenn gesetzt, wird die Aktion als Link gerendert. */
+  href?: string;
+  /** Wenn gesetzt, wird die Aktion als Button gerendert. Hat Vorrang vor href. */
+  onClick?: () => void;
 }
 
 export interface Toast {

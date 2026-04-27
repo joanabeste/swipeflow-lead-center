@@ -266,7 +266,11 @@ function LandingPageDialog({
   // Mount-Guard: createPortal braucht `document`, das auf dem Server nicht
   // existiert. Erst nach dem ersten Client-Render rendern wir das Modal.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    // Mount-Guard fuer createPortal — bewusster One-Shot-State-Sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   const selectedIndustry = industries.find((i) => i.id === industryId) ?? null;
   const selectedContact = allContacts.find((c) => c.id === contactId) ?? null;
@@ -351,6 +355,7 @@ function LandingPageDialog({
   useEffect(() => {
     if (didAutofill.current) return;
     if (!selectedIndustry) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     applyDefaults();
     didAutofill.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps

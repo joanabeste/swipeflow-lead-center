@@ -145,20 +145,8 @@ export interface DuplicateMatch {
   archived: boolean;
 }
 
-/** Prüft Duplikate gegen die bestehende Datenbank (mit Fuzzy-Matching).
- * Gibt eine Map zurück: CSV-Zeilen-Index → bestehende Lead-ID */
-export async function findDbDuplicates(
-  supabase: SupabaseClient,
-  rows: Record<string, string | null>[],
-): Promise<Map<number, string>> {
-  const detailed = await findDbDuplicatesDetailed(supabase, rows);
-  const map = new Map<number, string>();
-  for (const [idx, m] of detailed) map.set(idx, m.leadId);
-  return map;
-}
-
-/** Wie findDbDuplicates, gibt aber pro Treffer auch zurueck, ob der bestehende
- *  Lead in einem aussortierten CRM-Status liegt. */
+/** Prueft Duplikate gegen die bestehende DB (Fuzzy-Match auf Domain + Firmenname).
+ *  Gibt pro CSV-Zeilen-Index zurueck: bestehende Lead-ID + ob der Lead aussortiert ist. */
 export async function findDbDuplicatesDetailed(
   supabase: SupabaseClient,
   rows: Record<string, string | null>[],
