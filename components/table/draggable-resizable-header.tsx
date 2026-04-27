@@ -88,7 +88,7 @@ export function DraggableResizableHeader({
         thRef.current = node;
       }}
       style={style}
-      className="group relative px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400"
+      className="group relative border-r border-gray-200 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 last:border-r-0 dark:border-[#2c2c2e] dark:text-gray-400"
     >
       <div className="flex items-center gap-1">
         {/* Drag-Handle: nur bei Hover sichtbar, damit das UI ruhig bleibt. */}

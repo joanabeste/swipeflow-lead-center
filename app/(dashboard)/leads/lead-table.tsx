@@ -433,7 +433,7 @@ export function LeadTable({
             </colgroup>
             <thead className="bg-gray-50 dark:bg-[#232325]">
               <tr>
-                <th className="px-4 py-3">
+                <th className="border-r border-gray-200 px-4 py-3 dark:border-[#2c2c2e]">
                   <input
                     type="checkbox"
                     checked={selected.size === leads.length && leads.length > 0}
