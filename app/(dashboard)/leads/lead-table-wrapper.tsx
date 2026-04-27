@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Lead, EnrichmentConfig, ServiceMode, CustomLeadStatus } from "@/lib/types";
+import type { ColumnPref } from "@/lib/table-prefs";
 import { LeadTable } from "./lead-table";
 import { EnrichmentConfigModal } from "./enrichment-config-modal";
 
@@ -14,7 +15,7 @@ interface Props {
   currentQuery: string;
   currentStatus: string;
   currentFilters: Record<string, string>;
-  visibleColumns: string[] | null;
+  initialColumnPrefs: ColumnPref[];
   enrichmentDefaults: Record<ServiceMode, EnrichmentConfig>;
   customStatuses: CustomLeadStatus[];
 }

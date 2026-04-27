@@ -3,7 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Download, Trash2, StickyNote, MessageSquare, Plus } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import type { CustomLeadStatus } from "@/lib/types";
+import type { ColumnPref } from "@/lib/table-prefs";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads } from "../leads/actions";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
@@ -12,7 +21,8 @@ import { useToastContext } from "../toast-provider";
 import { SearchBox } from "@/components/table/search-box";
 import { TablePagination } from "@/components/table/pagination";
 import { ColumnPicker } from "@/components/table/column-picker";
-import { SortableHeader } from "@/components/table/sortable-header";
+import { DraggableResizableHeader } from "@/components/table/draggable-resizable-header";
+import { useColumnLayout } from "@/components/table/use-column-layout";
 import { PhoneCallLink } from "@/components/phone-call-link";
 
 export interface CrmLead {
@@ -62,26 +72,34 @@ interface Props {
   currentActivity: string;
   currentLastCall: string;
   currentFilters: Record<string, string>;
+  initialColumnPrefs: ColumnPref[];
 }
 
 export function CrmManager({
   leads, statuses, totalPages, currentPage, currentSort, currentOrder,
   currentQuery, currentStatus, currentActivity, currentLastCall, currentFilters,
+  initialColumnPrefs,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
   const activeStatuses = statuses.filter((s) => s.is_active);
 
-  const defaultVisible = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key);
-  const [visibleCols, setVisibleCols] = useState<string[]>(defaultVisible);
+  const { visible, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
+    tableKey: "crm",
+    allColumns: ALL_COLUMNS,
+    initialPrefs: initialColumnPrefs,
+  });
+  const visibleKeys = visible.map((v) => v.col.key);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastIndex, setLastIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>(activeStatuses[0]?.id ?? "");
   const [pending, startTransition] = useTransition();
   const [showNewLead, setShowNewLead] = useState(false);
 
-  const columns = ALL_COLUMNS.filter((c) => visibleCols.includes(c.key));
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
 
   function updateParams(updates: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -90,10 +108,6 @@ export function CrmManager({
       else params.delete(k);
     }
     router.push(`/crm?${params.toString()}`);
-  }
-
-  function toggleColumn(key: string) {
-    setVisibleCols((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   }
 
   function toggleAll() {
@@ -219,7 +233,12 @@ export function CrmManager({
             <Plus className="h-4 w-4" />
             Neuer Lead
           </button>
-          <ColumnPicker columns={ALL_COLUMNS} visible={visibleCols} onToggle={toggleColumn} />
+          <ColumnPicker
+            columns={ALL_COLUMNS}
+            visible={visibleKeys}
+            onToggle={toggleVisibility}
+            onReset={reset}
+          />
         </div>
       </div>
 
@@ -306,84 +325,107 @@ export function CrmManager({
 
       {/* Tabelle */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
-          <thead className="bg-gray-50 dark:bg-[#232325]">
-            <tr>
-              <th className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={selected.size === leads.length && leads.length > 0}
-                  onChange={toggleAll}
-                  className="rounded border-gray-300 dark:border-gray-600"
-                />
-              </th>
-              {columns.map((col) => (
-                <SortableHeader
+        <DndContext
+          sensors={dndSensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(e) => {
+            if (e.over && e.active.id !== e.over.id) {
+              reorder(String(e.active.id), String(e.over.id));
+            }
+          }}
+        >
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+            <colgroup>
+              <col style={{ width: 48 }} />
+              {visible.map(({ col, width }) => (
+                <col
                   key={col.key}
-                  label={col.label}
-                  sortKey={col.key}
-                  currentSort={currentSort}
-                  currentOrder={currentOrder}
-                  onSort={(key) =>
-                    updateParams({
-                      sort: key,
-                      order: currentSort === key && currentOrder === "asc" ? "desc" : "asc",
-                      page: "1",
-                    })
-                  }
-                  filterable={col.filterable}
-                  currentFilter={currentFilters[col.key] ?? ""}
-                  onFilter={(k, v) => updateParams({ [`filter_${k}`]: v, page: "1" })}
+                  data-col-key={col.key}
+                  style={width ? { width } : undefined}
                 />
               ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
-            {leads.length === 0 ? (
+            </colgroup>
+            <thead className="bg-gray-50 dark:bg-[#232325]">
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-                  Keine Leads in der Pipeline.
-                </td>
-              </tr>
-            ) : (
-              leads.map((lead, i) => (
-                <tr
-                  key={lead.id}
-                  className={`cursor-pointer transition ${
-                    selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                  }`}
-                >
-                  <td
-                    className="px-4 py-3"
-                    onClick={(e) => { e.stopPropagation(); toggleOne(lead.id, i, e); }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(lead.id)}
-                      onChange={() => {}}
-                      className="rounded border-gray-300 dark:border-gray-600"
-                    />
-                  </td>
-                  {columns.map((col) => (
-                    <td
+                <th className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === leads.length && leads.length > 0}
+                    onChange={toggleAll}
+                    className="rounded border-gray-300 dark:border-gray-600"
+                  />
+                </th>
+                <SortableContext items={visibleKeys} strategy={horizontalListSortingStrategy}>
+                  {visible.map(({ col }) => (
+                    <DraggableResizableHeader
                       key={col.key}
-                      onClick={() => {
-                        const qs = searchParams.toString();
-                        const from = qs ? `?from=${encodeURIComponent(qs)}` : "";
-                        router.push(`/crm/${lead.id}${from}`);
-                      }}
-                      className={`whitespace-nowrap px-4 py-3 text-sm ${
-                        col.key === "company_name" ? "font-medium" : "text-gray-600 dark:text-gray-400"
-                      }`}
-                    >
-                      <CellRenderer lead={lead} colKey={col.key} statuses={statuses} formatDate={formatDate} />
-                    </td>
+                      columnKey={col.key}
+                      label={col.label}
+                      currentSort={currentSort}
+                      currentOrder={currentOrder}
+                      onSort={(key) =>
+                        updateParams({
+                          sort: key,
+                          order: currentSort === key && currentOrder === "asc" ? "desc" : "asc",
+                          page: "1",
+                        })
+                      }
+                      filterable={col.filterable}
+                      currentFilter={currentFilters[col.key] ?? ""}
+                      onFilter={(k, v) => updateParams({ [`filter_${k}`]: v, page: "1" })}
+                      onResize={setWidth}
+                    />
                   ))}
+                </SortableContext>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+              {leads.length === 0 ? (
+                <tr>
+                  <td colSpan={visible.length + 1} className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                    Keine Leads in der Pipeline.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                leads.map((lead, i) => (
+                  <tr
+                    key={lead.id}
+                    className={`cursor-pointer transition ${
+                      selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    <td
+                      className="px-4 py-3"
+                      onClick={(e) => { e.stopPropagation(); toggleOne(lead.id, i, e); }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected.has(lead.id)}
+                        onChange={() => {}}
+                        className="rounded border-gray-300 dark:border-gray-600"
+                      />
+                    </td>
+                    {visible.map(({ col }) => (
+                      <td
+                        key={col.key}
+                        onClick={() => {
+                          const qs = searchParams.toString();
+                          const from = qs ? `?from=${encodeURIComponent(qs)}` : "";
+                          router.push(`/crm/${lead.id}${from}`);
+                        }}
+                        className={`overflow-hidden text-ellipsis whitespace-nowrap px-4 py-3 text-sm ${
+                          col.key === "company_name" ? "font-medium" : "text-gray-600 dark:text-gray-400"
+                        }`}
+                      >
+                        <CellRenderer lead={lead} colKey={col.key} statuses={statuses} formatDate={formatDate} />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </DndContext>
       </div>
 
       <TablePagination

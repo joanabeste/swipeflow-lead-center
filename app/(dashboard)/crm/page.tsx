@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { CustomLeadStatus, Lead } from "@/lib/types";
 import { CrmManager, type CrmLead } from "./crm-manager";
+import { loadTablePrefs } from "@/lib/table-prefs";
 
 const PAGE_SIZE = 50;
 
@@ -177,6 +178,8 @@ export default async function CrmPage({
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
+  const initialColumnPrefs = await loadTablePrefs("crm");
+
   return (
     <div>
       <h1 className="text-2xl font-bold tracking-tight">CRM</h1>
@@ -197,6 +200,7 @@ export default async function CrmPage({
         currentActivity={sp.activity ?? ""}
         currentLastCall={sp.last_call ?? ""}
         currentFilters={columnFilters}
+        initialColumnPrefs={initialColumnPrefs}
       />
     </div>
   );

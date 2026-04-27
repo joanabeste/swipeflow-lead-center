@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Columns3 } from "lucide-react";
+import { Columns3, RotateCcw } from "lucide-react";
 
 export interface PickerColumn {
   key: string;
@@ -12,10 +12,13 @@ export function ColumnPicker({
   columns,
   visible,
   onToggle,
+  onReset,
 }: {
   columns: PickerColumn[];
   visible: string[];
   onToggle: (key: string) => void;
+  /** Wenn gesetzt, rendert das Dropdown einen "Auf Standard zurücksetzen"-Button. */
+  onReset?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -53,6 +56,22 @@ export function ColumnPicker({
               {col.label}
             </label>
           ))}
+          {onReset && (
+            <>
+              <div className="my-1 border-t border-gray-200 dark:border-gray-700" />
+              <button
+                type="button"
+                onClick={() => {
+                  onReset();
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Auf Standard zurücksetzen
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

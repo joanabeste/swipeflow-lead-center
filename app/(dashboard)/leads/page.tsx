@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Lead, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { LeadTableWrapper } from "./lead-table-wrapper";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
+import { loadTablePrefs } from "@/lib/table-prefs";
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -19,18 +20,7 @@ export default async function LeadsPage({ searchParams }: Props) {
   const includeCrm = params.include_crm === "1";
 
   const supabase = await createClient();
-
-  // Benutzer-Spalten-Präferenzen laden
-  const { data: { user } } = await supabase.auth.getUser();
-  let visibleColumns: string[] | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("lead_table_columns")
-      .eq("id", user.id)
-      .single();
-    visibleColumns = profile?.lead_table_columns as string[] | null;
-  }
+  const initialColumnPrefs = await loadTablePrefs("leads");
 
   let query = supabase
     .from("leads")
@@ -117,7 +107,7 @@ export default async function LeadsPage({ searchParams }: Props) {
         currentQuery={params.q ?? ""}
         currentStatus={params.status ?? ""}
         currentFilters={columnFilters}
-        visibleColumns={visibleColumns}
+        initialColumnPrefs={initialColumnPrefs}
         enrichmentDefaults={enrichmentDefaults}
         customStatuses={(customStatuses as CustomLeadStatus[]) ?? []}
       />
