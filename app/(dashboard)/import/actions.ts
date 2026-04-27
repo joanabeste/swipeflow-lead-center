@@ -7,6 +7,7 @@ import { normalizeLeadRow } from "@/lib/csv/normalizer";
 import { findInternalDuplicates, findDbDuplicates } from "@/lib/csv/dedup";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
+import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
 import { logAudit } from "@/lib/audit-log";
 import {
   validateCsvSize,
@@ -22,6 +23,7 @@ export async function processImport(
   mapping: Record<string, string>,
   delimiter: string,
   templateName?: string,
+  vertical: "webdesign" | "recruiting" | null = null,
 ) {
   const supabase = await createClient();
   const db = createServiceClient();
@@ -49,13 +51,23 @@ export async function processImport(
     return { error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
-  // Zeilen auf Lead-Feld-Schema mappen + CSV-Injection sanitizen
+  // Zeilen auf Lead-Feld-Schema mappen + CSV-Injection sanitizen.
+  // Mehrere Quellspalten auf "description" werden zu "Header: Wert\nHeader: Wert" verkettet
+  // (NorthData liefert z.B. Umsatz, Geschäftsführer, Status, Unternehmensgegenstand alle als description).
   const mappedRows = rows.map((row) => {
     const mapped: Record<string, string | null> = {};
     headers.forEach((header, i) => {
       const targetField = mapping[header];
-      if (targetField && row[i]) {
-        mapped[targetField] = sanitizeCellValue(row[i]);
+      if (!targetField || !row[i]) return;
+      const value = sanitizeCellValue(row[i]);
+      if (!value) return;
+      if (targetField === "description") {
+        const part = `${header}: ${value}`;
+        mapped.description = mapped.description
+          ? `${mapped.description}\n${part}`
+          : part;
+      } else {
+        mapped[targetField] = value;
       }
     });
     return normalizeLeadRow(mapped);
@@ -69,6 +81,12 @@ export async function processImport(
 
   // Blacklist-Regeln, Einträge und Cancel-Rules in einem Rutsch laden (gecacht für gesamten Import)
   const ctx = await loadImportContext(db);
+
+  // Webdesign-Vertikale: Schalter, ob Leads ohne Website akzeptiert werden
+  const webdevConfig = vertical === "webdesign" ? await getWebdevScoringConfig() : null;
+  const blockMissingWebsite = webdevConfig
+    ? webdevConfig.allow_leads_without_website === false
+    : false;
 
   let importedCount = 0;
   let skippedCount = 0;
@@ -163,6 +181,9 @@ export async function processImport(
       status = "cancelled";
       cancelReason = cancelResult.reasons.map((r) => r.reason).join("; ");
       cancelRuleId = cancelResult.reasons[0].ruleId;
+    } else if (blockMissingWebsite && !row.website) {
+      status = "cancelled";
+      cancelReason = "Webdesign-Import: keine Website";
     }
 
     leadsToInsert.push({
@@ -181,6 +202,7 @@ export async function processImport(
       register_id: row.register_id,
       website: row.website,
       description: row.description,
+      vertical,
       status,
       blacklist_hit: blacklistHit,
       blacklist_reason: blacklistReason,

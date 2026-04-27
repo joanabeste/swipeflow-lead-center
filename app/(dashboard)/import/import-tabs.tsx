@@ -1,23 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, Globe, List } from "lucide-react";
-import type { MappingTemplate } from "@/lib/types";
+import { Upload, Globe, List, Database, Palette, Users } from "lucide-react";
+import type { MappingTemplate, WebdevScoringConfig } from "@/lib/types";
 import { SmartImport } from "./smart-import";
+import { NorthDataImport } from "./northdata-import";
+import { WebdesignImport } from "./webdesign-import";
+import { RecruitingImport } from "./recruiting-import";
 import { UrlImport } from "./url-import";
 import { DirectoryImport } from "./directory-import";
 
 interface Props {
   templates: MappingTemplate[];
+  webdevConfig: WebdevScoringConfig;
 }
 
 const tabs = [
   { key: "csv", label: "CSV / Daten", icon: Upload },
+  { key: "webdesign", label: "Webdesign", icon: Palette },
+  { key: "recruiting", label: "Recruiting", icon: Users },
+  { key: "northdata", label: "NorthData", icon: Database },
   { key: "url", label: "Firmen-URL", icon: Globe },
   { key: "directory", label: "Verzeichnis-URL", icon: List },
 ];
 
-export function ImportTabs({ templates }: Props) {
+export function ImportTabs({ templates, webdevConfig }: Props) {
   const [activeTab, setActiveTab] = useState("csv");
 
   return (
@@ -40,6 +47,9 @@ export function ImportTabs({ templates }: Props) {
       </div>
       <div className="mt-6">
         {activeTab === "csv" && <SmartImport templates={templates} />}
+        {activeTab === "webdesign" && <WebdesignImport templates={templates} webdevConfig={webdevConfig} />}
+        {activeTab === "recruiting" && <RecruitingImport templates={templates} />}
+        {activeTab === "northdata" && <NorthDataImport templates={templates} />}
         {activeTab === "url" && <UrlImport />}
         {activeTab === "directory" && <DirectoryImport />}
       </div>

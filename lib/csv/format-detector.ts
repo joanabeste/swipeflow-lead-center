@@ -2,7 +2,7 @@
  * Erkennt automatisch das Format einer CSV-Datei anhand der Header.
  */
 
-export type CsvFormat = "job_listing" | "google_maps" | "standard";
+export type CsvFormat = "job_listing" | "google_maps" | "northdata" | "standard";
 
 export interface FormatDetectionResult {
   format: CsvFormat;
@@ -41,6 +41,26 @@ export function detectCsvFormat(
       format: "google_maps",
       label: "Google Maps",
       description: "Firmendaten aus Google Maps mit Bewertungen, Telefon und Website",
+    };
+  }
+
+  // NorthData: Mehrere typische Spalten gleichzeitig vorhanden (mind. 2 Treffer)
+  const northDataMarkers = [
+    "unternehmensgegenstand",
+    "ust.-id",
+    "mitarbeiterzahl",
+    "handelsregister",
+    "geschäftsführer",
+    "geschaeftsfuehrer",
+  ];
+  const northDataHits = northDataMarkers.filter((m) =>
+    lowerHeaders.some((h) => h === m),
+  ).length;
+  if (northDataHits >= 2) {
+    return {
+      format: "northdata",
+      label: "NorthData",
+      description: "Firmenexport von northdata.de (Handelsregister, Bilanz, Geschäftsführer)",
     };
   }
 

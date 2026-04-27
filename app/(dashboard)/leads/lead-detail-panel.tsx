@@ -51,6 +51,7 @@ export function LeadDetailPanel({ lead, changes }: Props) {
     setCurrentStatus(newStatus);
     startStatusTransition(async () => {
       await updateLead(lead.id, { status: newStatus });
+      router.refresh();
     });
   }
 

@@ -23,6 +23,7 @@ export async function getWebdevScoringConfig(): Promise<WebdevScoringConfig> {
       check_meta_tags: data.check_meta_tags ?? true,
       check_alt_tags: data.check_alt_tags ?? true,
       check_outdated_html: data.check_outdated_html ?? true,
+      allow_leads_without_website: data.allow_leads_without_website ?? true,
     };
   } catch {
     return DEFAULT_WEBDEV_SCORING;

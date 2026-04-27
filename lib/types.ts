@@ -47,6 +47,8 @@ export interface Lead {
   website: string | null;
   career_page_url: string | null;
   description: string | null;
+  /** Vertikale aus dem Import-Tab (Webdesign oder Recruiting). Null = generischer Import. */
+  vertical: "webdesign" | "recruiting" | null;
   /** Alte HubSpot-Referenz — bleibt als Altlast für Migrations-/Audit-Zwecke, wird nicht mehr geschrieben. */
   hubspot_company_id: string | null;
   /** ID aus der custom_lead_statuses-Tabelle — CRM-Workflow-Status (Sales). */
@@ -366,6 +368,8 @@ export interface WebdevScoringConfig {
   check_meta_tags: boolean;
   check_alt_tags: boolean;
   check_outdated_html: boolean;
+  /** Webdesign-Importe: Leads ohne Website akzeptieren statt sie zu cancellen. */
+  allow_leads_without_website: boolean;
 }
 
 export interface RecruitingScoringConfig {
@@ -391,6 +395,7 @@ export const DEFAULT_WEBDEV_SCORING: WebdevScoringConfig = {
   check_meta_tags: true,
   check_alt_tags: true,
   check_outdated_html: true,
+  allow_leads_without_website: true,
 };
 
 // ============================================================

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
-import type { EnrichmentConfig, ServiceMode, CompanyDetailField } from "@/lib/types";
+import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
@@ -37,6 +37,12 @@ interface EnrichResult {
 
 type Phase = "configure" | "running" | "complete";
 
+const POST_ENRICH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
+  { value: "enriched", label: "Angereichert" },
+  { value: "qualified", label: "Qualifiziert" },
+  { value: "exported", label: "Exportiert" },
+];
+
 export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
@@ -61,6 +67,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
   const [currentLead, setCurrentLead] = useState<string>("");
   const [completed, setCompleted] = useState(0);
   const [qualifying, setQualifying] = useState(false);
+  const [targetStatus, setTargetStatus] = useState<LeadStatus>("qualified");
   const [jobId, setJobId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,9 +181,10 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
 
   async function handleQualify(ids: string[]) {
     setQualifying(true);
-    await bulkUpdateStatus(ids, "qualified");
+    await bulkUpdateStatus(ids, targetStatus);
     setQualifying(false);
-    addToast(`${ids.length} Lead(s) als qualifiziert markiert`, "success");
+    const label = POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label ?? targetStatus;
+    addToast(`${ids.length} Lead(s) auf „${label}“ gesetzt`, "success");
     onClose();
   }
 
@@ -291,6 +299,28 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
                   )}
                 </div>
               )}
+
+              {/* Ziel-Status nach Anreicherung */}
+              <div className="rounded-md border border-gray-200 px-3 py-2.5 dark:border-[#2c2c2e]">
+                <label htmlFor="target-status" className="block text-sm font-medium">
+                  Ziel-Status nach Qualifizierung
+                </label>
+                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  Wird gesetzt, wenn du die angereicherten Leads anschließend qualifizierst.
+                </p>
+                <select
+                  id="target-status"
+                  value={targetStatus}
+                  onChange={(e) => setTargetStatus(e.target.value as LeadStatus)}
+                  className="mt-2 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-[#232325] dark:text-gray-100"
+                >
+                  {POST_ENRICH_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <button
                 onClick={startEnrichment}
@@ -483,7 +513,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
                     className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    {qualifying ? "Wird qualifiziert…" : `${readyResults.length} qualifizieren`}
+                    {qualifying ? "Wird gesetzt…" : `${readyResults.length} auf „${POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label}“ setzen`}
                   </button>
                 )}
                 {successResults.length > readyResults.length && (
@@ -492,7 +522,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults }: Props) {
                     disabled={qualifying}
                     className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
                   >
-                    Alle {successResults.length} qualifizieren
+                    Alle {successResults.length} auf „{POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label}“ setzen
                   </button>
                 )}
                 <button

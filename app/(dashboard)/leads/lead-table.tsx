@@ -129,6 +129,7 @@ export function LeadTable({
       } else {
         addToast(`${ids.length} Lead(s) auf "${statusLabels[bulkStatus]?.label ?? bulkStatus}" gesetzt`);
         setSelected(new Set());
+        router.refresh();
       }
     });
   }

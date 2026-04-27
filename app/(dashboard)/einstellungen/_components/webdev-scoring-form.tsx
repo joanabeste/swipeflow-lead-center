@@ -120,6 +120,30 @@ export function WebdevScoringForm({ config }: { config: WebdevScoringConfig }) {
           </div>
         </div>
 
+        {/* Import-Verhalten */}
+        <div className="mt-6">
+          <label className="block text-sm font-medium">Webdesign-Import</label>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Wie sollen Webdesign-Leads ohne Website behandelt werden?
+          </p>
+          <label
+            className="mt-3 flex items-start gap-2.5 rounded-lg border border-gray-200 p-3.5 text-sm transition has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:border-[#2c2c2e] dark:has-[:checked]:border-primary/60 dark:has-[:checked]:bg-primary/10"
+          >
+            <input
+              type="checkbox"
+              name="allow_leads_without_website"
+              defaultChecked={config.allow_leads_without_website}
+              className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+            />
+            <span>
+              <span className="block font-medium">Leads ohne Website zulassen</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                Aktiv: Webdesign-Leads ohne Website werden importiert. Inaktiv: sie werden als „cancelled“ markiert.
+              </span>
+            </span>
+          </label>
+        </div>
+
         {/* Aktive Checks */}
         <div className="mt-6">
           <label className="block text-sm font-medium">Welche Checks zählen als Issue?</label>

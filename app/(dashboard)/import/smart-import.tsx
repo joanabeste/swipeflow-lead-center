@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Info } from "lucide-react";
+import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Database, Info } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
 import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, type CsvFormat } from "@/lib/csv/format-detector";
 import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
@@ -12,6 +12,10 @@ import type { MappingTemplate } from "@/lib/types";
 
 interface Props {
   templates: MappingTemplate[];
+  /** Wenn gesetzt, wird die Format-Auto-Erkennung übersprungen und das Format hart gesetzt. */
+  forcedFormat?: CsvFormat;
+  /** Vertikale-Label, das jedem importierten Lead zugewiesen wird. */
+  vertical?: "webdesign" | "recruiting";
 }
 
 interface PreviewRow {
@@ -23,10 +27,18 @@ type Phase = "upload" | "detected" | "mapping" | "result";
 const FORMAT_ICONS: Record<CsvFormat, typeof FileSpreadsheet> = {
   job_listing: Briefcase,
   google_maps: MapPin,
+  northdata: Database,
   standard: FileSpreadsheet,
 };
 
-export function SmartImport({ templates }: Props) {
+const FORCED_FORMAT_META: Record<CsvFormat, { label: string; description: string }> = {
+  job_listing: { label: "BA Stellenanzeigen", description: "Stellenanzeigen der Bundesagentur für Arbeit" },
+  google_maps: { label: "Google Maps", description: "Firmendaten aus Google Maps" },
+  northdata: { label: "NorthData", description: "Firmenexport von northdata.de (Handelsregister, Bilanz, Geschäftsführer)" },
+  standard: { label: "Firmendaten", description: "Standard CSV mit Firmen- und Kontaktdaten" },
+};
+
+export function SmartImport({ templates, forcedFormat, vertical }: Props) {
   const [phase, setPhase] = useState<Phase>("upload");
   const [fileContent, setFileContent] = useState("");
   const [fileName, setFileName] = useState("");
@@ -96,8 +108,10 @@ export function SmartImport({ templates }: Props) {
     setHeaders(h);
     setAllRows(rows);
 
-    // Format erkennen
-    const detection = detectCsvFormat(h, rows.slice(0, 3));
+    // Format erkennen (oder hart gesetzt verwenden)
+    const detection = forcedFormat
+      ? { format: forcedFormat, ...FORCED_FORMAT_META[forcedFormat] }
+      : detectCsvFormat(h, rows.slice(0, 3));
     setFormat(detection.format);
     setFormatLabel(detection.label);
     setFormatDesc(detection.description);
@@ -167,7 +181,7 @@ export function SmartImport({ templates }: Props) {
         const res = await processGoogleMapsImport(allRows);
         setResult(res);
       } else {
-        const res = await processImport(fileContent, mapping, delimiter);
+        const res = await processImport(fileContent, mapping, delimiter, undefined, vertical ?? null);
         setResult(res);
       }
       setPhase("result");

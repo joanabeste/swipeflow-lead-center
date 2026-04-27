@@ -165,6 +165,7 @@ export async function saveWebdevScoring(
       check_meta_tags: formData.get("check_meta_tags") === "on",
       check_alt_tags: formData.get("check_alt_tags") === "on",
       check_outdated_html: formData.get("check_outdated_html") === "on",
+      allow_leads_without_website: formData.get("allow_leads_without_website") === "on",
       updated_by: user?.id ?? null,
       updated_at: new Date().toISOString(),
     },
