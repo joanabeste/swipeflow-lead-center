@@ -7,10 +7,14 @@ import { getHqLocation } from "@/lib/app-settings";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 }
 
-export default async function LeadDetailPage({ params }: Props) {
+export default async function LeadDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = await searchParams;
+  const from = sp.from ? decodeURIComponent(sp.from) : "";
+  const backHref = from ? `/leads?${from}` : "/leads";
   const db = createServiceClient();
 
   const [
@@ -59,6 +63,7 @@ export default async function LeadDetailPage({ params }: Props) {
       jobPostings={(jobPostings as LeadJobPosting[]) ?? []}
       latestEnrichment={(enrichments?.[0] as LeadEnrichment) ?? null}
       hq={hq}
+      backHref={backHref}
     />
   );
 }

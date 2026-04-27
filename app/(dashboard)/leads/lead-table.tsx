@@ -395,7 +395,11 @@ export function LeadTable({
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        onClick={() => router.push(`/leads/${lead.id}`)}
+                        onClick={() => {
+                          const qs = searchParams.toString();
+                          const from = qs ? `?from=${encodeURIComponent(qs)}` : "";
+                          router.push(`/leads/${lead.id}${from}`);
+                        }}
                         className={`whitespace-nowrap px-4 py-3 text-sm ${
                           col.key === "company_name"
                             ? "font-medium"

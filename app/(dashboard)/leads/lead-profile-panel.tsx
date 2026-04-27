@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
-import { updateLead } from "./actions";
+import { updateLead, deleteLead } from "./actions";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
@@ -61,6 +61,7 @@ export function LeadProfilePanel({
   const { mode: serviceMode } = useServiceMode();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
+  const [deletePending, startDeleteTransition] = useTransition();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
 
   const hasWebsite = !!(lead.website || lead.domain);
@@ -70,6 +71,14 @@ export function LeadProfilePanel({
     setCurrentStatus(newStatus);
     startStatusTransition(async () => {
       await updateLead(lead.id, { status: newStatus });
+    });
+  }
+
+  function handleDelete() {
+    if (!confirm("Lead in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.")) return;
+    startDeleteTransition(async () => {
+      const res = await deleteLead(lead.id);
+      if (!res.error) router.push(backHref);
     });
   }
 
@@ -125,6 +134,15 @@ export function LeadProfilePanel({
             ))}
           </select>
           {statusPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />}
+          <button
+            onClick={handleDelete}
+            disabled={deletePending}
+            title="Lead in den Papierkorb verschieben"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/10"
+          >
+            {deletePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Löschen
+          </button>
         </div>
       </div>
 
