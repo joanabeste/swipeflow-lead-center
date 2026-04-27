@@ -8,14 +8,13 @@ import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import { processJobListingImport } from "./job-listing-actions";
 import { processGoogleMapsImport } from "./google-maps-actions";
+import { useServiceMode } from "@/lib/service-mode";
 import type { MappingTemplate } from "@/lib/types";
 
 interface Props {
   templates: MappingTemplate[];
   /** Wenn gesetzt, wird die Format-Auto-Erkennung übersprungen und das Format hart gesetzt. */
   forcedFormat?: CsvFormat;
-  /** Vertikale-Label, das jedem importierten Lead zugewiesen wird. */
-  vertical?: "webdesign" | "recruiting";
 }
 
 interface PreviewRow {
@@ -38,7 +37,11 @@ const FORCED_FORMAT_META: Record<CsvFormat, { label: string; description: string
   standard: { label: "Firmendaten", description: "Standard CSV mit Firmen- und Kontaktdaten" },
 };
 
-export function SmartImport({ templates, forcedFormat, vertical }: Props) {
+export function SmartImport({ templates, forcedFormat }: Props) {
+  const { mode: serviceMode } = useServiceMode();
+  // Vertikale wird aus dem Service-Mode oben in der App abgeleitet, damit der
+  // Import automatisch das richtige Label setzt — ohne separate Tabs.
+  const vertical: "webdesign" | "recruiting" = serviceMode === "webdev" ? "webdesign" : "recruiting";
   const [phase, setPhase] = useState<Phase>("upload");
   const [fileContent, setFileContent] = useState("");
   const [fileName, setFileName] = useState("");
@@ -181,7 +184,7 @@ export function SmartImport({ templates, forcedFormat, vertical }: Props) {
         const res = await processGoogleMapsImport(allRows);
         setResult(res);
       } else {
-        const res = await processImport(fileContent, mapping, delimiter, undefined, vertical ?? null);
+        const res = await processImport(fileContent, mapping, delimiter, undefined, vertical);
         setResult(res);
       }
       setPhase("result");

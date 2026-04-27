@@ -15,7 +15,7 @@ export function detectCsvFormat(
   headers: string[],
   firstRows: string[][] = [],
 ): FormatDetectionResult {
-  const lowerHeaders = headers.map((h) => h.toLowerCase().trim());
+  const lowerHeaders = headers.map((h) => h.toLowerCase().trim().replace(/\.$/, ""));
 
   // BA Stellenanzeigen: "Kontakt" + "Stelle" + "Beschreibung"
   if (
@@ -44,7 +44,20 @@ export function detectCsvFormat(
     };
   }
 
-  // NorthData: Mehrere typische Spalten gleichzeitig vorhanden (mind. 2 Treffer)
+  // NorthData — Slam-Dunk: "North Data URL"-Spalte oder northdata.de in den Daten
+  const northDataResult: FormatDetectionResult = {
+    format: "northdata",
+    label: "NorthData",
+    description: "Firmenexport von northdata.de (Handelsregister, Bilanz, Geschäftsführer)",
+  };
+  if (
+    lowerHeaders.some((h) => h === "north data url") ||
+    firstRows.some((row) => row.some((cell) => cell.includes("northdata.de")))
+  ) {
+    return northDataResult;
+  }
+
+  // NorthData — Marker-basiert (mind. 2 Treffer)
   const northDataMarkers = [
     "unternehmensgegenstand",
     "ust.-id",
@@ -52,16 +65,21 @@ export function detectCsvFormat(
     "handelsregister",
     "geschäftsführer",
     "geschaeftsfuehrer",
+    "hr amtsgericht",
+    "register-id",
+    "branche (wz)",
+    "ges. vertreter 1",
+    "gegenstand",
+    "finanzkennzahlen datum",
+    "stamm-/grundkapital eur",
+    "bilanzsumme eur",
+    "rechtsform",
   ];
   const northDataHits = northDataMarkers.filter((m) =>
     lowerHeaders.some((h) => h === m),
   ).length;
   if (northDataHits >= 2) {
-    return {
-      format: "northdata",
-      label: "NorthData",
-      description: "Firmenexport von northdata.de (Handelsregister, Bilanz, Geschäftsführer)",
-    };
+    return northDataResult;
   }
 
   // Standard CSV

@@ -1,6 +1,5 @@
 import { ExternalLink, Briefcase } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
 import { ImportTabs } from "./import-tabs";
 import { ImportHistory } from "./import-history";
 
@@ -17,8 +16,6 @@ export default async function ImportPage() {
     .from("mapping_templates")
     .select("*")
     .order("name");
-
-  const webdevConfig = await getWebdevScoringConfig();
 
   // Robust gegen alte Schemata: zuerst minimale Spalten, dann Full-Select
   const { data: imports, error: importsError, count } = await db
@@ -60,7 +57,7 @@ export default async function ImportPage() {
       </a>
 
       <div className="mt-6">
-        <ImportTabs templates={templates ?? []} webdevConfig={webdevConfig} />
+        <ImportTabs templates={templates ?? []} />
       </div>
 
       <div className="mt-10">
