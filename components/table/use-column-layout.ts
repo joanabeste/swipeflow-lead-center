@@ -5,6 +5,10 @@ import { saveTablePrefs, resetTablePrefs } from "@/app/(dashboard)/_actions/tabl
 import type { ColumnPref, TableKey } from "@/lib/table-prefs";
 
 const SAVE_DEBOUNCE_MS = 500;
+/** Default-Breite, wenn Spalte noch nie resized wurde. Wird gebraucht, damit
+ *  `table-layout: fixed` zusammen mit dem horizontalen Container-Scroll
+ *  vorhersagbar arbeitet (alle Spalten haben *eine* Breite). */
+export const DEFAULT_COLUMN_WIDTH = 160;
 
 export interface BaseColumn {
   key: string;
@@ -154,5 +158,28 @@ export function useColumnLayout<T extends BaseColumn>({
     void resetTablePrefs(tableKey);
   }, [tableKey]);
 
-  return { resolved, visible, reorder, setWidth, toggleVisibility, reset };
+  /** Effektive Breite (gespeichert oder Default) — fuer table-layout:fixed. */
+  const widthOf = useCallback(
+    (r: ResolvedColumn<T>) => r.width ?? DEFAULT_COLUMN_WIDTH,
+    [],
+  );
+
+  /** Summe aller sichtbaren Spaltenbreiten — als Tabellenbreite zu setzen,
+   *  damit horizontaler Scroll im Container greift, sobald die Spalten zusammen
+   *  breiter als der sichtbare Bereich werden. */
+  const totalVisibleWidth = useMemo(
+    () => visible.reduce((sum, r) => sum + widthOf(r), 0),
+    [visible, widthOf],
+  );
+
+  return {
+    resolved,
+    visible,
+    widthOf,
+    totalVisibleWidth,
+    reorder,
+    setWidth,
+    toggleVisibility,
+    reset,
+  };
 }

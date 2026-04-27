@@ -83,11 +83,14 @@ export function LeadTable({
   const { mode: serviceMode } = useServiceMode();
 
   const modeColumns = ALL_COLUMNS.filter((c) => c.modes.includes(serviceMode));
-  const { visible, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
+  const { visible, widthOf, totalVisibleWidth, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
     tableKey: "leads",
     allColumns: modeColumns,
     initialPrefs: initialColumnPrefs,
   });
+  // 48px = Checkbox-Spalte; addieren, damit horizontal-scroll bei vielen
+  // Spalten greift sobald total > Container.
+  const tableWidth = totalVisibleWidth + 48;
   const visibleKeys = visible.map((v) => v.col.key);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
@@ -414,14 +417,17 @@ export function LeadTable({
             }
           }}
         >
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
+          <table
+            className="table-fixed divide-y divide-gray-200 dark:divide-[#2c2c2e]"
+            style={{ width: tableWidth }}
+          >
             <colgroup>
               <col style={{ width: 48 }} />
-              {visible.map(({ col, width }) => (
+              {visible.map((r) => (
                 <col
-                  key={col.key}
-                  data-col-key={col.key}
-                  style={width ? { width } : undefined}
+                  key={r.col.key}
+                  data-col-key={r.col.key}
+                  style={{ width: widthOf(r) }}
                 />
               ))}
             </colgroup>
