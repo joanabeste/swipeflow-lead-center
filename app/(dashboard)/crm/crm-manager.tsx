@@ -367,7 +367,11 @@ export function CrmManager({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      onClick={() => router.push(`/crm/${lead.id}`)}
+                      onClick={() => {
+                        const qs = searchParams.toString();
+                        const from = qs ? `?from=${encodeURIComponent(qs)}` : "";
+                        router.push(`/crm/${lead.id}${from}`);
+                      }}
                       className={`whitespace-nowrap px-4 py-3 text-sm ${
                         col.key === "company_name" ? "font-medium" : "text-gray-600 dark:text-gray-400"
                       }`}

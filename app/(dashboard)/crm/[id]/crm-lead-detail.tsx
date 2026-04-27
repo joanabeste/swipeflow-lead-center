@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2 } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
   EmailMessage,
@@ -15,6 +16,7 @@ import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
+import { deleteLead } from "../../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
 
 type AuthorProfile = { name: string; avatar_url: string | null };
@@ -52,19 +54,31 @@ interface Props {
   industries: Industry[];
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
+  backHref?: string;
 }
 
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages,
+  backHref = "/crm",
 }: Props) {
+  const router = useRouter();
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
   const [enrichError] = useState<string | null>(null);
+  const [deletePending, startDeleteTransition] = useTransition();
   const latestEnrichment = enrichments[0] ?? null;
 
   function handleEnrich() {
     setEnrichModalOpen(true);
+  }
+
+  function handleDelete() {
+    if (!confirm("Lead in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.")) return;
+    startDeleteTransition(async () => {
+      const res = await deleteLead(lead.id);
+      if (!res.error) router.push(backHref);
+    });
   }
 
   return (
@@ -72,7 +86,7 @@ export function CrmLeadDetail({
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/crm"
+          href={backHref}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -85,6 +99,15 @@ export function CrmLeadDetail({
           >
             <Sparkles className="h-3.5 w-3.5" />
             Anreichern…
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deletePending}
+            title="Lead in den Papierkorb verschieben"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:hover:bg-red-900/10"
+          >
+            {deletePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            Löschen
           </button>
         </div>
       </div>

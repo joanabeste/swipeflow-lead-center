@@ -14,8 +14,17 @@ import type { DealWithRelations } from "@/lib/deals/types";
 import { listCaseStudies, listIndustries, listLandingPagesForLead } from "@/lib/landing-pages/server";
 import { CrmLeadDetail } from "./crm-lead-detail";
 
-export default async function CrmLeadPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CrmLeadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  const from = sp.from ? decodeURIComponent(sp.from) : "";
+  const backHref = from ? `/crm?${from}` : "/crm";
   const db = createServiceClient();
 
   const [
@@ -229,6 +238,7 @@ export default async function CrmLeadPage({ params }: { params: Promise<{ id: st
       industries={industries}
       caseStudies={caseStudies}
       landingPages={landingPages}
+      backHref={backHref}
     />
   );
 }
