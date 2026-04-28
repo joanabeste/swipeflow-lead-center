@@ -338,8 +338,8 @@ export function CrmManager({
           }}
         >
           <table
-            className="table-fixed divide-y divide-gray-200 dark:divide-[#2c2c2e]"
-            style={{ width: tableWidth }}
+            className="w-full table-fixed divide-y divide-gray-200 dark:divide-[#2c2c2e]"
+            style={{ minWidth: tableWidth }}
           >
             <colgroup>
               <col style={{ width: 48 }} />
