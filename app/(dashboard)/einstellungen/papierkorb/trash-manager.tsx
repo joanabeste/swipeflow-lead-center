@@ -2,12 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Banknote, RotateCcw, Trash2, Clock, X } from "lucide-react";
+import { Building2, Banknote, RotateCcw, Trash2, Clock, X, CircleX } from "lucide-react";
 import { formatAmount } from "@/lib/deals/types";
 import { useToastContext } from "../../toast-provider";
 import {
   restoreLead, restoreDeal, purgeLead, purgeDeal,
   bulkRestoreLeads, bulkRestoreDeals, bulkPurgeLeads, bulkPurgeDeals,
+  archiveTrashedLead, bulkArchiveTrashedLeads,
   type TrashedLead, type TrashedDeal,
 } from "./actions";
 
@@ -192,6 +193,36 @@ function LeadsList({ leads }: { leads: TrashedLead[] }) {
     });
   }
 
+  function handleArchive(id: string, name: string) {
+    setPendingId(id);
+    startRow(async () => {
+      const res = await archiveTrashedLead(id);
+      setPendingId(null);
+      if ("error" in res) addToast(res.error, "error");
+      else {
+        addToast(`„${name}" als „Passt nicht" archiviert.`, "success", {
+          action: { label: "Aussortierte Leads öffnen", href: "/einstellungen/aussortierte-leads" },
+        });
+        router.refresh();
+      }
+    });
+  }
+
+  function handleBulkArchive() {
+    const selectedIds = Array.from(selected);
+    startBulk(async () => {
+      const res = await bulkArchiveTrashedLeads(selectedIds);
+      if ("error" in res) addToast(res.error, "error");
+      else {
+        addToast(`${res.count} ${res.count === 1 ? "Firma" : "Firmen"} aussortiert.`, "success", {
+          action: { label: "Aussortierte Leads öffnen", href: "/einstellungen/aussortierte-leads" },
+        });
+        clear();
+        router.refresh();
+      }
+    });
+  }
+
   return (
     <div className="space-y-3">
       {selected.size > 0 && (
@@ -200,6 +231,7 @@ function LeadsList({ leads }: { leads: TrashedLead[] }) {
           label={`${selected.size} ${selected.size === 1 ? "Firma" : "Firmen"} ausgewählt`}
           pending={bulkPending}
           onRestore={handleBulkRestore}
+          onArchive={handleBulkArchive}
           onPurge={handleBulkPurge}
           onClear={clear}
         />
@@ -260,6 +292,16 @@ function LeadsList({ leads }: { leads: TrashedLead[] }) {
                       >
                         <RotateCcw className="h-3 w-3" />
                         Wiederherstellen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleArchive(l.id, l.company_name)}
+                        disabled={pendingId === l.id || bulkPending}
+                        title="Als „Passt nicht“ aussortieren"
+                        className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-white px-2 py-1 text-xs text-orange-700 hover:bg-orange-50 disabled:opacity-50 dark:border-orange-900/40 dark:bg-[#232325] dark:text-orange-400 dark:hover:bg-orange-900/20"
+                      >
+                        <CircleX className="h-3 w-3" />
+                        Aussortieren
                       </button>
                       <button
                         type="button"
@@ -469,12 +511,13 @@ function Checkbox({
 }
 
 function BulkActionBar({
-  label, pending, onRestore, onPurge, onClear,
+  label, pending, onRestore, onArchive, onPurge, onClear,
 }: {
   count: number;
   label: string;
   pending: boolean;
   onRestore: () => void;
+  onArchive?: () => void;
   onPurge: () => void;
   onClear: () => void;
 }) {
@@ -490,6 +533,17 @@ function BulkActionBar({
         <RotateCcw className="h-3 w-3" />
         Alle wiederherstellen
       </button>
+      {onArchive && (
+        <button
+          type="button"
+          onClick={onArchive}
+          disabled={pending}
+          className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-white px-3 py-1 text-xs text-orange-700 hover:bg-orange-50 disabled:opacity-50 dark:border-orange-900/40 dark:bg-[#232325] dark:text-orange-400 dark:hover:bg-orange-900/20"
+        >
+          <CircleX className="h-3 w-3" />
+          Alle aussortieren
+        </button>
+      )}
       <button
         type="button"
         onClick={onPurge}
