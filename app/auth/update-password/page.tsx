@@ -5,6 +5,7 @@ import Link from "next/link";
 import { updatePassword } from "@/app/login/actions";
 import { Lock, Check } from "lucide-react";
 import { SwipeflowLogo } from "@/app/(dashboard)/swipeflow-logo";
+import { PasswordInput } from "@/components/password-input";
 
 export default function UpdatePasswordPage() {
   const [state, formAction, pending] = useActionState(updatePassword, undefined);
@@ -45,10 +46,9 @@ export default function UpdatePasswordPage() {
             )}
             <div>
               <label htmlFor="password" className="block text-sm font-medium">Neues Passwort</label>
-              <input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 required
                 minLength={8}
                 autoComplete="new-password"
@@ -58,10 +58,9 @@ export default function UpdatePasswordPage() {
             </div>
             <div>
               <label htmlFor="confirm" className="block text-sm font-medium">Passwort bestätigen</label>
-              <input
+              <PasswordInput
                 id="confirm"
                 name="confirm"
-                type="password"
                 required
                 minLength={8}
                 autoComplete="new-password"

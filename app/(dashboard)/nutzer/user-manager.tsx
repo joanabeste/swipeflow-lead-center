@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Plus, Trash2, KeyRound } from "lucide-react";
 import type { Profile } from "@/lib/types";
 import { createUser, updateUser, deleteUser, resetPassword } from "./actions";
+import { PasswordInput } from "@/components/password-input";
 
 interface Props {
   profiles: Profile[];
@@ -51,9 +52,8 @@ export function UserManager({ profiles, currentUserId }: Props) {
           </div>
           <div className="w-36">
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Passwort</label>
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               required
               minLength={8}
               className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"

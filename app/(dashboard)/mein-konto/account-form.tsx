@@ -4,6 +4,7 @@ import { useActionState, useEffect } from "react";
 import { Lock, Check } from "lucide-react";
 import { changeMyPassword } from "./actions";
 import { useToastContext } from "../toast-provider";
+import { PasswordInput } from "@/components/password-input";
 
 export function AccountForm() {
   const [state, formAction, pending] = useActionState(changeMyPassword, undefined);
@@ -19,10 +20,9 @@ export function AccountForm() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="newPassword" className="block text-sm font-medium">Neues Passwort</label>
-          <input
+          <PasswordInput
             id="newPassword"
             name="newPassword"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"
@@ -32,10 +32,9 @@ export function AccountForm() {
         </div>
         <div>
           <label htmlFor="confirm" className="block text-sm font-medium">Passwort bestätigen</label>
-          <input
+          <PasswordInput
             id="confirm"
             name="confirm"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"

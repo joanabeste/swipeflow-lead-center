@@ -4,6 +4,7 @@ import { useState, useActionState } from "react";
 import { loginWithPassword, sendMagicLink, sendPasswordReset } from "./actions";
 import { Mail, Lock, KeyRound, ArrowLeft } from "lucide-react";
 import { SwipeflowLogo } from "../(dashboard)/swipeflow-logo";
+import { PasswordInput } from "@/components/password-input";
 
 type Tab = "password" | "magic" | "reset";
 
@@ -128,10 +129,9 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label htmlFor="pw-password" className="block text-sm font-medium">Passwort</label>
-                  <input
+                  <PasswordInput
                     id="pw-password"
                     name="password"
-                    type="password"
                     required
                     autoComplete="current-password"
                     placeholder="••••••••"

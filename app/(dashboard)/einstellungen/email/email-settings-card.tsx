@@ -7,6 +7,7 @@ import type { UserSmtpRecord } from "@/lib/email/user-credentials";
 import { saveEmailSettings, testEmailSettings, deleteEmailSettings } from "./actions";
 import { useToastContext } from "../../toast-provider";
 import { FormStatus, SubmitButton } from "../_components/ui";
+import { PasswordInput } from "@/components/password-input";
 
 type SecurityMode = "starttls" | "ssl";
 
@@ -153,8 +154,8 @@ export function EmailSettingsCard({ smtp }: { smtp: UserSmtpRecord | null }) {
                 </button>
               </div>
             ) : (
-              <input
-                id="password" name="password" type="password"
+              <PasswordInput
+                id="password" name="password"
                 required={!smtp}
                 placeholder={smtp ? "Leer lassen = unverändert" : ""}
                 className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
