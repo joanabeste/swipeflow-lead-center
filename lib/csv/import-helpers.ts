@@ -23,6 +23,57 @@ export function validateCsvSize(rowCount: number): ImportLimitError | null {
   return null;
 }
 
+// ─── Google-Maps-Export Helpers ─────────────────────────────
+
+/**
+ * Behebt Mojibake-Zeichen aus als Latin-1 fehl-decodiertem UTF-8.
+ * Tritt bei Google-Maps-Exports und Instant-Data-Scraper-CSVs regelmäßig auf.
+ */
+export function fixMojibake(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/Ã¤/g, "ä").replace(/Ã¶/g, "ö").replace(/Ã¼/g, "ü")
+    .replace(/Ã„/g, "Ä").replace(/Ã–/g, "Ö").replace(/Ãœ/g, "Ü")
+    .replace(/ÃŸ/g, "ß").replace(/Â·/g, "").replace(/Â­/g, "")
+    .replace(/Â /g, " ").trim();
+}
+
+/**
+ * Extrahiert Website-URL und Domain. Filtert Google-Ads-Tracking-Links (`google.com/aclk`)
+ * komplett aus, weil sie nicht zur Firma führen.
+ */
+export function extractWebsiteAndDomain(websiteRaw: string | null | undefined): {
+  website: string | null;
+  domain: string | null;
+} {
+  const trimmed = websiteRaw?.trim() ?? "";
+  if (!trimmed) return { website: null, domain: null };
+  if (trimmed.includes("google.com/aclk")) return { website: null, domain: null };
+  let domain: string | null = null;
+  try {
+    const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
+    domain = url.hostname.replace(/^www\./, "");
+  } catch { /* ignore */ }
+  return { website: trimmed, domain };
+}
+
+/**
+ * Parst PLZ + Stadt aus dem Adress-Pfad einer Google-Maps-`/maps/dir/`-URL.
+ * Beispiel-Eingabe (URL-encoded): `…/Auewiesen+9,+32339+Espelkamp/data=…`
+ * → `{ zip: "32339", city: "Espelkamp" }`. Bei Miss → beide null.
+ */
+export function parseCityZipFromMapsUrl(url: string | null | undefined): {
+  city: string | null;
+  zip: string | null;
+} {
+  if (!url) return { city: null, zip: null };
+  let decoded: string;
+  try { decoded = decodeURIComponent(url); } catch { decoded = url; }
+  const m = decoded.match(/,\s*(\d{5})\s+([^,/]+?)(?=\/|,|$)/);
+  if (!m) return { city: null, zip: null };
+  return { zip: m[1], city: m[2].trim() };
+}
+
 // ─── CSV-Injection-Schutz ───────────────────────────────────
 
 /**

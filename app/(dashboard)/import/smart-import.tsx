@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Database, Info } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
-import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, type CsvFormat } from "@/lib/csv/format-detector";
+import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, INSTANT_SCRAPER_COLUMNS, type CsvFormat } from "@/lib/csv/format-detector";
 import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import { processJobListingImport } from "./job-listing-actions";
 import { processGoogleMapsImport } from "./google-maps-actions";
+import { processInstantScraperImport } from "./instant-scraper-actions";
 import { useServiceMode } from "@/lib/service-mode";
 import type { MappingTemplate } from "@/lib/types";
 
@@ -26,6 +27,7 @@ type Phase = "upload" | "detected" | "mapping" | "result";
 const FORMAT_ICONS: Record<CsvFormat, typeof FileSpreadsheet> = {
   job_listing: Briefcase,
   google_maps: MapPin,
+  google_maps_directory: MapPin,
   northdata: Database,
   standard: FileSpreadsheet,
 };
@@ -33,6 +35,7 @@ const FORMAT_ICONS: Record<CsvFormat, typeof FileSpreadsheet> = {
 const FORCED_FORMAT_META: Record<CsvFormat, { label: string; description: string }> = {
   job_listing: { label: "BA Stellenanzeigen", description: "Stellenanzeigen der Bundesagentur für Arbeit" },
   google_maps: { label: "Google Maps", description: "Firmendaten aus Google Maps" },
+  google_maps_directory: { label: "Google Maps (Liste)", description: "Instant-Data-Scraper-Export aus der Google-Maps-Trefferliste" },
   northdata: { label: "NorthData", description: "Firmenexport von northdata.de (Handelsregister, Bilanz, Geschäftsführer)" },
   standard: { label: "Firmendaten", description: "Standard CSV mit Firmen- und Kontaktdaten" },
 };
@@ -157,6 +160,23 @@ export function SmartImport({ templates, forcedFormat }: Props) {
       })));
       setTotalRows(validRows.filter((r) => r[col.companyName]?.trim()).length);
       setPhase("detected");
+    } else if (detection.format === "google_maps_directory") {
+      const findIdx = (name: string) => h.findIndex((x) => x.trim() === name);
+      const iName = findIdx(INSTANT_SCRAPER_COLUMNS.companyName);
+      const iCategory = findIdx(INSTANT_SCRAPER_COLUMNS.category);
+      const iAddrPhone = findIdx(INSTANT_SCRAPER_COLUMNS.addressPhone);
+      const iWebsite = findIdx(INSTANT_SCRAPER_COLUMNS.website);
+      setPreviewHeaders(["Firma", "Branche", "Adresse · Telefon", "Website"]);
+      setPreview(validRows.slice(0, 15).map((r) => ({
+        cells: [
+          truncate(r[iName], 35),
+          truncate(r[iCategory]?.replace(/^[·\s]+/, ""), 20),
+          truncate(r[iAddrPhone], 35),
+          truncate(r[iWebsite], 30),
+        ],
+      })));
+      setTotalRows(validRows.filter((r) => r[iName]?.trim()).length);
+      setPhase("detected");
     } else {
       // Standard CSV → Auto-Mapping + Mapping-Schritt
       const autoMapping: Record<string, string> = {};
@@ -183,6 +203,9 @@ export function SmartImport({ templates, forcedFormat }: Props) {
         setResult(res);
       } else if (format === "google_maps") {
         const res = await processGoogleMapsImport(allRows);
+        setResult(res);
+      } else if (format === "google_maps_directory") {
+        const res = await processInstantScraperImport(allRows, headers, vertical);
         setResult(res);
       } else {
         const res = await processImport(fileContent, mapping, delimiter, undefined, vertical);
@@ -218,7 +241,7 @@ export function SmartImport({ templates, forcedFormat }: Props) {
             <Upload className={`h-10 w-10 ${dragging ? "text-primary" : "text-gray-400"}`} />
             <p className="mt-2 text-sm font-medium">CSV-Datei auswählen oder hierher ziehen</p>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              Firmendaten, Stellenanzeigen oder Google Maps — wird automatisch erkannt
+              Firmendaten, Stellenanzeigen, Google Maps oder Instant-Data-Scraper — wird automatisch erkannt
             </p>
             <input type="file" accept=".csv,.txt" onChange={(e) => { const f = e.target.files?.[0]; if (f) processFile(f); }} className="hidden" />
           </label>

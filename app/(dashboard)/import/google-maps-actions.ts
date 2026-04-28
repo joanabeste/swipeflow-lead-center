@@ -15,17 +15,9 @@ import {
   createImportLog,
   finalizeImportLog,
   batchInsert,
+  fixMojibake,
+  extractWebsiteAndDomain,
 } from "@/lib/csv/import-helpers";
-
-// Mojibake-Fix für Google-Maps-Exports
-function fixMojibake(s: string | undefined): string {
-  if (!s) return "";
-  return s
-    .replace(/Ã¤/g, "ä").replace(/Ã¶/g, "ö").replace(/Ã¼/g, "ü")
-    .replace(/Ã„/g, "Ä").replace(/Ã–/g, "Ö").replace(/Ãœ/g, "Ü")
-    .replace(/ÃŸ/g, "ß").replace(/Â·/g, "").replace(/Â­/g, "")
-    .replace(/Â /g, " ").trim();
-}
 
 export async function processGoogleMapsImport(rows: string[][]): Promise<{
   success: boolean;
@@ -78,21 +70,10 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
   for (const row of validRows) {
     const companyName = sanitizeCellValue(fixMojibake(row[col.companyName])) ?? "";
     const phone = sanitizeCellValue(fixMojibake(row[col.phone]));
-    const websiteRaw = row[col.website]?.trim() ?? "";
     const category = sanitizeCellValue(fixMojibake(row[col.category]));
     const address = sanitizeCellValue(fixMojibake(row[col.address]));
 
-    // Website bereinigen (Google Ads Links ausfiltern)
-    const website = websiteRaw.includes("google.com/aclk") ? null : websiteRaw || null;
-
-    // Domain extrahieren
-    let domain: string | null = null;
-    if (website) {
-      try {
-        const url = new URL(website.startsWith("http") ? website : `https://${website}`);
-        domain = url.hostname.replace(/^www\./, "");
-      } catch { /* ignore */ }
-    }
+    const { website, domain } = extractWebsiteAndDomain(row[col.website]);
 
     // Blacklist + Cancel
     const leadData: Record<string, string | null> = { company_name: companyName, domain, phone };

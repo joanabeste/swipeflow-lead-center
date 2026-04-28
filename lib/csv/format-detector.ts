@@ -2,7 +2,12 @@
  * Erkennt automatisch das Format einer CSV-Datei anhand der Header.
  */
 
-export type CsvFormat = "job_listing" | "google_maps" | "northdata" | "standard";
+export type CsvFormat =
+  | "job_listing"
+  | "google_maps"
+  | "google_maps_directory"
+  | "northdata"
+  | "standard";
 
 export interface FormatDetectionResult {
   format: CsvFormat;
@@ -27,6 +32,19 @@ export function detectCsvFormat(
       format: "job_listing",
       label: "BA Stellenanzeigen",
       description: "Stellenanzeigen der Bundesagentur für Arbeit mit Ansprechpartnern und Kontaktdaten",
+    };
+  }
+
+  // Google Maps Directory (Instant Data Scraper): Header-Klassen "OSrXXb"/"yYlJEf" oder /maps/dir/-URLs
+  if (
+    lowerHeaders.some((h) => h === "osrxxb" || h === "yylyef href" || h === "yylyef href 2") ||
+    lowerHeaders.filter((h) => h.startsWith("rllt__details")).length >= 2 ||
+    firstRows.some((row) => row.some((cell) => cell.includes("google.com/maps/dir")))
+  ) {
+    return {
+      format: "google_maps_directory",
+      label: "Google Maps (Liste)",
+      description: "Instant-Data-Scraper-Export aus der Google-Maps-Trefferliste",
     };
   }
 
@@ -102,3 +120,14 @@ export const GOOGLE_MAPS_COLUMNS = {
   website: 11,      // lcr4fd href
   review: 17,       // ah5Ghc (Bewertungstext)
 };
+
+/** Instant Data Scraper (Google Maps Liste) — Header-basiertes Mapping. */
+export const INSTANT_SCRAPER_COLUMNS = {
+  companyName: "OSrXXb",
+  category: "rllt__details",
+  rating: "yi40Hd",          // verworfen, kein DB-Feld
+  reviewCount: "RDApEe",     // verworfen, kein DB-Feld
+  addressPhone: "rllt__details 2",
+  website: "yYlJEf href",
+  mapsUrl: "yYlJEf href 2",
+} as const;
