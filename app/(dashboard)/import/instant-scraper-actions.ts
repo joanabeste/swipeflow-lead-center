@@ -18,6 +18,8 @@ import {
   fixMojibake,
   extractWebsiteAndDomain,
   parseCityZipFromMapsUrl,
+  looksLikePhone,
+  looksLikeUrl,
 } from "@/lib/csv/import-helpers";
 
 type InstantScraperResult = {
@@ -100,19 +102,35 @@ export async function processInstantScraperImport(
     const categoryRaw = fixMojibake(cCategory >= 0 ? row[cCategory] : "");
     const industry = sanitizeCellValue(categoryRaw.replace(/^[·\s]+/, ""));
 
-    // "Straße · Telefon" am ERSTEN "·" splitten
+    // "Straße · Telefon" am ERSTEN "·" splitten — aber jeder Teil kann auch URL,
+    // Telefon oder Adresse sein. Wir klassifizieren beide Teile heuristisch.
     const addrPhone = fixMojibake(cAddressPhone >= 0 ? row[cAddressPhone] : "");
+    const segments = addrPhone
+      .split("·")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     let street: string | null = null;
     let phone: string | null = null;
-    const sepIdx = addrPhone.indexOf("·");
-    if (sepIdx >= 0) {
-      street = sanitizeCellValue(addrPhone.slice(0, sepIdx));
-      phone = sanitizeCellValue(addrPhone.slice(sepIdx + 1));
-    } else {
-      street = sanitizeCellValue(addrPhone);
+    let websiteFromAddrPhone: string | null = null;
+    for (const seg of segments) {
+      if (looksLikePhone(seg)) {
+        if (!phone) phone = seg;
+      } else if (looksLikeUrl(seg)) {
+        if (!websiteFromAddrPhone) websiteFromAddrPhone = seg;
+      } else if (!street) {
+        street = seg;
+      }
     }
+    street = sanitizeCellValue(street);
+    phone = sanitizeCellValue(phone);
 
-    const { website, domain } = extractWebsiteAndDomain(cWebsite >= 0 ? row[cWebsite] : null);
+    // Website primär aus eigener Spalte, Fallback aus addrPhone
+    const websiteRaw = cWebsite >= 0 ? row[cWebsite] : null;
+    const websitePrimary = extractWebsiteAndDomain(websiteRaw);
+    const { website, domain } = websitePrimary.domain
+      ? websitePrimary
+      : extractWebsiteAndDomain(websiteFromAddrPhone);
 
     const mapsUrl = (cMapsUrl >= 0 ? row[cMapsUrl]?.trim() : "") || null;
     const { city, zip } = parseCityZipFromMapsUrl(mapsUrl);

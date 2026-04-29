@@ -40,7 +40,8 @@ export function fixMojibake(s: string | null | undefined): string {
 
 /**
  * Extrahiert Website-URL und Domain. Filtert Google-Ads-Tracking-Links (`google.com/aclk`)
- * komplett aus, weil sie nicht zur Firma führen.
+ * und ungültige Werte (kein gültiger Hostname mit TLD) komplett aus, sodass nur
+ * brauchbare Domains durchkommen.
  */
 export function extractWebsiteAndDomain(websiteRaw: string | null | undefined): {
   website: string | null;
@@ -49,12 +50,38 @@ export function extractWebsiteAndDomain(websiteRaw: string | null | undefined): 
   const trimmed = websiteRaw?.trim() ?? "";
   if (!trimmed) return { website: null, domain: null };
   if (trimmed.includes("google.com/aclk")) return { website: null, domain: null };
-  let domain: string | null = null;
   try {
     const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-    domain = url.hostname.replace(/^www\./, "");
-  } catch { /* ignore */ }
-  return { website: trimmed, domain };
+    const host = url.hostname.replace(/^www\./, "");
+    // Hostname muss mindestens einen Punkt haben (echte Domain mit TLD)
+    if (!host.includes(".")) return { website: null, domain: null };
+    return { website: trimmed, domain: host };
+  } catch {
+    return { website: null, domain: null };
+  }
+}
+
+/** Erkennt, ob ein String wie eine URL aussieht (auch ohne http-Prefix). */
+export function looksLikeUrl(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  if (/^https?:\/\//i.test(t)) return true;
+  if (/^www\./i.test(t)) return true;
+  // Domain-ähnlich: foo.bar(/...)
+  return /^[a-z0-9-]+\.[a-z]{2,}(\/|$)/i.test(t);
+}
+
+/**
+ * Erkennt eine Telefonnummer (DE-tolerant): muss mind. 5 Ziffern enthalten und darf
+ * neben Ziffern nur Leerzeichen, +, -, /, () enthalten. Schließt URLs explizit aus.
+ */
+export function looksLikePhone(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  if (looksLikeUrl(t)) return false;
+  const digits = t.replace(/\D/g, "");
+  if (digits.length < 5) return false;
+  return /^[\d\s+\-/().]+$/.test(t);
 }
 
 /**
