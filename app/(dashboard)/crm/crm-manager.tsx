@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, Trash2, StickyNote, MessageSquare, Plus } from "lucide-react";
+import { Download, Trash2, StickyNote, MessageSquare, Plus, CircleX } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -14,7 +14,8 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import type { CustomLeadStatus } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
 import { updateCrmStatus } from "./actions";
-import { bulkDeleteLeads } from "../leads/actions";
+import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
+import { useServiceMode } from "@/lib/service-mode";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
@@ -83,6 +84,7 @@ export function CrmManager({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
+  const { mode: serviceMode } = useServiceMode();
   const activeStatuses = statuses.filter((s) => s.is_active);
 
   const { visible, widthOf, totalVisibleWidth, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
@@ -157,6 +159,47 @@ export function CrmManager({
         setSelected(new Set());
         router.refresh();
       }
+    });
+  }
+
+  function handleBulkArchive() {
+    const count = selected.size;
+    if (!confirm(
+      `${count} Lead${count === 1 ? "" : "s"} aussortieren? ` +
+      `${count === 1 ? "Er erscheint" : "Sie erscheinen"} nicht mehr im CRM oder unter Neue Leads ` +
+      `und ${count === 1 ? "wird" : "werden"} der KI als Negativ-Signal gemeldet.`,
+    )) return;
+    const ids = Array.from(selected);
+    const mode = serviceMode === "webdev" ? "webdev" : "recruiting";
+    startTransition(async () => {
+      const res = await bulkArchiveLeads(ids, mode);
+      if ("error" in res && res.error) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      const previous = "previous" in res ? res.previous : [];
+      addToast(
+        `${count} Lead${count === 1 ? "" : "s"} aussortiert.`,
+        "success",
+        {
+          action: {
+            label: "Rückgängig",
+            onClick: () => {
+              startTransition(async () => {
+                const undo = await bulkRestoreCrmStatus(previous);
+                if ("error" in undo && undo.error) {
+                  addToast(`Fehler beim Rückgängig: ${undo.error}`, "error");
+                } else {
+                  addToast("Aussortierung rückgängig gemacht.", "success");
+                  router.refresh();
+                }
+              });
+            },
+          },
+        },
+      );
+      setSelected(new Set());
+      router.refresh();
     });
   }
 
@@ -315,6 +358,15 @@ export function CrmManager({
           >
             <Trash2 className="h-3.5 w-3.5" />
             Löschen
+          </button>
+          <button
+            onClick={handleBulkArchive}
+            disabled={pending}
+            title="Lead(s) aussortieren — erscheinen nicht mehr im CRM oder unter Neue Leads"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-orange-600 hover:bg-orange-50 disabled:opacity-50 dark:border-gray-700 dark:text-orange-400 dark:hover:bg-orange-900/10"
+          >
+            <CircleX className="h-3.5 w-3.5" />
+            Aussortieren
           </button>
           <div className="h-4 w-px bg-gray-300 dark:bg-[#2c2c2e]" />
           <button
