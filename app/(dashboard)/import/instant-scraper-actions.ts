@@ -102,12 +102,13 @@ export async function processInstantScraperImport(
     const categoryRaw = fixMojibake(cCategory >= 0 ? row[cCategory] : "");
     const industry = sanitizeCellValue(categoryRaw.replace(/^[·\s]+/, ""));
 
-    // "Straße · Telefon" am ERSTEN "·" splitten — aber jeder Teil kann auch URL,
-    // Telefon oder Adresse sein. Wir klassifizieren beide Teile heuristisch.
-    const addrPhone = fixMojibake(cAddressPhone >= 0 ? row[cAddressPhone] : "");
-    const segments = addrPhone
-      .split("·")
-      .map((s) => s.trim())
+    // "Straße · Telefon" splitten. Wichtig: ZUERST splitten (auf Mojibake-Â·
+    // ODER proper Unicode-·), DANN pro Segment fixMojibake — sonst frisst der
+    // Mojibake-Fix den Trenner.
+    const addrPhoneRaw = cAddressPhone >= 0 ? (row[cAddressPhone] ?? "") : "";
+    const segments = addrPhoneRaw
+      .split(/Â·|·/)
+      .map((s) => fixMojibake(s))
       .filter(Boolean);
 
     let street: string | null = null;
