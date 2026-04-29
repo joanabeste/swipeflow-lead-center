@@ -3,10 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus } from "@/lib/types";
-import { bulkRestoreCrmStatus } from "./actions";
+import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead } from "./actions";
 import { ResizableColumns } from "@/components/resizable-columns";
@@ -85,6 +85,21 @@ export function LeadProfilePanel({
     startUnarchive(async () => {
       const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
       if (!("error" in res) || !res.error) router.refresh();
+    });
+  }
+
+  const [archivePending, startArchiveTransition] = useTransition();
+  function handleArchive() {
+    if (archivedStatus) return;
+    if (!confirm("Lead aussortieren? Er erscheint nicht mehr unter Neue Leads oder im CRM und wird der KI als Negativ-Signal gemeldet. Du kannst ihn jederzeit ueber das Banner wiederherstellen.")) return;
+    startArchiveTransition(async () => {
+      const mode = serviceMode === "webdev" ? "webdev" : "recruiting";
+      const res = await bulkArchiveLeads([lead.id], mode);
+      if ("error" in res && res.error) {
+        alert(res.error);
+        return;
+      }
+      router.refresh();
     });
   }
 
@@ -181,6 +196,19 @@ export function LeadProfilePanel({
               {statusPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
             </span>
           </div>
+
+          {/* Aussortieren — neutral, nicht destruktiv. Banner uebernimmt das Wiederherstellen. */}
+          {!archivedStatus && (
+            <button
+              onClick={handleArchive}
+              disabled={archivePending}
+              title="Lead aussortieren — erscheint nicht mehr in Neue Leads oder im CRM"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              {archivePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+              <span className="hidden sm:inline">Aussortieren</span>
+            </button>
+          )}
 
           {/* Loeschen — destructive, etwas separiert. */}
           <button
