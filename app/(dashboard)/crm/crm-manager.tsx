@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, Trash2, StickyNote, MessageSquare, Plus, CircleX } from "lucide-react";
+import { Download, Trash2, StickyNote, MessageSquare, Plus, CircleX, CalendarClock } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -42,6 +42,10 @@ export interface CrmLead {
   call_count: number;
   last_call_at: string | null;
   note_count: number;
+  /** Frühestes offenes Todo (next_todo_due IS NULL = keine offene Aufgabe). */
+  next_todo_due: string | null;
+  next_todo_title: string | null;
+  open_todo_count: number;
 }
 
 const ALL_COLUMNS: { key: string; label: string; defaultVisible: boolean; filterable?: boolean }[] = [
@@ -54,6 +58,7 @@ const ALL_COLUMNS: { key: string; label: string; defaultVisible: boolean; filter
   { key: "phone", label: "Telefon", defaultVisible: true, filterable: true },
   { key: "email", label: "E-Mail", defaultVisible: false, filterable: true },
   { key: "crm_status_id", label: "CRM-Status", defaultVisible: true },
+  { key: "next_todo", label: "Nächste Aktion", defaultVisible: true },
   { key: "call_count", label: "Anrufe", defaultVisible: true },
   { key: "note_count", label: "Notizen", defaultVisible: true },
   { key: "last_call_at", label: "Letzter Anruf", defaultVisible: true },
@@ -72,13 +77,14 @@ interface Props {
   currentStatus: string;
   currentActivity: string;
   currentLastCall: string;
+  currentTodo: string;
   currentFilters: Record<string, string>;
   initialColumnPrefs: ColumnPref[];
 }
 
 export function CrmManager({
   leads, statuses, totalPages, currentPage, currentSort, currentOrder,
-  currentQuery, currentStatus, currentActivity, currentLastCall, currentFilters,
+  currentQuery, currentStatus, currentActivity, currentLastCall, currentTodo, currentFilters,
   initialColumnPrefs,
 }: Props) {
   const router = useRouter();
@@ -208,7 +214,7 @@ export function CrmManager({
     return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
   }
 
-  const hasActiveFilter = currentStatus || currentActivity || currentLastCall || Object.keys(currentFilters).length > 0;
+  const hasActiveFilter = currentStatus || currentActivity || currentLastCall || currentTodo || Object.keys(currentFilters).length > 0;
 
   return (
     <div className="mt-4 space-y-4">
@@ -257,6 +263,20 @@ export function CrmManager({
             { value: "30d", label: "Letzte 30 Tage" },
             { value: "older_30d", label: "Älter als 30 Tage" },
             { value: "never", label: "Nie angerufen" },
+          ]}
+        />
+
+        <FilterSelect
+          label="Aufgabe"
+          value={currentTodo}
+          onChange={(v) => updateParams({ todo: v, page: "1" })}
+          options={[
+            { value: "", label: "Alle" },
+            { value: "overdue", label: "Überfällig" },
+            { value: "today", label: "Heute fällig" },
+            { value: "week", label: "Diese Woche" },
+            { value: "any", label: "Mit offener Aufgabe" },
+            { value: "none", label: "Ohne Aufgabe" },
           ]}
         />
 
@@ -593,6 +613,8 @@ function CellRenderer({
           )}
         </span>
       );
+    case "next_todo":
+      return <NextTodoCell lead={lead} />;
     case "last_call_at":
       return <span>{formatDate(lead.last_call_at)}</span>;
     case "updated_at":
@@ -617,4 +639,41 @@ function CellRenderer({
       return <span>{String(v)}</span>;
     }
   }
+}
+
+function NextTodoCell({ lead }: { lead: CrmLead }) {
+  if (!lead.next_todo_due) return <span className="text-gray-400">–</span>;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const due = lead.next_todo_due;
+  let toneClass = "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300";
+  let label: string;
+  if (due < todayKey) {
+    const days = Math.floor((Date.parse(todayKey) - Date.parse(due)) / 86400_000);
+    label = days === 1 ? "Gestern" : `${days} Tg. überfällig`;
+    toneClass = "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+  } else if (due === todayKey) {
+    label = "Heute";
+    toneClass = "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
+  } else {
+    const diff = Math.floor((Date.parse(due) - Date.parse(todayKey)) / 86400_000);
+    if (diff <= 7) {
+      label = `In ${diff} Tg.`;
+      toneClass = "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
+    } else {
+      const [y, m, d] = due.split("-");
+      label = `${d}.${m}.${y.slice(2)}`;
+    }
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <CalendarClock className="h-3 w-3 shrink-0 text-gray-400" />
+      <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${toneClass}`}>{label}</span>
+      <span className="truncate text-xs text-gray-600 dark:text-gray-400">{lead.next_todo_title}</span>
+      {lead.open_todo_count > 1 && (
+        <span className="shrink-0 text-[11px] text-gray-400">+{lead.open_todo_count - 1}</span>
+      )}
+    </span>
+  );
 }

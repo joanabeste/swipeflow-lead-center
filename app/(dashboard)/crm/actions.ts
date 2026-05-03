@@ -137,6 +137,116 @@ export async function deleteNote(noteId: string, leadId: string) {
   return { success: true };
 }
 
+// ─── Aufgaben / Wiedervorlagen ───────────────────────────────
+
+export async function addLeadTodo(leadId: string, title: string, dueDate: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const trimmed = title.trim();
+  if (!trimmed) return { error: "Titel darf nicht leer sein." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
+
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("lead_todos")
+    .insert({ lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id })
+    .select()
+    .single();
+  if (error) {
+    console.error("[addLeadTodo] insert failed:", error);
+    if (error.code === "42P01" || /relation.*does not exist/i.test(error.message)) {
+      return { error: "Tabelle lead_todos fehlt — Migration 053 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.todo_added",
+    entityType: "lead",
+    entityId: leadId,
+    details: { todo_id: data.id, due_date: dueDate, title: trimmed },
+  });
+
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath("/");
+  return { success: true, todo: data };
+}
+
+export async function updateLeadTodo(todoId: string, leadId: string, title: string, dueDate: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const trimmed = title.trim();
+  if (!trimmed) return { error: "Titel darf nicht leer sein." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("lead_todos")
+    .update({ title: trimmed, due_date: dueDate, updated_at: new Date().toISOString() })
+    .eq("id", todoId);
+  if (error) return { error: `DB-Fehler: ${error.message}` };
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.todo_updated",
+    entityType: "lead",
+    entityId: leadId,
+    details: { todo_id: todoId, due_date: dueDate, title: trimmed },
+  });
+
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function toggleLeadTodo(todoId: string, leadId: string, done: boolean) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db
+    .from("lead_todos")
+    .update({ done_at: done ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .eq("id", todoId);
+  if (error) return { error: `DB-Fehler: ${error.message}` };
+
+  await logAudit({
+    userId: user.id,
+    action: done ? "lead.todo_completed" : "lead.todo_reopened",
+    entityType: "lead",
+    entityId: leadId,
+    details: { todo_id: todoId },
+  });
+
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath("/");
+  return { success: true };
+}
+
+export async function deleteLeadTodo(todoId: string, leadId: string) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_todos").delete().eq("id", todoId);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.todo_deleted",
+    entityType: "lead",
+    entityId: leadId,
+    details: { todo_id: todoId },
+  });
+
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath("/crm");
+  revalidatePath("/");
+  return { success: true };
+}
+
 export async function logCall(input: {
   leadId: string;
   contactId?: string | null;

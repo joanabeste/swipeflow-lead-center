@@ -9,7 +9,7 @@ import {
   RecentLeadsWidget, RecentActivityWidget, CrmQueueWidget, TodaysCallsWidget,
   MyDayWidget, CallStats7dWidget, EnrichmentTrend7dWidget, CrmStatusDistributionWidget,
   FollowUpReminderWidget, TeamLeaderboardWidget, DealSummaryWidget, EmailStats7dWidget,
-  MotivationalQuoteWidget, DealTrendsWidget,
+  MotivationalQuoteWidget, DealTrendsWidget, OpenTodosWidget,
 } from "./widgets/widgets";
 import { CallTrendsWidget } from "./widgets/call-trends-widget";
 
@@ -72,6 +72,7 @@ function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboard
     case "call-stats-7d": return <CallStats7dWidget data={data} />;
     case "enrichment-trend-7d": return <EnrichmentTrend7dWidget data={data} />;
     case "follow-up-reminder": return <FollowUpReminderWidget data={data} />;
+    case "open-todos": return <OpenTodosWidget data={data} />;
     case "team-leaderboard": return <TeamLeaderboardWidget data={data} />;
     case "deal-summary": return <DealSummaryWidget data={data} />;
     case "email-stats-7d": return <EmailStats7dWidget data={data} />;
@@ -89,6 +90,14 @@ function motivationText(data: Awaited<ReturnType<typeof loadDashboardData>>, ser
   const enrichTotal = c.enrichmentCompleted + c.enrichmentFailed;
   const qualifyRate = c.total > 0 ? Math.round(((c.qualified + c.exported) / c.total) * 100) : 0;
   if (c.total === 0) return "Noch leer hier — ein Import bringt deinen Funnel in Schwung.";
+  const overdueTodos = data.openTodoItems.filter((t) => t.tone === "overdue").length;
+  const todayTodos = data.openTodoItems.filter((t) => t.tone === "today").length;
+  if (overdueTodos > 0) {
+    return `${overdueTodos} ${overdueTodos === 1 ? "Aufgabe ist" : "Aufgaben sind"} überfällig — ran ans Telefon.`;
+  }
+  if (todayTodos > 0) {
+    return `${todayTodos} ${todayTodos === 1 ? "Aufgabe ist heute fällig" : "Aufgaben sind heute fällig"}. Auf geht's.`;
+  }
   if (data.crmQueue.length > 0) return `${data.crmQueue.length} ${data.crmQueue.length === 1 ? "Lead wartet" : "Leads warten"} im CRM auf Kontakt. Let's go.`;
   if (readyToExport > 0) return `${readyToExport} ${readyToExport === 1 ? "Lead ist" : "Leads sind"} bereit fürs CRM. Zeit zu closen.`;
   if (waiting >= 10) return `${waiting} Leads warten auf Anreicherung — heute wird's produktiv.`;

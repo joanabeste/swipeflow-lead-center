@@ -207,6 +207,19 @@ export interface LeadNote {
   updated_at: string;
 }
 
+/** Aufgabe / Wiedervorlage zu einem Lead. due_date ist Pflicht (Sales-Rhythmus
+ *  setzt immer ein Datum voraus). done_at IS NULL = offen. */
+export interface LeadTodo {
+  id: string;
+  lead_id: string;
+  title: string;
+  due_date: string;        // YYYY-MM-DD
+  done_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type CallDirection = "outbound" | "inbound";
 export type CallStatus =
   | "initiated"
@@ -381,6 +394,8 @@ export interface WebdevScoringConfig {
   check_outdated_html: boolean;
   /** Webdesign-Importe: Leads ohne Website akzeptieren statt sie zu cancellen. */
   allow_leads_without_website: boolean;
+  /** Visuelle Design-Analyse via Headless-Chromium-Screenshot statt HTML-Snippet. */
+  screenshot_visual_analysis: boolean;
 }
 
 export interface RecruitingScoringConfig {
@@ -407,6 +422,7 @@ export const DEFAULT_WEBDEV_SCORING: WebdevScoringConfig = {
   check_alt_tags: true,
   check_outdated_html: true,
   allow_leads_without_website: true,
+  screenshot_visual_analysis: false,
 };
 
 // ─── Lernende Scoring-Vorschlaege ────────────────────────────────

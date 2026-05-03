@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2 } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage,
+  EmailMessage, LeadTodo,
 } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
@@ -15,6 +15,7 @@ import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types
 import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
+import { LeadTodosCard } from "./_components/lead-todos-card";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
 import { deleteLead } from "../../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
@@ -54,12 +55,13 @@ interface Props {
   industries: Industry[];
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
+  todos: LeadTodo[];
   backHref?: string;
 }
 
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
-  deals, dealStages, team, industries, caseStudies, landingPages,
+  deals, dealStages, team, industries, caseStudies, landingPages, todos,
   backHref = "/crm",
 }: Props) {
   const router = useRouter();
@@ -165,22 +167,25 @@ export function CrmLeadDetail({
           />
         }
         right={
-          <CrmActivityFeed
-            leadId={lead.id}
-            leadPhone={lead.phone}
-            companyName={lead.company_name}
-            senderName={senderName}
-            currentStatusId={lead.crm_status_id}
-            statuses={statuses}
-            contacts={contacts}
-            notes={notes}
-            calls={calls}
-            emails={emails}
-            enrichments={enrichments}
-            changes={changes}
-            auditLogs={auditLogs}
-            callProviders={callProviders}
-          />
+          <div className="space-y-4">
+            <LeadTodosCard leadId={lead.id} todos={todos} />
+            <CrmActivityFeed
+              leadId={lead.id}
+              leadPhone={lead.phone}
+              companyName={lead.company_name}
+              senderName={senderName}
+              currentStatusId={lead.crm_status_id}
+              statuses={statuses}
+              contacts={contacts}
+              notes={notes}
+              calls={calls}
+              emails={emails}
+              enrichments={enrichments}
+              changes={changes}
+              auditLogs={auditLogs}
+              callProviders={callProviders}
+            />
+          </div>
         }
       />
 

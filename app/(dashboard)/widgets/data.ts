@@ -113,6 +113,45 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .is("deleted_at", null),
   ]);
 
+  // Offene Aufgaben (Wiedervorlagen) — für Dashboard-Widget.
+  // Zeigt überfällige + heutige + nächste 7 Tage. Lead-Daten parallel via Lookup.
+  const todayDateOnly = new Date(today).toISOString().slice(0, 10);
+  const sevenDaysAheadKey = new Date(Date.now() + 7 * 24 * 3600_000).toISOString().slice(0, 10);
+  const { data: openTodoRows } = await db
+    .from("lead_todos")
+    .select("id, lead_id, title, due_date")
+    .is("done_at", null)
+    .lte("due_date", sevenDaysAheadKey)
+    .order("due_date", { ascending: true })
+    .limit(50);
+  type OpenTodo = { id: string; lead_id: string; title: string; due_date: string };
+  const openTodos = (openTodoRows ?? []) as OpenTodo[];
+  const todoLeadIds = Array.from(new Set(openTodos.map((t) => t.lead_id)));
+  const { data: todoLeads } = todoLeadIds.length > 0
+    ? await db.from("leads").select("id, company_name, city").in("id", todoLeadIds).is("deleted_at", null)
+    : { data: [] as { id: string; company_name: string; city: string | null }[] };
+  const todoLeadMap = new Map<string, { company_name: string; city: string | null }>();
+  for (const l of (todoLeads ?? []) as Array<{ id: string; company_name: string; city: string | null }>) {
+    todoLeadMap.set(l.id, { company_name: l.company_name, city: l.city });
+  }
+  const openTodoItems = openTodos
+    .filter((t) => todoLeadMap.has(t.lead_id))   // gelöschte/archivierte Leads ausblenden
+    .map((t) => {
+      const lead = todoLeadMap.get(t.lead_id)!;
+      const tone: "overdue" | "today" | "soon" =
+        t.due_date < todayDateOnly ? "overdue" :
+        t.due_date === todayDateOnly ? "today" : "soon";
+      return {
+        id: t.id,
+        leadId: t.lead_id,
+        title: t.title,
+        dueDate: t.due_date,
+        tone,
+        company_name: lead.company_name,
+        city: lead.city,
+      };
+    });
+
   // Namen für Call-Ersteller
   const callRows = (todaysCalls.data ?? []) as Array<{
     id: string; lead_id: string; direction: string; status: string;
@@ -363,6 +402,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     emailsFailed7d,
     callsByDay90,
     dealsByMonth12,
+    openTodoItems,
     userId,
     serviceMode,
   };

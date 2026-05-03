@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Clock } from "lucide-react";
+import { FileSpreadsheet, Upload, PhoneCall, Sparkles, Clock, CalendarClock } from "lucide-react";
 import type { DashboardData } from "../data";
 import { Card } from "./shared";
 
@@ -272,6 +272,86 @@ export function FollowUpReminderWidget({ data }: { data: DashboardData }) {
           </Link>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// ─── Offene Aufgaben (Wiedervorlagen) ────────────────────────────
+
+function formatTodoDue(dueDate: string, todayKey: string): string {
+  if (dueDate < todayKey) {
+    const days = Math.floor((Date.parse(todayKey) - Date.parse(dueDate)) / 86400_000);
+    return days === 1 ? "Gestern" : `${days} Tg.`;
+  }
+  if (dueDate === todayKey) return "Heute";
+  const diff = Math.floor((Date.parse(dueDate) - Date.parse(todayKey)) / 86400_000);
+  if (diff === 1) return "Morgen";
+  if (diff <= 7) return `In ${diff} Tg.`;
+  const [y, m, d] = dueDate.split("-");
+  return `${d}.${m}.${y.slice(2)}`;
+}
+
+export function OpenTodosWidget({ data }: { data: DashboardData }) {
+  const items = data.openTodoItems;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayKey = today.toISOString().slice(0, 10);
+  const overdue = items.filter((t) => t.tone === "overdue");
+  const dueToday = items.filter((t) => t.tone === "today");
+  const upcoming = items.filter((t) => t.tone === "soon");
+  const urgent = overdue.length + dueToday.length;
+
+  return (
+    <Card className="p-0">
+      <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-[#2c2c2e]/50">
+        <h2 className="flex items-center gap-1.5 text-sm font-medium">
+          <CalendarClock className="h-3.5 w-3.5 text-primary" />
+          Anstehende Aufgaben
+          {urgent > 0 && (
+            <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">
+              {urgent}
+            </span>
+          )}
+        </h2>
+        <Link href="/crm?todo=any" className="text-xs text-primary hover:underline">Alle</Link>
+      </div>
+      {items.length === 0 ? (
+        <p className="px-5 py-8 text-center text-sm text-gray-400">
+          Keine anstehenden Aufgaben — alles aktuell.
+        </p>
+      ) : (
+        <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">
+          {[
+            { label: "Überfällig", items: overdue, badge: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+            { label: "Heute fällig", items: dueToday, badge: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+            { label: "Diese Woche", items: upcoming, badge: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+          ].filter((s) => s.items.length > 0).map((section) => (
+            <div key={section.label}>
+              <p className="px-5 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                {section.label}
+              </p>
+              {section.items.slice(0, 6).map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/crm/${t.leadId}`}
+                  className="flex items-center justify-between gap-2 px-5 py-2 transition hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{t.title}</p>
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                      {t.company_name}
+                      {t.city && <span className="ml-1.5 text-gray-400">· {t.city}</span>}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${section.badge}`}>
+                    {formatTodoDue(t.dueDate, todayKey)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }

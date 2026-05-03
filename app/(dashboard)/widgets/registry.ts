@@ -44,6 +44,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   { key: "deal-trends", label: "Deal-Abschlüsse (12 Monate)", description: "Monatliche Won/Lost-Entwicklung", defaultVisible: true, defaultOrder: 8, defaultWidth: "full" },
   { key: "call-trends", label: "Anrufe-Trend (filterbar)", description: "Anrufe pro Tag/Woche, umschaltbar 7/30/90 Tage", defaultVisible: true, defaultOrder: 12, defaultWidth: "full" },
   // Daily Work
+  { key: "open-todos", label: "Anstehende Aufgaben", description: "Wiedervorlagen mit Datum: überfällig + heute + diese Woche", defaultVisible: true, defaultOrder: 18, defaultWidth: "half" },
   { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 20, defaultWidth: "half" },
   { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 22, defaultWidth: "half" },
   { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 30, defaultWidth: "full" },

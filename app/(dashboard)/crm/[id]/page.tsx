@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage,
+  EmailMessage, LeadTodo,
 } from "@/lib/types";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
@@ -38,6 +38,7 @@ export default async function CrmLeadPage({
     { data: enrichments },
     { data: changes },
     { data: auditLogs },
+    { data: todos },
     hq,
   ] = await Promise.all([
     db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
@@ -56,6 +57,7 @@ export default async function CrmLeadPage({
       .in("action", ["lead.crm_status_changed", "lead.bulk_status_update"])
       .order("created_at", { ascending: false })
       .limit(200),
+    db.from("lead_todos").select("*").eq("lead_id", id).order("due_date", { ascending: true }),
     getHqLocation(),
   ]);
 
@@ -238,6 +240,7 @@ export default async function CrmLeadPage({
       industries={industries}
       caseStudies={caseStudies}
       landingPages={landingPages}
+      todos={(todos ?? []) as LeadTodo[]}
       backHref={backHref}
     />
   );

@@ -51,6 +51,16 @@ export default async function CrmPage({
   const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
   const notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
 
+  // Offene Aufgaben (für todo-Filter + Spalte „Nächste Aktion").
+  const { data: openTodoRows } = await db
+    .from("lead_todos")
+    .select("lead_id, title, due_date")
+    .is("done_at", null)
+    .limit(10000);
+  type OpenTodoRow = { lead_id: string; title: string; due_date: string };
+  const openTodos = (openTodoRows ?? []) as OpenTodoRow[];
+  const todoLeadIds = Array.from(new Set(openTodos.map((r) => r.lead_id)));
+
   // Aussortierte Status (is_archived=true) gehoeren NICHT ins CRM-Board.
   const archivedStatusIds = statuses.filter((s) => s.is_archived).map((s) => s.id);
 
@@ -116,6 +126,37 @@ export default async function CrmPage({
     }
   }
 
+  // Aufgaben-Filter (Wiedervorlage). „today" als URL-Wert kollidiert nicht mit
+  // last_call=today, weil eigener Param-Name (todo).
+  if (sp.todo) {
+    const todayDate = new Date(nowMs);
+    todayDate.setHours(0, 0, 0, 0);
+    const todayKey = todayDate.toISOString().slice(0, 10);
+    if (sp.todo === "any" && todoLeadIds.length > 0) {
+      query = query.in("id", todoLeadIds);
+    } else if (sp.todo === "any") {
+      query = query.eq("id", "00000000-0000-0000-0000-000000000000");
+    } else if (sp.todo === "none") {
+      if (todoLeadIds.length > 0) {
+        query = query.not("id", "in", `(${todoLeadIds.join(",")})`);
+      }
+    } else if (sp.todo === "overdue") {
+      const ids = Array.from(new Set(openTodos.filter((t) => t.due_date < todayKey).map((t) => t.lead_id)));
+      query = ids.length > 0 ? query.in("id", ids) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    } else if (sp.todo === "today") {
+      const ids = Array.from(new Set(openTodos.filter((t) => t.due_date === todayKey).map((t) => t.lead_id)));
+      query = ids.length > 0 ? query.in("id", ids) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    } else if (sp.todo === "week") {
+      const weekEnd = new Date(todayDate);
+      weekEnd.setDate(weekEnd.getDate() + 7);
+      const weekEndKey = weekEnd.toISOString().slice(0, 10);
+      const ids = Array.from(new Set(
+        openTodos.filter((t) => t.due_date >= todayKey && t.due_date <= weekEndKey).map((t) => t.lead_id),
+      ));
+      query = ids.length > 0 ? query.in("id", ids) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    }
+  }
+
   if (sp.q) {
     const like = `%${sp.q}%`;
     query = query.or(`company_name.ilike.${like},domain.ilike.${like},city.ilike.${like}`);
@@ -158,23 +199,44 @@ export default async function CrmPage({
     noteByLead.set(n.lead_id, (noteByLead.get(n.lead_id) ?? 0) + 1);
   }
 
-  const rows: CrmLead[] = leadList.map((l) => ({
-    id: l.id,
-    company_name: l.company_name,
-    domain: l.domain,
-    city: l.city,
-    zip: l.zip,
-    industry: l.industry,
-    company_size: l.company_size,
-    phone: l.phone,
-    email: l.email,
-    crm_status_id: l.crm_status_id,
-    updated_at: l.updated_at,
-    created_at: l.created_at,
-    call_count: callByLead.get(l.id)?.count ?? 0,
-    last_call_at: callByLead.get(l.id)?.lastAt ?? null,
-    note_count: noteByLead.get(l.id) ?? 0,
-  }));
+  // Pro Lead: frühestes offenes Todo (= „nächste Aktion") + Anzahl.
+  const todoByLead = new Map<string, { count: number; due: string; title: string }>();
+  for (const t of openTodos) {
+    const prev = todoByLead.get(t.lead_id);
+    if (!prev) {
+      todoByLead.set(t.lead_id, { count: 1, due: t.due_date, title: t.title });
+    } else {
+      prev.count += 1;
+      if (t.due_date < prev.due) {
+        prev.due = t.due_date;
+        prev.title = t.title;
+      }
+    }
+  }
+
+  const rows: CrmLead[] = leadList.map((l) => {
+    const todo = todoByLead.get(l.id);
+    return {
+      id: l.id,
+      company_name: l.company_name,
+      domain: l.domain,
+      city: l.city,
+      zip: l.zip,
+      industry: l.industry,
+      company_size: l.company_size,
+      phone: l.phone,
+      email: l.email,
+      crm_status_id: l.crm_status_id,
+      updated_at: l.updated_at,
+      created_at: l.created_at,
+      call_count: callByLead.get(l.id)?.count ?? 0,
+      last_call_at: callByLead.get(l.id)?.lastAt ?? null,
+      note_count: noteByLead.get(l.id) ?? 0,
+      next_todo_due: todo?.due ?? null,
+      next_todo_title: todo?.title ?? null,
+      open_todo_count: todo?.count ?? 0,
+    };
+  });
 
   const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
 
@@ -199,6 +261,7 @@ export default async function CrmPage({
         currentStatus={sp.crm_status ?? ""}
         currentActivity={sp.activity ?? ""}
         currentLastCall={sp.last_call ?? ""}
+        currentTodo={sp.todo ?? ""}
         currentFilters={columnFilters}
         initialColumnPrefs={initialColumnPrefs}
       />
