@@ -26,9 +26,9 @@ export interface WidgetMeta {
 // Default-Reihenfolge: vertriebsrelevante & motivierende Widgets zuerst,
 // Kennzahlen/Enrichment-Trend später. Ordnung:
 //   1  Offene Deals        (ganz oben — primär vertriebsrelevant)
+//   2  Spruch des Tages    (motivierender Kopf)
+//   3  Anstehende Aufgaben (Wiedervorlagen — direkt sichtbar, weil tagesentscheidend)
 //   5  Pipeline-Balken     (Status-Übersicht)
-//  10  Spruch des Tages    (motivierender Kopf)
-//  15  Anrufe (7 Tage)     (Wochen-Performance)
 //  20  CRM-Queue           (daily tasks)
 //  22  Mein Tag            (persönliche Tages-Stats)
 //  30  Schnell-Aktionen    (Navigations-Kürzel)
@@ -39,12 +39,13 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   // Hero-Row: Deals + Spruch nebeneinander (2/3 + 1/3), gleiche Höhe durch h-full.
   { key: "deal-summary", label: "Offene Deals", description: "Deals nach Stage inkl. Wert-Summe", defaultVisible: true, defaultOrder: 1, defaultWidth: "two-thirds" },
   { key: "motivational-quote", label: "Spruch des Tages", description: "Täglich wechselnder Sales-Spruch", defaultVisible: true, defaultOrder: 2, defaultWidth: "third" },
+  // Direkt unter dem Hero: Tagesaufgaben sichtbar machen.
+  { key: "open-todos", label: "Anstehende Aufgaben", description: "Wiedervorlagen mit Datum: überfällig + heute + diese Woche", defaultVisible: true, defaultOrder: 3, defaultWidth: "half" },
   // Status-Übersicht + visuelle Trend-Charts
   { key: "pipeline", label: "Pipeline-Balken", description: "Lead-Verteilung über alle Status", defaultVisible: true, defaultOrder: 5, defaultWidth: "full" },
   { key: "deal-trends", label: "Deal-Abschlüsse (12 Monate)", description: "Monatliche Won/Lost-Entwicklung", defaultVisible: true, defaultOrder: 8, defaultWidth: "full" },
   { key: "call-trends", label: "Anrufe-Trend (filterbar)", description: "Anrufe pro Tag/Woche, umschaltbar 7/30/90 Tage", defaultVisible: true, defaultOrder: 12, defaultWidth: "full" },
   // Daily Work
-  { key: "open-todos", label: "Anstehende Aufgaben", description: "Wiedervorlagen mit Datum: überfällig + heute + diese Woche", defaultVisible: true, defaultOrder: 18, defaultWidth: "half" },
   { key: "crm-queue", label: "CRM — Heute zu kontaktieren", description: "Leads mit Status Todo", defaultVisible: true, defaultOrder: 20, defaultWidth: "half" },
   { key: "my-day", label: "Mein Tag", description: "Deine Calls & Notizen heute, offene Todos", defaultVisible: true, defaultOrder: 22, defaultWidth: "half" },
   { key: "quick-actions", label: "Schnell-Aktionen", description: "Leads · Import · Anreichern · CRM", defaultVisible: true, defaultOrder: 30, defaultWidth: "full" },
