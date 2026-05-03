@@ -1,6 +1,7 @@
 /**
  * Findet die Website eines Unternehmens anhand des Firmennamens.
- * Versucht mehrere Suchmaschinen: Google → DuckDuckGo → Bing
+ * Versucht mehrere Suchmaschinen: Brave → Google → DuckDuckGo → Bing
+ * + heuristisches Domain-Guessing + LLM-Disambiguation als Last Resort.
  */
 
 const USER_AGENT =
@@ -13,38 +14,107 @@ const SKIP_DOMAINS = [
   "google.com", "google.de", "bing.com", "duckduckgo.com",
   "amazon.de", "ebay.de", "ebay-kleinanzeigen.de",
   "northdata.de", "firmenwissen.de", "unternehmensregister.de",
+  "tiktok.com", "pinterest.de", "tripadvisor.de", "fahrschulen.de",
+  "branchenbuch.de", "branchenbuchdeutschland.de", "openpr.de",
+  "creditreform.de", "dnb.com", "wlw.de", "europages.de",
 ];
 
-/** Sucht die Website eines Unternehmens — probiert mehrere Quellen */
+/** Generische Wörter, die in vielen Firmennamen vorkommen und zur Domain-
+ *  Erkennung unbrauchbar sind. Werden beim Token-Matching ignoriert. */
+const GENERIC_WORDS = new Set([
+  "fahrschule", "autohaus", "baeckerei", "metzgerei", "restaurant", "hotel",
+  "gasthaus", "gasthof", "praxis", "apotheke", "kanzlei", "agentur",
+  "zentrum", "studio", "salon", "shop", "store", "service", "services",
+  "consulting", "solutions", "group", "international", "deutschland",
+  "germany", "company", "und", "und-co", "der", "die", "das", "von", "vom",
+  "the", "and", "for", "fuer", "mit", "zur", "zum", "im", "am", "an",
+  "gmbh", "ag", "ug", "kg", "ohg", "se", "mbh", "co", "cokg", "haftungsbeschraenkt",
+  "inh", "inhaber", "inhaberin", "ev", "verein", "stiftung",
+]);
+
+/** Sucht die Website eines Unternehmens — probiert mehrere Quellen + Disambiguation */
 export async function findCompanyWebsite(companyName: string, city?: string | null): Promise<string | null> {
-  const query = city
-    ? `${companyName} ${city}`
-    : companyName;
+  const tokens = extractMeaningfulTokens(companyName);
+  const query = city ? `${companyName} ${city}` : companyName;
+
+  // Sammelt alle Kandidaten (Domain + Quelle) aus allen Suchen, deduplizierte
+  // und finale Auswahl erfolgt am Ende — so kann der LLM-Disambiguator alles sehen.
+  const candidates: { domain: string; source: string }[] = [];
 
   // 1. Brave Search API (wenn API-Key gesetzt) — zuverlässigste Quelle
-  const braveResult = await searchBrave(query);
-  if (braveResult) return braveResult;
+  const braveResults = await searchBraveAll(query);
+  for (const d of braveResults) candidates.push({ domain: d, source: "brave" });
+
+  // Brave-Top-Treffer ist meist sehr gut — wenn er strikt zum Namen passt: direkt zurück.
+  const braveStrict = braveResults.find((d) => isStrictlyRelevant(d, tokens));
+  if (braveStrict) return braveStrict;
 
   // 2. Google-Scraping (oft durch CAPTCHA blockiert)
-  const googleResult = await searchGoogle(query);
-  if (googleResult) return googleResult;
+  const googleAll = await searchGoogleAll(query);
+  for (const d of googleAll) candidates.push({ domain: d, source: "google" });
 
-  // 3. DuckDuckGo als Fallback
-  const ddgResult = await searchDuckDuckGo(query);
-  if (ddgResult) return ddgResult;
+  // 3. DuckDuckGo
+  const ddgAll = await searchDuckDuckGoAll(query);
+  for (const d of ddgAll) candidates.push({ domain: d, source: "ddg" });
 
-  // 4. Bing als letzter Fallback
-  const bingResult = await searchBing(query);
-  if (bingResult) return bingResult;
+  // 4. Bing
+  const bingAll = await searchBingAll(query);
+  for (const d of bingAll) candidates.push({ domain: d, source: "bing" });
+
+  // Strict-Match aus den anderen Suchmaschinen
+  for (const c of candidates) {
+    if (isStrictlyRelevant(c.domain, tokens)) return c.domain;
+  }
 
   // 5. Heuristisches Domain-Guessing (HEAD-Probe).
-  // Greift, wenn alle Suchmaschinen nichts liefern — in der Praxis der häufigste
-  // Grund für „keine Website gefunden" bei mittelständischen Firmen mit
-  // schwach gepflegtem Web-Footprint.
-  const guessResult = await guessDomainFromName(companyName);
-  if (guessResult) return guessResult;
+  const guessed = await guessDomainsFromTokens(tokens);
+  for (const d of guessed) candidates.push({ domain: d, source: "guess" });
+  if (guessed.length > 0) return guessed[0];
+
+  // 6. LLM-Disambiguation als Last Resort, wenn die Suchen Treffer hatten,
+  // aber kein striktes Token-Match gefunden wurde. Wir schicken die Top-N
+  // Kandidaten + den Firmennamen + die Stadt an Claude und lassen wählen.
+  if (candidates.length > 0) {
+    const llmPick = await pickWebsiteWithLLM(companyName, city ?? null, candidates);
+    if (llmPick) return llmPick;
+  }
+
+  // 7. Fallback: erstes nicht-skip Such-Ergebnis (lieber irgendwas als nichts —
+  // der nachfolgende LLM-Extractor fängt Falsch-Treffer ab und qualifiziert nicht).
+  for (const c of candidates) {
+    if (!SKIP_DOMAINS.some((s) => c.domain.includes(s))) return c.domain;
+  }
 
   return null;
+}
+
+/** Extrahiert "bedeutungsvolle" Tokens aus dem Firmennamen, mit denen
+ *  Domain-Treffer geprüft werden können. Eigennamen, Markenwörter — keine
+ *  Branchen-Generika, keine Rechtsformen. */
+export function extractMeaningfulTokens(name: string): string[] {
+  const cleaned = name
+    .toLowerCase()
+    .replace(/[äÄ]/g, "ae").replace(/[öÖ]/g, "oe").replace(/[üÜ]/g, "ue").replace(/ß/g, "ss")
+    .replace(/[.,()&/+]/g, " ")
+    .replace(/[^a-z0-9\s-]/g, " ");
+  const raw = cleaned.split(/[\s-]+/).filter(Boolean);
+  const tokens = raw.filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w));
+  // Wenn nach Filterung nichts übrig: alle Tokens >= 3 nehmen (z.B. "Fahrschule Pagel" → "pagel"
+  // wird sonst rausgefiltert wenn nur generic/2-letter)
+  if (tokens.length === 0) {
+    return raw.filter((w) => w.length >= 3);
+  }
+  return tokens;
+}
+
+/** Strikte Relevanz-Prüfung: Domain muss mindestens einen bedeutungsvollen
+ *  Token (≥4 Zeichen, oder ≥3 wenn nur ein Token existiert) komplett enthalten. */
+function isStrictlyRelevant(domain: string, tokens: string[]): boolean {
+  if (SKIP_DOMAINS.some((s) => domain.includes(s))) return false;
+  if (tokens.length === 0) return false;
+  const normalizedDomain = domain.split(".")[0].replace(/[^a-z0-9]/g, "");
+  const minLen = tokens.length === 1 ? 3 : 4;
+  return tokens.some((t) => t.length >= minLen && normalizedDomain.includes(t));
 }
 
 /**
@@ -55,26 +125,70 @@ export async function findCompanyWebsite(companyName: string, city?: string | nu
  * vom nachfolgenden LLM-Extractor aussortiert — besser als der komplette
  * Enrichment-Abbruch beim `null`-Return.
  */
-async function guessDomainFromName(name: string): Promise<string | null> {
-  const base = normalizeForComparison(name);
-  if (base.length < 4) return null;
+/**
+ * Generiert plausible Domain-Kandidaten aus den Firmennamen-Tokens und
+ * prüft sie via HEAD-Request. Gibt alle erreichbaren Domains in
+ * Plausibilitäts-Reihenfolge zurück.
+ *
+ * Erzeugt z.B. für "Fahrschule Michael Pagel":
+ *   - fahrschule-michael-pagel.de, fahrschule-pagel.de, michael-pagel.de
+ *   - pagel.de, fahrschulemichaelpagel.de, …
+ */
+async function guessDomainsFromTokens(tokens: string[]): Promise<string[]> {
+  if (tokens.length === 0) return [];
 
-  // Hyphenated-Variante aus Einzelwörtern (z.B. "Acme Solutions GmbH" → "acme-solutions")
-  const words = name
-    .toLowerCase()
-    .replace(/[äÄ]/g, "ae").replace(/[öÖ]/g, "oe").replace(/[üÜ]/g, "ue").replace(/ß/g, "ss")
-    .replace(/\b(gmbh|ag|ug|kg|ohg|se|mbh|co|cokg|haftungsbeschraenkt)\b/g, "")
-    .split(/\s+/)
-    .map((w) => w.replace(/[^a-z0-9-]/g, ""))
-    .filter((w) => w.length > 1);
-  const hyphenated = words.join("-");
+  // Branchen-Wort aus dem Original (vor der Filterung), um z.B. "fahrschule-pagel" zu bauen
+  const meaningful = tokens.filter((t) => !GENERIC_WORDS.has(t));
+  if (meaningful.length === 0) return [];
 
-  const bases = Array.from(new Set([base, hyphenated].filter((x) => x.length >= 4)));
+  const variants = new Set<string>();
+
+  // 1. Volle Token-Liste
+  variants.add(tokens.join("-"));
+  variants.add(tokens.join(""));
+
+  // 2. Nur bedeutungsvolle Tokens (ohne Branchen-Wörter)
+  if (meaningful.length >= 1) {
+    variants.add(meaningful.join("-"));
+    variants.add(meaningful.join(""));
+  }
+
+  // 3. Letzter Token solo (oft der Eigenname: "Pagel", "Rubcic")
+  if (meaningful.length >= 1 && meaningful[meaningful.length - 1].length >= 4) {
+    variants.add(meaningful[meaningful.length - 1]);
+  }
+
+  // 4. Erster + letzter Token (Vor- + Nachname Pattern)
+  if (meaningful.length >= 2) {
+    const first = meaningful[0];
+    const last = meaningful[meaningful.length - 1];
+    if (first.length >= 3 && last.length >= 3) {
+      variants.add(`${first}-${last}`);
+      variants.add(`${last}-${first}`);
+      variants.add(`${first}${last}`);
+    }
+  }
+
+  // 5. Branchen-Wort + letzter Eigenname (z.B. "fahrschule-pagel")
+  const generic = tokens.find((t) => GENERIC_WORDS.has(t));
+  if (generic && meaningful.length >= 1) {
+    const last = meaningful[meaningful.length - 1];
+    if (last.length >= 3) {
+      variants.add(`${generic}-${last}`);
+      variants.add(`${last}-${generic}`);
+      variants.add(`${generic}${last}`);
+    }
+  }
+
   const tlds = [".de", ".com", ".eu", ".at"];
-
   const candidates: string[] = [];
-  for (const b of bases) for (const tld of tlds) candidates.push(`${b}${tld}`);
+  for (const v of variants) {
+    if (v.length < 3) continue;
+    for (const tld of tlds) candidates.push(`${v}${tld}`);
+  }
 
+  // HEAD-Probe parallel — wir sammeln ALLE Treffer, nicht nur den ersten.
+  // Reihenfolge bleibt erhalten: kürzere/spezifischere Varianten zuerst.
   const checks = candidates.map(async (domain) => {
     try {
       const res = await fetch(`https://${domain}`, {
@@ -89,15 +203,14 @@ async function guessDomainFromName(name: string): Promise<string | null> {
     }
   });
   const results = await Promise.all(checks);
-  // Bevorzugt Reihenfolge: kürzere Base zuerst, dann .de vor .com
-  return results.find((r) => r !== null) ?? null;
+  return results.filter((r): r is string => r !== null);
 }
 
-async function searchBrave(query: string): Promise<string | null> {
+async function searchBraveAll(query: string): Promise<string[]> {
   const apiKey = process.env.BRAVE_SEARCH_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) return [];
   try {
-    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&country=DE&count=5&safesearch=off`;
+    const url = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&country=DE&count=8&safesearch=off`;
     const res = await fetch(url, {
       headers: {
         "X-Subscription-Token": apiKey,
@@ -106,151 +219,96 @@ async function searchBrave(query: string): Promise<string | null> {
       },
       signal: AbortSignal.timeout(8_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = (await res.json()) as {
       web?: { results?: { url?: string }[] };
     };
-    const results = data.web?.results ?? [];
-    // Erst relevante Domain finden, sonst erstes verwertbares Ergebnis
-    for (const r of results) {
+    const out: string[] = [];
+    for (const r of data.web?.results ?? []) {
       const domain = extractDomain(r.url ?? "");
-      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s)) && isRelevantDomain(domain, query)) {
-        return domain;
+      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s)) && !out.includes(domain)) {
+        out.push(domain);
       }
     }
-    for (const r of results) {
-      const domain = extractDomain(r.url ?? "");
-      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s))) return domain;
-    }
-    return null;
+    return out;
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function searchGoogle(query: string): Promise<string | null> {
+async function searchGoogleAll(query: string): Promise<string[]> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
-
-    const url = `https://www.google.de/search?q=${encodeURIComponent(query)}&hl=de&num=5`;
+    const url = `https://www.google.de/search?q=${encodeURIComponent(query)}&hl=de&num=10`;
     const res = await fetch(url, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Accept-Language": "de-DE,de;q=0.9",
-      },
-      signal: controller.signal,
+      headers: { "User-Agent": USER_AGENT, "Accept-Language": "de-DE,de;q=0.9" },
+      signal: AbortSignal.timeout(8_000),
       redirect: "follow",
     });
-
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-
+    if (!res.ok) return [];
     const html = await res.text();
-    return extractFirstRelevantDomain(html, query);
+    return extractAllDomains(html);
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function searchDuckDuckGo(query: string): Promise<string | null> {
+async function searchDuckDuckGoAll(query: string): Promise<string[]> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
-
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query + " website")}`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(8_000),
     });
-
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-
+    if (!res.ok) return [];
     const html = await res.text();
+    const out: string[] = [];
 
-    // DuckDuckGo-spezifisch: uddg-Parameter
-    const uddgMatches = html.match(/uddg=([^&"]+)/g);
-    if (uddgMatches) {
-      for (const match of uddgMatches) {
-        const encoded = match.replace("uddg=", "");
-        const decoded = decodeURIComponent(encoded);
-        const domain = extractDomain(decoded);
-        if (domain && isRelevantDomain(domain, query)) return domain;
+    // DuckDuckGo-spezifisch: uddg-Parameter (encoded URL)
+    const uddgMatches = html.match(/uddg=([^&"]+)/g) ?? [];
+    for (const match of uddgMatches) {
+      const decoded = decodeURIComponent(match.replace("uddg=", ""));
+      const domain = extractDomain(decoded);
+      if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s)) && !out.includes(domain)) {
+        out.push(domain);
       }
     }
 
-    return extractFirstRelevantDomain(html, query);
+    for (const d of extractAllDomains(html)) {
+      if (!out.includes(d)) out.push(d);
+    }
+    return out;
   } catch {
-    return null;
+    return [];
   }
 }
 
-async function searchBing(query: string): Promise<string | null> {
+async function searchBingAll(query: string): Promise<string[]> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8_000);
-
-    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&cc=de`;
+    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}&cc=de&count=10`;
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT },
-      signal: controller.signal,
+      signal: AbortSignal.timeout(8_000),
     });
-
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-
+    if (!res.ok) return [];
     const html = await res.text();
-    return extractFirstRelevantDomain(html, query);
+    return extractAllDomains(html);
   } catch {
-    return null;
+    return [];
   }
 }
 
-/** Extrahiert die erste relevante Domain aus HTML-Suchergebnissen */
-function extractFirstRelevantDomain(html: string, query: string): string | null {
-  // URLs aus href-Attributen extrahieren
+/** Extrahiert alle Domains aus HTML-Suchergebnissen, dedupliziert, ohne Skip-Domains. */
+function extractAllDomains(html: string): string[] {
   const hrefRegex = /href="(https?:\/\/[^"]+)"/g;
+  const out: string[] = [];
   let match;
-  const candidates: string[] = [];
-
   while ((match = hrefRegex.exec(html)) !== null) {
     const domain = extractDomain(match[1]);
-    if (domain && !SKIP_DOMAINS.some((skip) => domain.includes(skip))) {
-      candidates.push(domain);
+    if (domain && !SKIP_DOMAINS.some((s) => domain.includes(s)) && !out.includes(domain)) {
+      out.push(domain);
     }
   }
-
-  // Deduplizieren
-  const unique = [...new Set(candidates)];
-
-  for (const domain of unique) {
-    if (isRelevantDomain(domain, query)) return domain;
-  }
-
-  // Fallback: erstes nicht-skip Ergebnis
-  return unique[0] ?? null;
-}
-
-/** Prüft ob eine Domain zum Suchbegriff passt */
-function isRelevantDomain(domain: string, query: string): boolean {
-  if (SKIP_DOMAINS.some((skip) => domain.includes(skip))) return false;
-
-  const normalizedDomain = domain.split(".")[0].replace(/[^a-z0-9]/g, "");
-  const normalizedQuery = normalizeForComparison(query);
-
-  // Domain enthält Teil des Namens oder umgekehrt
-  if (normalizedQuery.length >= 4 && normalizedDomain.includes(normalizedQuery.slice(0, Math.min(8, normalizedQuery.length)))) return true;
-  if (normalizedDomain.length >= 4 && normalizedQuery.includes(normalizedDomain.slice(0, Math.min(8, normalizedDomain.length)))) return true;
-
-  return false;
-}
-
-function normalizeForComparison(name: string): string {
-  return name.toLowerCase()
-    .replace(/[äÄ]/g, "ae").replace(/[öÖ]/g, "oe").replace(/[üÜ]/g, "ue").replace(/ß/g, "ss")
-    .replace(/[^a-z0-9]/g, "")
-    .replace(/(gmbh|ag|ug|kg|ohg|se|mbh|co|cokg|haftungsbeschraenkt)/g, "");
+  return out;
 }
 
 function extractDomain(url: string): string | null {
@@ -260,4 +318,76 @@ function extractDomain(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * LLM-Disambiguation: Wenn die Suchen Treffer hatten, aber kein Token-Match
+ * sicher genug war, lassen wir Claude den wahrscheinlichsten offiziellen
+ * Treffer auswählen. Token-spar-Modus: max 12 Kandidaten, einzeiliger Output.
+ */
+async function pickWebsiteWithLLM(
+  companyName: string,
+  city: string | null,
+  candidates: { domain: string; source: string }[],
+): Promise<string | null> {
+  // Dedup nach Domain, max 12 — typische Such-Top-Ergebnisse reichen
+  const seen = new Set<string>();
+  const dedup = candidates.filter((c) => (seen.has(c.domain) ? false : (seen.add(c.domain), true))).slice(0, 12);
+  if (dedup.length === 0) return null;
+
+  const prompt = [
+    `Welche dieser Domains ist mit hoher Wahrscheinlichkeit die offizielle Website von "${companyName}"${city ? ` aus ${city}` : ""}?`,
+    "Antwort NUR die Domain (z.B. fahrschule-pagel.de) ODER das Wort \"keine\" wenn keine wirklich passt.",
+    "Keine Erklärung, kein https://, kein www., kein Komma, kein Punkt am Ende.",
+    "",
+    "Domains:",
+    ...dedup.map((c, i) => `${i + 1}. ${c.domain}`),
+  ].join("\n");
+
+  try {
+    if (process.env.ANTHROPIC_API_KEY) {
+      const Anthropic = (await import("@anthropic-ai/sdk")).default;
+      const client = new Anthropic();
+      const res = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 40,
+        temperature: 0,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const block = res.content.find((b) => b.type === "text");
+      const answer = (block?.type === "text" ? block.text : "").trim().toLowerCase();
+      return parseLLMDomainAnswer(answer, dedup.map((c) => c.domain));
+    }
+    if (process.env.OPENAI_API_KEY) {
+      const OpenAI = (await import("openai")).default;
+      const openai = new OpenAI();
+      const res = await openai.chat.completions.create({
+        model: "gpt-4.1-mini",
+        max_tokens: 40,
+        temperature: 0,
+        messages: [{ role: "user", content: prompt }],
+      });
+      const answer = (res.choices[0]?.message?.content ?? "").trim().toLowerCase();
+      return parseLLMDomainAnswer(answer, dedup.map((c) => c.domain));
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function parseLLMDomainAnswer(answer: string, candidates: string[]): string | null {
+  if (!answer || answer.startsWith("keine")) return null;
+  // Whitespace, http://, https://, www., trailing slash entfernen
+  const cleaned = answer
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[\s,;.]+$/, "")
+    .split(/\s+/)[0];
+  if (!cleaned) return null;
+  // Strikt: Antwort muss einer der Kandidaten sein (kein hallucinated Domain)
+  const exact = candidates.find((c) => c === cleaned);
+  if (exact) return exact;
+  // Fuzzy: Antwort enthält eine Kandidaten-Domain als Substring
+  return candidates.find((c) => cleaned.includes(c)) ?? null;
 }
