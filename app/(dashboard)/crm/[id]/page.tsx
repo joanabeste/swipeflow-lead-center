@@ -13,6 +13,7 @@ import { listTeamMembers } from "../../deals/actions";
 import type { DealWithRelations } from "@/lib/deals/types";
 import { listCaseStudies, listIndustries, listLandingPagesForLead } from "@/lib/landing-pages/server";
 import { CrmLeadDetail } from "./crm-lead-detail";
+import { LeadScreenshotCard } from "../../leads/_components/lead-screenshot-card";
 
 export default async function CrmLeadPage({
   params,
@@ -200,9 +201,18 @@ export default async function CrmLeadPage({
     senderName = (profile?.name as string | null) ?? null;
   }
 
+  const screenshotCard = (
+    <LeadScreenshotCard
+      screenshotPath={typedLead.website_screenshot_path}
+      takenAt={typedLead.website_screenshot_taken_at}
+      websiteUrl={typedLead.website ?? (typedLead.domain ? `https://${typedLead.domain}` : null)}
+    />
+  );
+
   return (
     <CrmLeadDetail
       lead={typedLead}
+      screenshotCard={screenshotCard}
       callProviders={callProviders}
       contacts={(contacts ?? []) as LeadContact[]}
       jobs={(jobs ?? []) as LeadJobPosting[]}

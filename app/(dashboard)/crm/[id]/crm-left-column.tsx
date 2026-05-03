@@ -25,15 +25,17 @@ interface Props {
   industries: Industry[];
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
+  screenshotCard?: React.ReactNode;
 }
 
 export function CrmLeftColumn({
   lead, contacts, jobs, latestEnrichment, hq, senderName, deals, dealStages, team,
-  industries, caseStudies, landingPages,
+  industries, caseStudies, landingPages, screenshotCard,
 }: Props) {
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
+      {screenshotCard}
       <CrmDealsCard
         leadId={lead.id}
         companyName={lead.company_name}

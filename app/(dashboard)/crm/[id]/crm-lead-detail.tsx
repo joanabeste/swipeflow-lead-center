@@ -57,12 +57,14 @@ interface Props {
   landingPages: LandingPage[];
   todos: LeadTodo[];
   backHref?: string;
+  screenshotCard?: React.ReactNode;
 }
 
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
   backHref = "/crm",
+  screenshotCard,
 }: Props) {
   const router = useRouter();
   const { mode: serviceMode } = useServiceMode();
@@ -164,6 +166,7 @@ export function CrmLeadDetail({
             industries={industries}
             caseStudies={caseStudies}
             landingPages={landingPages}
+            screenshotCard={screenshotCard}
           />
         }
         right={
