@@ -66,6 +66,8 @@ export interface Lead {
   website_tech: string | null;
   website_age_estimate: string | null;
   website_issues: string[];
+  website_screenshot_path: string | null;
+  website_screenshot_taken_at: string | null;
   enriched_at: string | null;
   enrichment_source: string | null;
   latitude: number | null;

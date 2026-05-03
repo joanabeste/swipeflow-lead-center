@@ -111,7 +111,7 @@ export async function enrichLead(
     let websiteAnalysis: Awaited<ReturnType<typeof analyzeWebsite>> | null = null;
     const webdevScoring = serviceMode === "webdev" ? await getWebdevScoringConfig() : null;
     if (serviceMode === "webdev" && webdevScoring) {
-      websiteAnalysis = await analyzeWebsite(websiteOrDomain, webdevScoring);
+      websiteAnalysis = await analyzeWebsite(websiteOrDomain, webdevScoring, leadId);
       // Ergebnisse im Lead speichern
       await db.from("leads").update({
         has_ssl: websiteAnalysis.hasSsl,
@@ -120,6 +120,8 @@ export async function enrichLead(
         website_tech: websiteAnalysis.technology,
         website_age_estimate: websiteAnalysis.designEstimate,
         website_issues: websiteAnalysis.issues,
+        website_screenshot_path: websiteAnalysis.screenshotPath,
+        website_screenshot_taken_at: websiteAnalysis.screenshotTakenAt,
       }).eq("id", leadId);
     }
 

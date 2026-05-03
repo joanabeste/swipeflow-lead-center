@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus } from "@/lib/types";
 import { LeadProfilePanel } from "../lead-profile-panel";
+import { LeadScreenshotCard } from "../_components/lead-screenshot-card";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation } from "@/lib/app-settings";
 
@@ -57,6 +58,14 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
     }
   }
 
+  const screenshotCard = (
+    <LeadScreenshotCard
+      screenshotPath={typedLead.website_screenshot_path}
+      takenAt={typedLead.website_screenshot_taken_at}
+      websiteUrl={typedLead.website ?? (typedLead.domain ? `https://${typedLead.domain}` : null)}
+    />
+  );
+
   return (
     <LeadProfilePanel
       lead={typedLead}
@@ -67,6 +76,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
       customStatuses={(customStatuses as CustomLeadStatus[]) ?? []}
       hq={hq}
       backHref={backHref}
+      extraRightColumn={screenshotCard}
     />
   );
 }

@@ -71,6 +71,30 @@ export function WebdevScoringForm({ config }: { config: WebdevScoringConfig }) {
           />
         </div>
 
+        {/* Visuelle Analyse via Screenshot */}
+        <div className="mt-6">
+          <label className="block text-sm font-medium">Bewertungs-Methode</label>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Wie soll die Design-Einschätzung erstellt werden?
+          </p>
+          <label
+            className="mt-3 flex items-start gap-2.5 rounded-lg border border-gray-200 p-3.5 text-sm transition has-[:checked]:border-primary has-[:checked]:bg-primary/5 dark:border-[#2c2c2e] dark:has-[:checked]:border-primary/60 dark:has-[:checked]:bg-primary/10"
+          >
+            <input
+              type="checkbox"
+              name="screenshot_visual_analysis"
+              defaultChecked={config.screenshot_visual_analysis}
+              className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+            />
+            <span>
+              <span className="block font-medium">Visuelle Analyse via Screenshot</span>
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                Macht zusätzlich einen Screenshot der Homepage und lässt das Design optisch bewerten — höhere Genauigkeit (z.&nbsp;B. bei JavaScript-Sites oder modernen Frameworks mit altem Theme), aber +5–8&nbsp;s pro Lead und ein Vision-API-Call zusätzlich. Der Screenshot wird in der Lead-Detailseite angezeigt.
+              </span>
+            </span>
+          </label>
+        </div>
+
         {/* Schwellwerte */}
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>

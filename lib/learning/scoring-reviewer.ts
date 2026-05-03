@@ -293,6 +293,10 @@ function validateSuggested(
         typeof sc.allow_leads_without_website === "boolean"
           ? sc.allow_leads_without_website
           : cur.allow_leads_without_website,
+      screenshot_visual_analysis:
+        typeof sc.screenshot_visual_analysis === "boolean"
+          ? sc.screenshot_visual_analysis
+          : cur.screenshot_visual_analysis,
     };
     return { ok: true, suggested: out };
   }

@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { WebdevScoringConfig } from "@/lib/types";
 import { DEFAULT_WEBDEV_SCORING } from "@/lib/types";
+import { captureWebsiteScreenshot, uploadScreenshot } from "./screenshot";
 
 export interface WebsiteAnalysis {
   hasSsl: boolean;
@@ -10,6 +11,8 @@ export interface WebsiteAnalysis {
   technology: string | null;
   designEstimate: "veraltet" | "durchschnittlich" | "modern";
   issues: string[];
+  screenshotPath: string | null;
+  screenshotTakenAt: string | null;
 }
 
 const TECH_PATTERNS: [RegExp, string][] = [
@@ -57,10 +60,83 @@ function buildDesignPrompt(
   return parts.join("\n\n");
 }
 
+/** Baut den Vision-Prompt für die Screenshot-basierte Bewertung. */
+function buildVisualDesignPrompt(scoring: WebdevScoringConfig): string {
+  const strictnessGuide: Record<WebdevScoringConfig["strictness"], string> = {
+    lax: "Bewerte großzügig — nur bei offensichtlich veralteten Designs (alte Stockfotos, harte Farben, wenig Whitespace, vor 2010 wirkende Layouts) 'veraltet' vergeben. Solide 2015er-Optik = 'durchschnittlich'. 'modern' für zeitgemäßes Design.",
+    normal: "Bewerte ausgewogen anhand des Erscheinungsbilds: Typografie, Layout, Whitespace, Bildqualität, Farbharmonie, visuelle Hierarchie. Altmodische Optik = 'veraltet'. Solide Standards = 'durchschnittlich'. Zeitgemäß = 'modern'.",
+    strict: "Bewerte streng — heutige Designstandards anlegen. Schlechte Typografie, gestauchte Layouts, wenig Whitespace, altmodische Farben/Bilder, Stockfoto-Stil → 'veraltet'. Nur wirklich zeitgemäß = 'modern'. Der Großteil des deutschen Mittelstands ist 'veraltet'.",
+  };
+  const parts: string[] = [
+    "Bewerte das Webdesign anhand dieses Screenshots. Antwort NUR mit einem Wort: \"veraltet\", \"durchschnittlich\" oder \"modern\".",
+    strictnessGuide[scoring.strictness],
+  ];
+  if (scoring.design_focus?.trim()) {
+    parts.push(`Besonderer Fokus: ${scoring.design_focus.trim()}`);
+  }
+  return parts.join("\n\n");
+}
+
+/** Visuelle Bewertung via Vision-LLM. */
+async function evaluateDesignFromScreenshot(
+  buffer: Buffer,
+  scoring: WebdevScoringConfig,
+): Promise<WebsiteAnalysis["designEstimate"]> {
+  const prompt = buildVisualDesignPrompt(scoring);
+  const base64 = buffer.toString("base64");
+
+  if (process.env.OPENAI_API_KEY) {
+    const openai = new OpenAI();
+    const res = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      max_tokens: 10,
+      temperature: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64}` } },
+            { type: "text", text: prompt },
+          ],
+        },
+      ],
+    });
+    const answer = res.choices[0]?.message?.content?.toLowerCase().trim() ?? "";
+    if (answer.includes("veraltet")) return "veraltet";
+    if (answer.includes("modern")) return "modern";
+    return "durchschnittlich";
+  }
+
+  const client = new Anthropic();
+  const res = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 10,
+    temperature: 0,
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: "image/jpeg", data: base64 },
+          },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  });
+  const block = res.content.find((b) => b.type === "text");
+  const answer = (block?.type === "text" ? block.text : "").toLowerCase().trim();
+  if (answer.includes("veraltet")) return "veraltet";
+  if (answer.includes("modern")) return "modern";
+  return "durchschnittlich";
+}
+
 /** Analysiert die technische Qualität einer Website */
 export async function analyzeWebsite(
   websiteOrDomain: string,
   scoring: WebdevScoringConfig = DEFAULT_WEBDEV_SCORING,
+  leadId?: string,
 ): Promise<WebsiteAnalysis> {
   const domain = websiteOrDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
 
@@ -118,6 +194,8 @@ export async function analyzeWebsite(
         technology: null,
         designEstimate: "veraltet",
         issues: ["Website nicht erreichbar"],
+        screenshotPath: null,
+        screenshotTakenAt: null,
       };
     }
   }
@@ -166,46 +244,78 @@ export async function analyzeWebsite(
     if (/<!DOCTYPE html/i.test(html) === false) issues.push("Kein HTML5 DOCTYPE");
   }
 
-  // 5. Design-Einschätzung via LLM (abhängig von Strenge + Fokus)
+  // 5. Design-Einschätzung — visuell via Screenshot (wenn aktiviert) oder textbasiert (HTML/CSS)
   let designEstimate: WebsiteAnalysis["designEstimate"] = "durchschnittlich";
+  let screenshotPath: string | null = null;
+  let screenshotTakenAt: string | null = null;
 
-  const designSnippet = html.slice(0, 3000);
-  const cssInfo = (html.match(/<link[^>]*stylesheet[^>]*>/gi) ?? []).join("\n");
-  const designPrompt = buildDesignPrompt(scoring, designSnippet, cssInfo);
+  const visualMode = scoring.screenshot_visual_analysis && !!leadId;
+  let visualSucceeded = false;
 
-  try {
-    if (process.env.OPENAI_API_KEY) {
-      const openai = new OpenAI();
-      const res = await openai.chat.completions.create({
-        model: "gpt-4.1-mini",
-        max_tokens: 10,
-        temperature: 0,
-        messages: [{ role: "user", content: designPrompt }],
-      });
-      const answer = res.choices[0]?.message?.content?.toLowerCase().trim() ?? "";
-      if (answer.includes("veraltet")) designEstimate = "veraltet";
-      else if (answer.includes("modern")) designEstimate = "modern";
-    } else {
-      const client = new Anthropic();
-      const res = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 10,
-        temperature: 0,
-        messages: [{ role: "user", content: designPrompt }],
-      });
-      const block = res.content.find((b) => b.type === "text");
-      const answer = (block?.type === "text" ? block.text : "").toLowerCase().trim();
-      if (answer.includes("veraltet")) designEstimate = "veraltet";
-      else if (answer.includes("modern")) designEstimate = "modern";
+  if (visualMode) {
+    try {
+      const baseUrl = hasSsl ? httpsUrl : httpUrl;
+      const { buffer, contentType } = await captureWebsiteScreenshot(baseUrl);
+      const upload = await uploadScreenshot(leadId!, buffer, contentType);
+      if ("path" in upload) {
+        screenshotPath = upload.path;
+        screenshotTakenAt = new Date().toISOString();
+      }
+      designEstimate = await evaluateDesignFromScreenshot(buffer, scoring);
+      visualSucceeded = true;
+    } catch {
+      // Screenshot- oder Vision-Pfad fehlgeschlagen → unten Fallback auf Text-Analyse.
     }
-  } catch {
-    // Design-Check fehlgeschlagen — basierend auf Issues schätzen
-    if (issues.length >= 4) designEstimate = "veraltet";
+  }
+
+  if (!visualSucceeded) {
+    const designSnippet = html.slice(0, 3000);
+    const cssInfo = (html.match(/<link[^>]*stylesheet[^>]*>/gi) ?? []).join("\n");
+    const designPrompt = buildDesignPrompt(scoring, designSnippet, cssInfo);
+
+    try {
+      if (process.env.OPENAI_API_KEY) {
+        const openai = new OpenAI();
+        const res = await openai.chat.completions.create({
+          model: "gpt-4.1-mini",
+          max_tokens: 10,
+          temperature: 0,
+          messages: [{ role: "user", content: designPrompt }],
+        });
+        const answer = res.choices[0]?.message?.content?.toLowerCase().trim() ?? "";
+        if (answer.includes("veraltet")) designEstimate = "veraltet";
+        else if (answer.includes("modern")) designEstimate = "modern";
+      } else {
+        const client = new Anthropic();
+        const res = await client.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 10,
+          temperature: 0,
+          messages: [{ role: "user", content: designPrompt }],
+        });
+        const block = res.content.find((b) => b.type === "text");
+        const answer = (block?.type === "text" ? block.text : "").toLowerCase().trim();
+        if (answer.includes("veraltet")) designEstimate = "veraltet";
+        else if (answer.includes("modern")) designEstimate = "modern";
+      }
+    } catch {
+      // Design-Check fehlgeschlagen — basierend auf Issues schätzen
+      if (issues.length >= 4) designEstimate = "veraltet";
+    }
   }
 
   if (designEstimate === "veraltet" && !issues.includes("Veraltetes Design")) {
     issues.push("Veraltetes Design");
   }
 
-  return { hasSsl, isMobileFriendly, loadTimeMs, technology, designEstimate, issues };
+  return {
+    hasSsl,
+    isMobileFriendly,
+    loadTimeMs,
+    technology,
+    designEstimate,
+    issues,
+    screenshotPath,
+    screenshotTakenAt,
+  };
 }
