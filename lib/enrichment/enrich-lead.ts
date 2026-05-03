@@ -111,7 +111,12 @@ export async function enrichLead(
     let websiteAnalysis: Awaited<ReturnType<typeof analyzeWebsite>> | null = null;
     const webdevScoring = serviceMode === "webdev" ? await getWebdevScoringConfig() : null;
     if (serviceMode === "webdev" && webdevScoring) {
-      websiteAnalysis = await analyzeWebsite(websiteOrDomain, webdevScoring, leadId);
+      // Pro-Run Override: capture_screenshot=true im Anreicherungs-Modal erzwingt
+      // den Visual-Pfad, auch wenn das gespeicherte Scoring textbasiert läuft.
+      const effectiveScoring = config.capture_screenshot
+        ? { ...webdevScoring, screenshot_visual_analysis: true }
+        : webdevScoring;
+      websiteAnalysis = await analyzeWebsite(websiteOrDomain, effectiveScoring, leadId);
       // Ergebnisse im Lead speichern
       await db.from("leads").update({
         has_ssl: websiteAnalysis.hasSsl,

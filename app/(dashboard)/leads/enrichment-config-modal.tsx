@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX } from "lucide-react";
+import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX, Camera } from "lucide-react";
 import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
@@ -268,6 +268,27 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                   </label>
                 ))}
               </div>
+
+              {/* Screenshot-Option (nur Webdev) */}
+              {serviceMode === "webdev" && (
+                <label className="flex items-start gap-2.5 rounded-md border border-gray-200 px-3 py-2.5 text-sm dark:border-[#2c2c2e]">
+                  <input
+                    type="checkbox"
+                    checked={config.capture_screenshot ?? false}
+                    onChange={(e) => setConfig({ ...config, capture_screenshot: e.target.checked })}
+                    className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <div>
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Camera className="h-3.5 w-3.5 text-primary" />
+                      Screenshot der Website machen
+                    </span>
+                    <span className="ml-1 text-xs text-gray-400">
+                      Visuelle Design-Analyse + Anzeige im Lead-Detail. +5–8&nbsp;s pro Lead.
+                    </span>
+                  </div>
+                </label>
+              )}
 
               {/* Detail-Modus: Nur bestimmte Firmendaten-Felder */}
               {config.company_details && (

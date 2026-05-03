@@ -370,6 +370,9 @@ export interface EnrichmentConfig {
    *  Beispiel: "Suche gezielt nach Ausbildungsplätzen und HR-Ansprechpartner.
    *  Gründungsjahr ist wichtig." Wird dem System-Prompt als Extra-Regel angehängt. */
   focus_query?: string;
+  /** Pro-Run Override: erzwingt visuelle Screenshot-Analyse, auch wenn das
+   *  Webdesign-Scoring sonst nur HTML-basiert läuft. Nur im Webdev-Modus relevant. */
+  capture_screenshot?: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {

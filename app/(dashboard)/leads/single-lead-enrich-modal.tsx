@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { X, Sparkles, Target, Loader2 } from "lucide-react";
+import { X, Sparkles, Target, Loader2, Camera } from "lucide-react";
 import type { EnrichmentConfig, CompanyDetailField, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { enrichLeadAction } from "./enrichment-actions";
@@ -75,6 +75,7 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
       company_details: config.company_details && (!fieldsOnly || selectedFields.length > 0),
       company_details_fields: fieldsOnly && selectedFields.length > 0 ? selectedFields : undefined,
       focus_query: focusQuery.trim() || undefined,
+      capture_screenshot: config.capture_screenshot,
     };
     startTransition(async () => {
       const res = await enrichLeadAction(leadId, finalConfig, serviceMode);
@@ -134,6 +135,29 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
               ))}
             </div>
           </section>
+
+          {/* Screenshot-Option (nur Webdev) */}
+          {serviceMode === "webdev" && (
+            <section>
+              <label className="flex items-start gap-2.5 rounded-md border border-gray-200 p-3 text-sm hover:border-primary/40 dark:border-[#2c2c2e]">
+                <input
+                  type="checkbox"
+                  checked={config.capture_screenshot ?? false}
+                  onChange={(e) => setConfig({ ...config, capture_screenshot: e.target.checked })}
+                  className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                />
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <Camera className="h-3.5 w-3.5 text-primary" />
+                    Screenshot der Website machen
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    Macht zusätzlich einen Screenshot und lässt das Design optisch bewerten. +5–8&nbsp;s pro Lead, Screenshot wird im Lead-Detail angezeigt.
+                  </p>
+                </div>
+              </label>
+            </section>
+          )}
 
           {/* Firmendaten-Feld-Auswahl */}
           {config.company_details && (
