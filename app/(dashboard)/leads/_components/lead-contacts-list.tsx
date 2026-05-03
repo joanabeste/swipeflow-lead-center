@@ -25,7 +25,9 @@ export function LeadContactsList({
       </div>
       {contacts.length === 0 ? (
         <p className="mt-3 text-sm text-gray-400">
-          {hasWebsite ? "Noch keine Kontakte — Lead anreichern um Kontakte zu finden." : "Keine Website vorhanden."}
+          {hasWebsite
+            ? "Noch keine Kontakte — Lead anreichern um Kontakte zu finden."
+            : "Keine Website hinterlegt — beim Anreichern wird automatisch nach einer gesucht."}
         </p>
       ) : (
         <div className="mt-3 space-y-2">

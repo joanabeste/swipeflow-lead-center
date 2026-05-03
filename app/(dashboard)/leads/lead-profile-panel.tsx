@@ -169,12 +169,13 @@ export function LeadProfilePanel({
             </button>
           )}
 
-          {/* Anreichern — primary action */}
+          {/* Anreichern — primary action. Auch ohne Website verfügbar:
+              der Backend-Flow versucht via findCompanyWebsite() automatisch
+              eine passende Domain zu ermitteln, bevor er aufgibt. */}
           <button
             onClick={() => setEnrichModalOpen(true)}
-            disabled={!hasWebsite}
             className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-900 px-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-            title={!hasWebsite ? "Keine Website/Domain vorhanden" : undefined}
+            title={!hasWebsite ? "Keine Website hinterlegt — wird beim Anreichern automatisch gesucht" : undefined}
           >
             <Sparkles className="h-3.5 w-3.5" />
             {contacts.length > 0 ? "Erneut anreichern" : "Anreichern"}

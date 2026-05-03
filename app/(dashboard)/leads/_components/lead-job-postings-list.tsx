@@ -29,7 +29,9 @@ export function LeadJobPostingsList({
       </div>
       {jobPostings.length === 0 ? (
         <p className="mt-3 text-sm text-gray-400">
-          {hasWebsite ? "Keine Stellen gefunden." : "Keine Website vorhanden."}
+          {hasWebsite
+            ? "Keine Stellen gefunden."
+            : "Keine Website hinterlegt — beim Anreichern wird automatisch nach einer gesucht."}
         </p>
       ) : (
         <div className="mt-3 space-y-1.5">
