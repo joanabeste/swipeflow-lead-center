@@ -168,7 +168,6 @@ export function CrmLeadDetail({
         }
         right={
           <div className="space-y-4">
-            <LeadTodosCard leadId={lead.id} todos={todos} />
             <CrmActivityFeed
               leadId={lead.id}
               leadPhone={lead.phone}
@@ -185,6 +184,7 @@ export function CrmLeadDetail({
               auditLogs={auditLogs}
               callProviders={callProviders}
             />
+            <LeadTodosCard leadId={lead.id} todos={todos} />
           </div>
         }
       />
