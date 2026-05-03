@@ -275,7 +275,7 @@ function TodoComposer({
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-[#2c2c2e] dark:bg-[#161618]"
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark]"
         />
         <div className="ml-auto flex gap-2">
           <button
