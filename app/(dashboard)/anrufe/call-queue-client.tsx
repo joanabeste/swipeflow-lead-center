@@ -488,7 +488,7 @@ export function CallQueueClient({
                             )}
                           </span>
                         )}
-                        {currentLead.domain && <span>{currentLead.domain}</span>}
+                        {currentLead.website && <span>{currentLead.website}</span>}
                       </div>
                     </div>
                     <CallStatusBadge activeCall={activeCall} />
@@ -510,9 +510,9 @@ export function CallQueueClient({
                         {currentLead.job_postings_count} {currentLead.job_postings_count === 1 ? "Stellenanzeige" : "Stellenanzeigen"}
                       </span>
                     )}
-                    {currentLead.domain && (
+                    {currentLead.website && (
                       <a
-                        href={`https://${currentLead.domain}`}
+                        href={`https://${currentLead.website}`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700 hover:bg-gray-200 dark:bg-white/5 dark:text-gray-300"

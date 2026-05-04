@@ -72,8 +72,7 @@ export async function importFromUrl(url: string): Promise<{
       .from("leads")
       .insert({
         company_name: companyName,
-        domain,
-        website: url.startsWith("http") ? url : `https://${url}`,
+        website: domain,
         source_type: "url",
         source_url: url,
         source_import_id: importLog?.id,
@@ -223,7 +222,7 @@ export async function createLeadsFromDirectory(
 
     const leadData: Record<string, string | null> = {
       company_name: company.name,
-      domain,
+      website: domain,
     };
 
     // Blacklist-Check
@@ -262,7 +261,7 @@ export async function createLeadsFromDirectory(
 
     await db.from("leads").insert({
       company_name: company.name,
-      domain,
+      website: domain,
       source_type: "directory",
       source_url: sourceUrl,
       source_import_id: importLog?.id,

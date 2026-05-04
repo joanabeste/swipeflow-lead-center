@@ -19,7 +19,7 @@ const statusOptions: { value: string; label: string; color: string }[] = [
 
 const fieldLabels: Record<string, string> = {
   company_name: "Firmenname",
-  domain: "Domain",
+  website: "Website",
   phone: "Telefon",
   email: "E-Mail",
   street: "Straße",

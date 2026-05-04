@@ -46,16 +46,16 @@ export async function enrichLead(
 
   if (!lead) return { success: false, error: "Lead nicht gefunden." };
 
-  let websiteOrDomain: string | null = lead.domain ?? null;
+  let websiteOrDomain: string | null = lead.website ?? null;
 
-  // Wenn keine Domain hinterlegt: automatisch suchen
+  // Wenn keine Website hinterlegt: automatisch suchen
   if (!websiteOrDomain) {
     const foundDomain = await findCompanyWebsite(lead.company_name, lead.city);
     if (foundDomain) {
       websiteOrDomain = foundDomain;
-      // Domain im Lead speichern
+      // Im Lead speichern
       await db.from("leads").update({
-        domain: foundDomain,
+        website: foundDomain,
         updated_at: new Date().toISOString(),
       }).eq("id", leadId);
     } else {

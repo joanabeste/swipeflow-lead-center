@@ -1,12 +1,12 @@
 /**
  * Helper rund um die Web-Adresse eines Leads. Single Source of Truth ist
- * `lead.domain` — Anzeige-Links werden zur Render-Zeit als `https://${domain}`
+ * `lead.website` — Anzeige-Links werden zur Render-Zeit als `https://${website}`
  * konstruiert. Subpages für Karriereseiten leben in `lead.career_page_url`.
  */
 
-/** Liefert die Homepage-URL eines Leads oder null, wenn keine Domain hinterlegt. */
-export function leadHomepageUrl(lead: { domain: string | null }): string | null {
-  return lead.domain ? `https://${lead.domain}` : null;
+/** Liefert die Homepage-URL eines Leads oder null, wenn keine Website hinterlegt. */
+export function leadHomepageUrl(lead: { website: string | null }): string | null {
+  return lead.website ? `https://${lead.website}` : null;
 }
 
 /** Extrahiert die nackte Domain aus einer beliebigen URL/Eingabe.

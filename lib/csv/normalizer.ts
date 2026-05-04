@@ -72,14 +72,14 @@ export function normalizeLeadRow(
   if (normalized.phone) normalized.phone = normalizePhone(normalized.phone);
   if (normalized.email) normalized.email = normalizeEmail(normalized.email);
 
-  // Domain immer als nackte Domain speichern — falls der CSV-User eine volle URL
+  // Website immer als nackte Domain speichern — falls der CSV-User eine volle URL
   // eingetragen hat (https://www.foo.de/bla), wird der Hostname extrahiert.
-  if (normalized.domain) {
-    normalized.domain = extractDomain(normalized.domain);
+  if (normalized.website) {
+    normalized.website = extractDomain(normalized.website);
   }
-  // Fallback: aus E-Mail extrahieren wenn keine Domain hinterlegt
-  if (!normalized.domain) {
-    normalized.domain = extractDomain(normalized.email) ?? null;
+  // Fallback: aus E-Mail extrahieren wenn keine Website hinterlegt
+  if (!normalized.website) {
+    normalized.website = extractDomain(normalized.email) ?? null;
   }
 
   // Default-Land

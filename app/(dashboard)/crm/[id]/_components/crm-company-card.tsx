@@ -12,14 +12,14 @@ export function CrmCompanyCard({
         Firma
       </h2>
       <h3 className="mt-2 text-lg font-bold tracking-tight">{lead.company_name}</h3>
-      {lead.domain && (
+      {lead.website && (
         <a
-          href={`https://${lead.domain}`}
+          href={`https://${lead.website}`}
           target="_blank"
           rel="noreferrer"
           className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
-          {lead.domain}
+          {lead.website}
           <ExternalLink className="h-3 w-3" />
         </a>
       )}

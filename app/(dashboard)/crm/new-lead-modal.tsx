@@ -20,7 +20,6 @@ export function NewLeadModal({
   const [error, setError] = useState<string | null>(null);
 
   const [companyName, setCompanyName] = useState("");
-  const [domain, setDomain] = useState("");
   const [website, setWebsite] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -45,7 +44,6 @@ export function NewLeadModal({
     startTransition(async () => {
       const res = await createManualLead({
         companyName,
-        domain: domain || null,
         website: website || null,
         phone: phone || null,
         email: email || null,
@@ -110,7 +108,6 @@ export function NewLeadModal({
             <Field label="Telefon" value={phone} onChange={setPhone} placeholder="+49 …" />
             <Field label="E-Mail" value={email} onChange={setEmail} placeholder="info@firma.de" type="email" />
             <Field label="Website" value={website} onChange={setWebsite} placeholder="firma.de" />
-            <Field label="Domain" value={domain} onChange={setDomain} placeholder="firma.de" />
           </div>
 
           {/* Adresse */}

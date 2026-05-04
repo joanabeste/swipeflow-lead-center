@@ -10,7 +10,7 @@ export interface LeadField {
 
 export const leadFields: LeadField[] = [
   { key: "company_name", label: "Firmenname", type: "text", required: true },
-  { key: "domain", label: "Domain", type: "url", required: false },
+  { key: "website", label: "Website", type: "url", required: false },
   { key: "phone", label: "Telefon", type: "phone", required: false },
   { key: "email", label: "E-Mail", type: "email", required: false },
   { key: "street", label: "Straße", type: "text", required: false },
@@ -48,13 +48,13 @@ export const knownColumnAliases: Record<string, string> = {
   "e-mail": "email",
   "email": "email",
   "mail": "email",
-  // URL-haltige Spalten werden auf das domain-Feld gemappt — der Normalizer
+  // URL-haltige Spalten werden auf das website-Feld gemappt — der Normalizer
   // extrahiert die nackte Domain aus der eingegebenen URL.
-  "website": "domain",
-  "webseite": "domain",
-  "url": "domain",
-  "homepage": "domain",
-  "domain": "domain",
+  "website": "website",
+  "webseite": "website",
+  "url": "website",
+  "homepage": "website",
+  "domain": "website",
   "branche": "industry",
   "industry": "industry",
   "plz": "zip",

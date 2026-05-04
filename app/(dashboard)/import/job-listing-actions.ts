@@ -193,7 +193,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   const ctx = await loadImportContext(db);
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, domain, status, crm_status_id");
+    .select("id, company_name, website, status, crm_status_id");
   const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
@@ -235,7 +235,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
     // Blacklist + Cancel-Rules
     const leadData: Record<string, string | null> = {
       company_name: first.companyName,
-      domain,
+      website: domain,
       email: first.email,
     };
     if (checkLead(leadData, ctx.rules, ctx.entries).blocked) { skipped++; continue; }
@@ -259,7 +259,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
           const updates: Record<string, unknown> = {};
           if (!existingLead.email && first.email) updates.email = first.email;
           if (!existingLead.phone && first.phone) updates.phone = first.phone;
-          if (!existingLead.domain && domain) updates.domain = domain;
+          if (!existingLead.website && domain) updates.website = domain;
           if (!existingLead.career_page_url && first.careerPage) updates.career_page_url = first.careerPage;
           if (!existingLead.city && descData.city) updates.city = descData.city;
           if (!existingLead.zip && descData.zip) updates.zip = descData.zip;
@@ -296,7 +296,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
       company_name: nl.company.companyName,
       email: nl.company.email,
       phone: nl.company.phone,
-      domain: nl.domain,
+      website: nl.domain,
       career_page_url: nl.company.careerPage,
       city: nl.descData.city,
       zip: nl.descData.zip,

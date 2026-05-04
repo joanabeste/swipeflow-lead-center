@@ -7,7 +7,7 @@ import { updateLead } from "../actions";
 
 const fieldLabels: Record<string, string> = {
   company_name: "Firmenname",
-  domain: "Domain",
+  website: "Website",
   phone: "Telefon",
   email: "E-Mail",
   street: "Straße",

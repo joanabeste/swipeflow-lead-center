@@ -34,7 +34,7 @@ const statusLabels: Record<string, { label: string; color: string }> = {
 
 const ALL_COLUMNS = [
   { key: "company_name", label: "Firma", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "domain", label: "Domain", defaultVisible: true, modes: ["recruiting", "webdev"] },
+  { key: "website", label: "Website", defaultVisible: true, modes: ["recruiting", "webdev"] },
   { key: "city", label: "Ort", defaultVisible: true, modes: ["recruiting", "webdev"] },
   { key: "zip", label: "PLZ", defaultVisible: false, modes: ["recruiting", "webdev"] },
   { key: "industry", label: "Branche", defaultVisible: true, modes: ["recruiting"] },
@@ -511,15 +511,15 @@ export function LeadTable({
                             >
                               {status.label}
                             </span>
-                          ) : col.key === "domain" && lead.domain ? (
+                          ) : col.key === "website" && lead.website ? (
                             <a
-                              href={`https://${lead.domain}`}
+                              href={`https://${lead.website}`}
                               target="_blank"
                               rel="noreferrer noopener"
                               onClick={(e) => e.stopPropagation()}
                               className="text-primary hover:underline"
                             >
-                              {lead.domain}
+                              {lead.website}
                             </a>
                           ) : (
                             getCellValue(lead, col.key)

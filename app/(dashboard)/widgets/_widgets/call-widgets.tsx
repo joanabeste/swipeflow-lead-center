@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, StickyNote, CheckSquare, Sun, Trophy } from "lucide-react";
 import type { DashboardData } from "../data";
-import { Card, LegendDot, weekdayShort } from "./shared";
+import { Card } from "./shared";
+
+export { CallStats7dWidget } from "./call-stats-7d";
 
 // ─── Heutige Anrufe ────────────────────────────────────────────────
 
@@ -97,53 +99,6 @@ function greetingForHour(h: number): string {
   if (h < 14) return "Mittag";
   if (h < 18) return "Nachmittag";
   return "Guten Abend";
-}
-
-// ─── Anrufe (7 Tage) ────────────────────────────────────────────────
-
-export function CallStats7dWidget({ data }: { data: DashboardData }) {
-  const maxDaily = Math.max(1, ...data.callsByDay.map((d) => d.outbound + d.inbound + d.missed));
-  const totalInbound = data.callsByDay.reduce((s, d) => s + d.inbound, 0);
-  const totalOutbound = data.callsByDay.reduce((s, d) => s + d.outbound, 0);
-  const totalMissed = data.callsByDay.reduce((s, d) => s + d.missed, 0);
-  return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
-            Anrufe (7 Tage)
-            <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:bg-white/5 dark:text-gray-400">
-              Team
-            </span>
-          </p>
-          <p className="mt-0.5 text-lg font-bold">{data.callsTotal7d} gesamt</p>
-        </div>
-        <div className="flex gap-3 text-xs">
-          <LegendDot color="bg-emerald-500" label={`Ausgehend ${totalOutbound}`} />
-          <LegendDot color="bg-blue-500" label={`Eingehend ${totalInbound}`} />
-          <LegendDot color="bg-red-400" label={`Verpasst ${totalMissed}`} />
-        </div>
-      </div>
-      <div className="mt-5 flex h-28 items-end gap-1.5">
-        {data.callsByDay.map((d) => {
-          const total = d.outbound + d.inbound + d.missed;
-          const h = (total / maxDaily) * 100;
-          return (
-            <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
-              <div className="flex w-full flex-col justify-end" style={{ height: "6rem" }}>
-                <div className="flex w-full flex-col overflow-hidden rounded-t-md" style={{ height: `${h}%` }}>
-                  {d.outbound > 0 && <div className="bg-emerald-500" style={{ flexGrow: d.outbound }} title={`Ausgehend: ${d.outbound}`} />}
-                  {d.inbound > 0 && <div className="bg-blue-500" style={{ flexGrow: d.inbound }} title={`Eingehend: ${d.inbound}`} />}
-                  {d.missed > 0 && <div className="bg-red-400" style={{ flexGrow: d.missed }} title={`Verpasst: ${d.missed}`} />}
-                </div>
-              </div>
-              <p className="text-[10px] text-gray-400">{weekdayShort(d.date)}</p>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
-  );
 }
 
 // ─── Team-Leaderboard heute ──────────────────────────────────────

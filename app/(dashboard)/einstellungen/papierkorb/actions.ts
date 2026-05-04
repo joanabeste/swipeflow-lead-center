@@ -13,7 +13,7 @@ async function requireUser() {
 export interface TrashedLead {
   id: string;
   company_name: string;
-  domain: string | null;
+  website: string | null;
   city: string | null;
   deleted_at: string;
   expires_at: string;
@@ -42,7 +42,7 @@ export async function listTrash(): Promise<{ leads: TrashedLead[]; deals: Trashe
   const [{ data: leads }, { data: deals }] = await Promise.all([
     db
       .from("leads")
-      .select("id, company_name, domain, city, deleted_at")
+      .select("id, company_name, website, city, deleted_at")
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false })
       .limit(500),
@@ -57,7 +57,7 @@ export async function listTrash(): Promise<{ leads: TrashedLead[]; deals: Trashe
   const leadRows: TrashedLead[] = (leads ?? []).map((l) => ({
     id: l.id as string,
     company_name: (l.company_name as string) ?? "—",
-    domain: (l.domain as string | null) ?? null,
+    website: (l.website as string | null) ?? null,
     city: (l.city as string | null) ?? null,
     deleted_at: l.deleted_at as string,
     expires_at: addDays(l.deleted_at as string, 30),

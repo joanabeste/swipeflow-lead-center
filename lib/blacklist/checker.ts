@@ -78,7 +78,10 @@ function getMatchField(
     case "name":
       return lead.company_name ?? null;
     case "domain":
-      return lead.domain ?? null;
+      // Match-Type-String "domain" bleibt aus Backwards-Compat-Gründen erhalten
+      // (Blacklist-Einträge sind so in der DB persistiert). Die Datenquelle ist
+      // aber das umbenannte `website`-Feld des Leads.
+      return lead.website ?? null;
     case "register_id":
       return lead.register_id ?? null;
     default:

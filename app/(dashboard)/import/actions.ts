@@ -101,7 +101,7 @@ export async function processImport(
   const leadsToInsert: Record<string, unknown>[] = [];
 
   const updateFields = [
-    "domain", "phone", "email", "street", "city", "zip", "state",
+    "website", "phone", "email", "street", "city", "zip", "state",
     "country", "industry", "company_size", "legal_form", "register_id",
     "description",
   ];
@@ -190,14 +190,14 @@ export async function processImport(
       status = "cancelled";
       cancelReason = cancelResult.reasons.map((r) => r.reason).join("; ");
       cancelRuleId = cancelResult.reasons[0].ruleId;
-    } else if (blockMissingWebsite && !row.domain) {
+    } else if (blockMissingWebsite && !row.website) {
       status = "cancelled";
       cancelReason = "Webdesign-Import: keine Website";
     }
 
     leadsToInsert.push({
       company_name: row.company_name,
-      domain: row.domain,
+      website: row.website,
       phone: row.phone,
       email: row.email,
       street: row.street,

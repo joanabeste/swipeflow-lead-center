@@ -81,7 +81,7 @@ export async function processEnrichmentJob(jobId: string): Promise<void> {
     db
       .from("leads")
       .select(
-        "id, company_name, status, blacklist_hit, cancel_reason, legal_form, company_size, domain, website",
+        "id, company_name, status, blacklist_hit, cancel_reason, legal_form, company_size, website",
       )
       .in("id", leadIds),
     db.from("cancel_rules").select("*").eq("is_active", true),

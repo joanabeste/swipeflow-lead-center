@@ -39,25 +39,27 @@ export function fixMojibake(s: string | null | undefined): string {
 }
 
 /**
- * Extrahiert Website-URL und Domain. Filtert Google-Ads-Tracking-Links (`google.com/aclk`)
- * und ungültige Werte (kein gültiger Hostname mit TLD) komplett aus, sodass nur
- * brauchbare Domains durchkommen.
+ * Extrahiert die nackte Domain aus einer Eingabe-URL. Filtert Google-Ads-
+ * Tracking-Links (`google.com/aclk`) und ungültige Werte (kein gültiger
+ * Hostname mit TLD) komplett aus, sodass nur brauchbare Domains durchkommen.
+ *
+ * Lokale Variable `domain` = der Hostname-String. Das DB-Feld dafür heißt
+ * inzwischen `website` — die Aufrufer mappen lokal um.
  */
 export function extractWebsiteAndDomain(websiteRaw: string | null | undefined): {
-  website: string | null;
   domain: string | null;
 } {
   const trimmed = websiteRaw?.trim() ?? "";
-  if (!trimmed) return { website: null, domain: null };
-  if (trimmed.includes("google.com/aclk")) return { website: null, domain: null };
+  if (!trimmed) return { domain: null };
+  if (trimmed.includes("google.com/aclk")) return { domain: null };
   try {
     const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     const host = url.hostname.replace(/^www\./, "");
     // Hostname muss mindestens einen Punkt haben (echte Domain mit TLD)
-    if (!host.includes(".")) return { website: null, domain: null };
-    return { website: trimmed, domain: host };
+    if (!host.includes(".")) return { domain: null };
+    return { domain: host };
   } catch {
-    return { website: null, domain: null };
+    return { domain: null };
   }
 }
 
@@ -152,7 +154,8 @@ export interface LeadIndex {
 export interface ExistingLeadRow {
   id: string;
   company_name: string;
-  domain: string | null;
+  /** Spalten-Name `website` aus der DB; Inhalt ist die nackte Domain. */
+  website: string | null;
   status?: string | null;
   crm_status_id?: string | null;
 }
@@ -167,8 +170,8 @@ export function buildLeadIndex(leads: ExistingLeadRow[]): LeadIndex {
   const byName: { id: string; name: string }[] = [];
   const crmStatusById = new Map<string, { status: string | null; crmStatusId: string | null }>();
   for (const l of leads) {
-    if (l.domain) {
-      const norm = normalizeDomain(l.domain);
+    if (l.website) {
+      const norm = normalizeDomain(l.website);
       if (norm && !byDomain.has(norm)) byDomain.set(norm, l.id);
     }
     byName.push({ id: l.id, name: l.company_name });

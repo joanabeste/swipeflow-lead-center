@@ -85,7 +85,7 @@ export async function GET(request: Request) {
   // CSV-Zeilen
   const rows = leads.map((lead) => {
     const baseRow = [
-      lead.company_name, lead.domain, lead.phone, lead.email,
+      lead.company_name, lead.website, lead.phone, lead.email,
       lead.street, lead.city, lead.zip, lead.state, lead.country,
       lead.industry, lead.company_size, lead.legal_form,
       lead.register_id, lead.description, lead.status,

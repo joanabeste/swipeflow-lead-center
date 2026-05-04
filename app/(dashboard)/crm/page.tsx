@@ -159,7 +159,7 @@ export default async function CrmPage({
 
   if (sp.q) {
     const like = `%${sp.q}%`;
-    query = query.or(`company_name.ilike.${like},domain.ilike.${like},city.ilike.${like}`);
+    query = query.or(`company_name.ilike.${like},website.ilike.${like},city.ilike.${like}`);
   }
 
   // Spalten-Filter
@@ -219,7 +219,7 @@ export default async function CrmPage({
     return {
       id: l.id,
       company_name: l.company_name,
-      domain: l.domain,
+      website: l.website,
       city: l.city,
       zip: l.zip,
       industry: l.industry,

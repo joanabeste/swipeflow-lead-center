@@ -102,9 +102,9 @@ export async function mergeLeads(keepId: string, mergeId: string) {
 
   // Felder übernehmen die im Haupt-Lead leer sind
   const fieldsToMerge = [
-    "domain", "phone", "email", "street", "city", "zip", "state",
+    "website", "phone", "email", "street", "city", "zip", "state",
     "country", "industry", "company_size", "legal_form", "register_id",
-    "website", "career_page_url", "description",
+    "career_page_url", "description",
   ];
 
   const updates: Record<string, unknown> = {};
@@ -145,13 +145,13 @@ export async function mergeLeads(keepId: string, mergeId: string) {
 
 export async function findSimilarLeads(leadId: string) {
   const db = createServiceClient();
-  const { data: lead } = await db.from("leads").select("company_name, domain, city").eq("id", leadId).single();
+  const { data: lead } = await db.from("leads").select("company_name, website, city").eq("id", leadId).single();
   if (!lead) return [];
 
   // Nach ähnlichem Namen oder gleicher Domain suchen
   const { data: candidates } = await db
     .from("leads")
-    .select("id, company_name, domain, city, status")
+    .select("id, company_name, website, city, status")
     .neq("id", leadId)
     .is("deleted_at", null)
     .limit(100);
@@ -161,7 +161,7 @@ export async function findSimilarLeads(leadId: string) {
   const { isFuzzyMatch, isDomainMatch, normalizeDomain } = await import("@/lib/csv/dedup");
 
   return candidates.filter((c) => {
-    if (lead.domain && c.domain && isDomainMatch(normalizeDomain(lead.domain), normalizeDomain(c.domain))) return true;
+    if (lead.website && c.website && isDomainMatch(normalizeDomain(lead.website), normalizeDomain(c.website))) return true;
     if (lead.company_name && c.company_name && isFuzzyMatch(lead.company_name, c.company_name)) return true;
     return false;
   }).slice(0, 10);
@@ -175,9 +175,9 @@ export async function searchLeads(query: string) {
 
   const { data } = await db
     .from("leads")
-    .select("id, company_name, domain, city, status")
+    .select("id, company_name, website, city, status")
     .is("deleted_at", null)
-    .or(`company_name.ilike.${q},domain.ilike.${q},city.ilike.${q},email.ilike.${q},phone.ilike.${q}`)
+    .or(`company_name.ilike.${q},website.ilike.${q},city.ilike.${q},email.ilike.${q},phone.ilike.${q}`)
     .limit(8);
 
   return data ?? [];
@@ -213,16 +213,17 @@ export async function bulkAddToBlacklist(leadIds: string[]) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Leads laden
-  const { data: leads } = await db.from("leads").select("company_name, domain").in("id", leadIds);
+  const { data: leads } = await db.from("leads").select("company_name, website").in("id", leadIds);
   if (!leads) return { error: "Leads nicht gefunden." };
 
   let added = 0;
   for (const lead of leads) {
-    // Domain blacklisten wenn vorhanden
-    if (lead.domain) {
+    // Domain blacklisten wenn vorhanden (BlacklistMatchType "domain" bleibt
+    // als String-Konstante erhalten — referenziert auf Storage-Werte).
+    if (lead.website) {
       const { error } = await db.from("blacklist_entries").insert({
         match_type: "domain",
-        match_value: lead.domain,
+        match_value: lead.website,
         reason: "Manuell aus Lead-Liste",
         created_by: user?.id,
       });

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Merge } from "lucide-react";
 import { findSimilarLeads, mergeLeads } from "../actions";
 
-type SimilarLead = { id: string; company_name: string; domain: string | null; city: string | null; status: string };
+type SimilarLead = { id: string; company_name: string; website: string | null; city: string | null; status: string };
 
 export function LeadDuplicatesCard({ leadId }: { leadId: string }) {
   const [similar, setSimilar] = useState<SimilarLead[]>([]);
@@ -40,7 +40,7 @@ export function LeadDuplicatesCard({ leadId }: { leadId: string }) {
             <div key={s.id} className="flex items-center justify-between rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
               <div>
                 <p className="text-sm font-medium">{s.company_name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{s.domain ?? s.city ?? "–"}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{s.website ?? s.city ?? "–"}</p>
               </div>
               <button
                 onClick={() => {

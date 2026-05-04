@@ -86,7 +86,7 @@ export async function processInstantScraperImport(
   }
 
   const ctx = await loadImportContext(db);
-  const { data: existingLeads } = await db.from("leads").select("id, company_name, domain");
+  const { data: existingLeads } = await db.from("leads").select("id, company_name, website");
   const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
@@ -137,7 +137,7 @@ export async function processInstantScraperImport(
     const mapsUrl = (cMapsUrl >= 0 ? row[cMapsUrl]?.trim() : "") || null;
     const { city, zip } = parseCityZipFromMapsUrl(mapsUrl);
 
-    const leadData: Record<string, string | null> = { company_name: companyName, domain, phone };
+    const leadData: Record<string, string | null> = { company_name: companyName, website: domain, phone };
     if (checkLead(leadData, ctx.rules, ctx.entries).blocked) { skipped++; continue; }
     if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) {
       skipped++;
@@ -151,7 +151,7 @@ export async function processInstantScraperImport(
       if (existingLead) {
         const updates: Record<string, unknown> = {};
         if (!existingLead.phone && phone) updates.phone = phone;
-        if (!existingLead.domain && domain) updates.domain = domain;
+        if (!existingLead.website && domain) updates.website = domain;
         if (!existingLead.industry && industry) updates.industry = industry;
         if (!existingLead.street && street) updates.street = street;
         if (!existingLead.city && city) updates.city = city;
@@ -167,7 +167,7 @@ export async function processInstantScraperImport(
       newLeads.push({
         company_name: companyName,
         phone,
-        domain,
+        website: domain,
         industry,
         street,
         city,

@@ -8,7 +8,7 @@ import { searchLeads } from "./leads/actions";
 interface SearchResult {
   id: string;
   company_name: string;
-  domain: string | null;
+  website: string | null;
   city: string | null;
   status: string;
 }

@@ -29,7 +29,7 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   if (params.q) {
     query = query.or(
-      `company_name.ilike.%${params.q}%,domain.ilike.%${params.q}%,city.ilike.%${params.q}%`,
+      `company_name.ilike.%${params.q}%,website.ilike.%${params.q}%,city.ilike.%${params.q}%`,
     );
   }
 

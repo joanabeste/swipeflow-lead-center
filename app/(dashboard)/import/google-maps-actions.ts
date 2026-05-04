@@ -57,7 +57,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
   const ctx = await loadImportContext(db);
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, domain");
+    .select("id, company_name, website");
   const leadIndex = buildLeadIndex(existingLeads ?? []);
 
   let imported = 0;
@@ -76,7 +76,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
     const { domain } = extractWebsiteAndDomain(row[col.website]);
 
     // Blacklist + Cancel
-    const leadData: Record<string, string | null> = { company_name: companyName, domain, phone };
+    const leadData: Record<string, string | null> = { company_name: companyName, website: domain, phone };
     if (checkLead(leadData, ctx.rules, ctx.entries).blocked) { skipped++; continue; }
     if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) { skipped++; continue; }
 
@@ -88,7 +88,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
       if (existingLead) {
         const updates: Record<string, unknown> = {};
         if (!existingLead.phone && phone) updates.phone = phone;
-        if (!existingLead.domain && domain) updates.domain = domain;
+        if (!existingLead.website && domain) updates.website = domain;
         if (!existingLead.industry && category) updates.industry = category;
         if (!existingLead.street && address) updates.street = address;
         if (Object.keys(updates).length > 0) {
@@ -101,7 +101,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
       newLeads.push({
         company_name: companyName,
         phone,
-        domain,
+        website: domain,
         industry: category || null,
         street: address || null,
         country: "Deutschland",

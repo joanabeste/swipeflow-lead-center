@@ -8,7 +8,7 @@ import { Card } from "./crm-shared";
 
 const FIELD_LABELS: Record<string, string> = {
   company_name: "Firmenname",
-  domain: "Domain",
+  website: "Website",
   phone: "Telefon",
   email: "E-Mail",
   street: "Straße",

@@ -172,7 +172,7 @@ export async function extractLeadBrandAction(input: {
   const db = createServiceClient();
   const { data: lead } = await db
     .from("leads")
-    .select("website, domain, primary_color, logo_url")
+    .select("website, primary_color, logo_url")
     .eq("id", input.leadId)
     .maybeSingle();
   if (!lead) return { error: "Lead nicht gefunden." };
@@ -187,11 +187,11 @@ export async function extractLeadBrandAction(input: {
     };
   }
 
-  const domain = (lead.domain as string | null) ?? null;
-  if (!domain) {
-    return { error: "Lead hat keine Domain — nichts zu extrahieren." };
+  const website = (lead.website as string | null) ?? null;
+  if (!website) {
+    return { error: "Lead hat keine Website — nichts zu extrahieren." };
   }
-  const source = `https://${domain}`;
+  const source = `https://${website}`;
 
   const { primaryColor, logoUrl } = await extractBrandFromWebsite(source);
 

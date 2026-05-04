@@ -79,7 +79,7 @@ export function LeadDetailSections({
     lead.register_id ||
     lead.description;
   const hasTechData =
-    lead.domain ||
+    lead.website ||
     lead.career_page_url ||
     lead.has_ssl != null ||
     lead.page_speed_score != null ||
@@ -201,7 +201,7 @@ export function LeadDetailSections({
                     className="inline-flex items-center gap-1 text-primary hover:underline"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    {lead.domain}
+                    {lead.website}
                   </a>
                 </DataRow>
               ) : null;

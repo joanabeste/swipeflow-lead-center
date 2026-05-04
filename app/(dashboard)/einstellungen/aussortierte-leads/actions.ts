@@ -13,7 +13,7 @@ async function requireUser() {
 export interface ArchivedLead {
   id: string;
   company_name: string;
-  domain: string | null;
+  website: string | null;
   city: string | null;
   vertical: "recruiting" | "webdesign" | null;
   crm_status_id: string;
@@ -56,7 +56,7 @@ export async function listArchivedLeads(): Promise<ArchivedLeadsResult> {
 
   const { data: leads } = await db
     .from("leads")
-    .select("id, company_name, domain, city, vertical, crm_status_id, updated_at")
+    .select("id, company_name, website, city, vertical, crm_status_id, updated_at")
     .is("deleted_at", null)
     .in("crm_status_id", archivedStatusIds)
     .order("updated_at", { ascending: false })
@@ -65,7 +65,7 @@ export async function listArchivedLeads(): Promise<ArchivedLeadsResult> {
   const rows: ArchivedLead[] = (leads ?? []).map((l) => ({
     id: l.id as string,
     company_name: (l.company_name as string) ?? "—",
-    domain: (l.domain as string | null) ?? null,
+    website: (l.website as string | null) ?? null,
     city: (l.city as string | null) ?? null,
     vertical: (l.vertical as "recruiting" | "webdesign" | null) ?? null,
     crm_status_id: l.crm_status_id as string,

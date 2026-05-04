@@ -63,7 +63,7 @@ const DEAL_SELECT = `
   probability, next_step, last_followup_at,
   company_name,
   created_by, created_at, updated_at,
-  leads(company_name, domain),
+  leads(company_name, website),
   deal_stages!inner(label, color, kind),
   profiles:assigned_to(name, avatar_url)
 `;
@@ -374,7 +374,7 @@ type DealRelRow = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  leads: JoinRow<{ company_name: string; domain: string | null }>;
+  leads: JoinRow<{ company_name: string; website: string | null }>;
   deal_stages: JoinRow<{ label: string; color: string; kind: DealStageKind }>;
   profiles?: JoinRow<{ name: string | null; avatar_url: string | null }>;
 };
@@ -409,7 +409,7 @@ function mapDealRelRow(r: unknown): DealWithRelations {
     // Snapshot auf dem Deal hat Vorrang — bleibt auch stehen, wenn der Lead
     // gelöscht wurde (FK ON DELETE SET NULL).
     company_name: row.company_name ?? lead?.company_name ?? "—",
-    company_domain: lead?.domain ?? null,
+    company_domain: lead?.website ?? null,
     stage_label: stage?.label ?? row.stage_id,
     stage_color: stage?.color ?? "#6b7280",
     stage_kind: stage?.kind ?? "open",

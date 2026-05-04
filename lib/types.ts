@@ -32,7 +32,7 @@ export interface Lead {
   id: string;
   status: LeadStatus;
   company_name: string;
-  domain: string | null;
+  website: string | null;
   phone: string | null;
   email: string | null;
   street: string | null;

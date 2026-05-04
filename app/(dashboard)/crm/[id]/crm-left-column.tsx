@@ -61,7 +61,7 @@ export function CrmLeftColumn({
         brand={{
           primaryColor: lead.primary_color,
           logoUrl: lead.logo_url,
-          domain: lead.domain,
+          website: lead.website,
         }}
       />
       <CrmJobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />

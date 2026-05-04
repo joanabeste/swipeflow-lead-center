@@ -95,7 +95,7 @@ export function ArchiveManager({ leads }: Props) {
                       <div className="min-w-0">
                         <p className="truncate font-medium">{l.company_name}</p>
                         <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                          {[l.domain, l.city].filter(Boolean).join(" · ") || "—"}
+                          {[l.website, l.city].filter(Boolean).join(" · ") || "—"}
                         </p>
                       </div>
                     </Link>

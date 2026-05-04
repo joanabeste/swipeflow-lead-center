@@ -205,7 +205,7 @@ export default async function CrmLeadPage({
     <LeadScreenshotCard
       screenshotPath={typedLead.website_screenshot_path}
       takenAt={typedLead.website_screenshot_taken_at}
-      websiteUrl={typedLead.domain ? `https://${typedLead.domain}` : null}
+      websiteUrl={typedLead.website ? `https://${typedLead.website}` : null}
     />
   );
 

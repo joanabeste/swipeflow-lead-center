@@ -113,7 +113,7 @@ export function findInternalDuplicates(
 
   rows.forEach((row, index) => {
     const name = row.company_name ?? "";
-    const domain = row.domain ? normalizeDomain(row.domain) : null;
+    const domain = row.website ? normalizeDomain(row.website) : null;
 
     for (const prev of processed) {
       // Domain-Match
@@ -160,16 +160,16 @@ export async function findDbDuplicatesDetailed(
     .eq("is_archived", true);
   const archivedSet = new Set((archivedRows ?? []).map((r) => r.id as string));
 
-  // Alle existierenden Leads laden (ID, Domain, Name, Stadt, CRM-Status)
+  // Alle existierenden Leads laden (ID, Website, Name, Stadt, CRM-Status)
   const { data: existingLeads } = await supabase
     .from("leads")
-    .select("id, domain, company_name, city, crm_status_id");
+    .select("id, website, company_name, city, crm_status_id");
 
   if (!existingLeads || existingLeads.length === 0) return duplicates;
 
   const existingWithDomain = existingLeads
-    .filter((l) => l.domain)
-    .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.domain!) }));
+    .filter((l) => l.website)
+    .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.website!) }));
 
   function buildMatch(lead: { id: string; crm_status_id: string | null }): DuplicateMatch {
     return {
@@ -179,9 +179,9 @@ export async function findDbDuplicatesDetailed(
   }
 
   rows.forEach((row, index) => {
-    // Domain-Match
-    if (row.domain) {
-      const d = normalizeDomain(row.domain);
+    // Domain-Match (CSV-Row-Property heißt jetzt website, Inhalt = nackte Domain)
+    if (row.website) {
+      const d = normalizeDomain(row.website);
       const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
       if (match) {
         duplicates.set(index, buildMatch(match));
