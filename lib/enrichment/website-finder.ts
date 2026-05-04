@@ -88,9 +88,10 @@ export async function findCompanyWebsite(companyName: string, city?: string | nu
   return null;
 }
 
-/** Extrahiert "bedeutungsvolle" Tokens aus dem Firmennamen, mit denen
- *  Domain-Treffer geprüft werden können. Eigennamen, Markenwörter — keine
- *  Branchen-Generika, keine Rechtsformen. */
+/** Extrahiert alle Tokens aus dem Firmennamen, die für Domain-Suche relevant sind.
+ *  Enthält Eigennamen, Branchen-Wörter (für „fahrschule-pagel"-Patterns) und
+ *  Bindestrich-Pairs (für „acryl-decor"-Patterns). Rechtsformen (gmbh/ag/…)
+ *  werden ausgefiltert, weil sie nie Teil einer Domain sind. */
 export function extractMeaningfulTokens(name: string): string[] {
   const cleaned = name
     .toLowerCase()
@@ -98,23 +99,40 @@ export function extractMeaningfulTokens(name: string): string[] {
     .replace(/[.,()&/+]/g, " ")
     .replace(/[^a-z0-9\s-]/g, " ");
   const raw = cleaned.split(/[\s-]+/).filter(Boolean);
-  const tokens = raw.filter((w) => w.length >= 3 && !GENERIC_WORDS.has(w));
-  // Wenn nach Filterung nichts übrig: alle Tokens >= 3 nehmen (z.B. "Fahrschule Pagel" → "pagel"
-  // wird sonst rausgefiltert wenn nur generic/2-letter)
-  if (tokens.length === 0) {
-    return raw.filter((w) => w.length >= 3);
-  }
-  return tokens;
+
+  // Rechtsformen + offensichtliche Bindewörter komplett raus, der Rest bleibt
+  // (auch generische Branchen-Wörter wie „fahrschule" werden für Variant-Bauen
+  // gebraucht, z.B. „fahrschule-pagel.de").
+  const tokens = raw.filter((w) => w.length >= 3 && !LEGAL_FORM_WORDS.has(w));
+
+  // Bindestrich-Pairs als zusätzliche Tokens — „acryl-decor", „kfz-mueller", etc.
+  // Werden vor die Standard-Tokens gestellt, weil sie spezifischer sind.
+  const hyphenPairs = (cleaned.match(/\b[a-z0-9]+-[a-z0-9]+\b/g) ?? [])
+    .filter((p) => p.length >= 5 && !LEGAL_FORM_WORDS.has(p));
+
+  return [...hyphenPairs, ...tokens];
 }
 
+/** Rechtsformen + Konjunktionen, die nie Teil einer Domain sind. */
+const LEGAL_FORM_WORDS = new Set([
+  "gmbh", "ag", "ug", "kg", "ohg", "se", "mbh", "co", "cokg", "haftungsbeschraenkt",
+  "inh", "inhaber", "inhaberin", "ev", "verein", "stiftung",
+  "und", "und-co", "der", "die", "das", "von", "vom",
+  "the", "and", "for", "fuer", "mit", "zur", "zum", "im", "am", "an",
+]);
+
 /** Strikte Relevanz-Prüfung: Domain muss mindestens einen bedeutungsvollen
- *  Token (≥4 Zeichen, oder ≥3 wenn nur ein Token existiert) komplett enthalten. */
+ *  (= nicht-generischen) Token komplett enthalten. */
 function isStrictlyRelevant(domain: string, tokens: string[]): boolean {
   if (SKIP_DOMAINS.some((s) => domain.includes(s))) return false;
-  if (tokens.length === 0) return false;
+  const meaningful = tokens.filter((t) => !GENERIC_WORDS.has(t));
+  if (meaningful.length === 0) return false;
   const normalizedDomain = domain.split(".")[0].replace(/[^a-z0-9]/g, "");
-  const minLen = tokens.length === 1 ? 3 : 4;
-  return tokens.some((t) => t.length >= minLen && normalizedDomain.includes(t));
+  const minLen = meaningful.length === 1 ? 3 : 4;
+  return meaningful.some((t) => {
+    const norm = t.replace(/-/g, "");
+    return norm.length >= minLen && normalizedDomain.includes(norm);
+  });
 }
 
 /**
@@ -137,15 +155,28 @@ function isStrictlyRelevant(domain: string, tokens: string[]): boolean {
 async function guessDomainsFromTokens(tokens: string[]): Promise<string[]> {
   if (tokens.length === 0) return [];
 
-  // Branchen-Wort aus dem Original (vor der Filterung), um z.B. "fahrschule-pagel" zu bauen
-  const meaningful = tokens.filter((t) => !GENERIC_WORDS.has(t));
-  if (meaningful.length === 0) return [];
+  // Bindestrich-Pairs (z.B. „acryl-decor") werden als komplette Variante übernommen,
+  // einzelne Tokens davon getrennt behandelt.
+  const hyphenPairs = tokens.filter((t) => t.includes("-"));
+  const singleTokens = tokens.filter((t) => !t.includes("-"));
+
+  // Branchen-Wort aus dem Original (vor der Filterung), um z.B. „fahrschule-pagel" zu bauen
+  const meaningful = singleTokens.filter((t) => !GENERIC_WORDS.has(t));
+  if (meaningful.length === 0 && hyphenPairs.length === 0) return [];
 
   const variants = new Set<string>();
 
-  // 1. Volle Token-Liste
-  variants.add(tokens.join("-"));
-  variants.add(tokens.join(""));
+  // 0. Bindestrich-Pairs direkt als Domain (z.B. „acryl-decor", „kfz-mueller")
+  for (const pair of hyphenPairs) {
+    variants.add(pair);
+    variants.add(pair.replace(/-/g, ""));
+  }
+
+  // 1. Volle Token-Liste (nur Single-Tokens, sonst Doppelung mit hyphenPairs)
+  if (singleTokens.length > 0) {
+    variants.add(singleTokens.join("-"));
+    variants.add(singleTokens.join(""));
+  }
 
   // 2. Nur bedeutungsvolle Tokens (ohne Branchen-Wörter)
   if (meaningful.length >= 1) {
@@ -153,12 +184,21 @@ async function guessDomainsFromTokens(tokens: string[]): Promise<string[]> {
     variants.add(meaningful.join(""));
   }
 
-  // 3. Letzter Token solo (oft der Eigenname: "Pagel", "Rubcic")
-  if (meaningful.length >= 1 && meaningful[meaningful.length - 1].length >= 4) {
-    variants.add(meaningful[meaningful.length - 1]);
+  // 3. Erste 2 meaningful Tokens als Marken-Phrase (z.B. „erwin-quarder",
+  //    „acryl-decor" wenn aus „acryl decor busse" ohne Bindestrich kommt)
+  if (meaningful.length >= 2) {
+    const firstTwo = meaningful.slice(0, 2);
+    variants.add(firstTwo.join("-"));
+    variants.add(firstTwo.join(""));
   }
 
-  // 4. Erster + letzter Token (Vor- + Nachname Pattern)
+  // 4. Jeden meaningful Token solo, falls genug lang (z.B. „quarder" aus
+  //    „Erwin Quarder Systemtechnik" oder „acryldecor" als Einwort-Marke).
+  for (const t of meaningful) {
+    if (t.length >= 4) variants.add(t);
+  }
+
+  // 6. Erster + letzter Token (Vor- + Nachname Pattern)
   if (meaningful.length >= 2) {
     const first = meaningful[0];
     const last = meaningful[meaningful.length - 1];
@@ -169,8 +209,8 @@ async function guessDomainsFromTokens(tokens: string[]): Promise<string[]> {
     }
   }
 
-  // 5. Branchen-Wort + letzter Eigenname (z.B. "fahrschule-pagel")
-  const generic = tokens.find((t) => GENERIC_WORDS.has(t));
+  // 7. Branchen-Wort + letzter Eigenname (z.B. „fahrschule-pagel")
+  const generic = singleTokens.find((t) => GENERIC_WORDS.has(t));
   if (generic && meaningful.length >= 1) {
     const last = meaningful[meaningful.length - 1];
     if (last.length >= 3) {
