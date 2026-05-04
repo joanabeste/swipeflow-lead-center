@@ -103,7 +103,7 @@ export async function processImport(
   const updateFields = [
     "domain", "phone", "email", "street", "city", "zip", "state",
     "country", "industry", "company_size", "legal_form", "register_id",
-    "website", "description",
+    "description",
   ];
 
   for (let i = 0; i < mappedRows.length; i++) {
@@ -190,7 +190,7 @@ export async function processImport(
       status = "cancelled";
       cancelReason = cancelResult.reasons.map((r) => r.reason).join("; ");
       cancelRuleId = cancelResult.reasons[0].ruleId;
-    } else if (blockMissingWebsite && !row.website) {
+    } else if (blockMissingWebsite && !row.domain) {
       status = "cancelled";
       cancelReason = "Webdesign-Import: keine Website";
     }
@@ -209,7 +209,6 @@ export async function processImport(
       company_size: row.company_size,
       legal_form: row.legal_form,
       register_id: row.register_id,
-      website: row.website,
       description: row.description,
       vertical,
       status,

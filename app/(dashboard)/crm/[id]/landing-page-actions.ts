@@ -187,10 +187,11 @@ export async function extractLeadBrandAction(input: {
     };
   }
 
-  const source = (lead.website as string | null) || (lead.domain as string | null);
-  if (!source) {
-    return { error: "Lead hat weder Website noch Domain — nichts zu extrahieren." };
+  const domain = (lead.domain as string | null) ?? null;
+  if (!domain) {
+    return { error: "Lead hat keine Domain — nichts zu extrahieren." };
   }
+  const source = `https://${domain}`;
 
   const { primaryColor, logoUrl } = await extractBrandFromWebsite(source);
 

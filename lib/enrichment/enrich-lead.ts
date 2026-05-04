@@ -46,25 +46,9 @@ export async function enrichLead(
 
   if (!lead) return { success: false, error: "Lead nicht gefunden." };
 
-  // Homepage extrahieren — wenn website eine Sub-URL ist (z.B. /karriere),
-  // nimm die Domain als Ausgangspunkt. Alte Daten haben das oft falsch.
-  function rootFromUrl(url: string): string | null {
-    const m = url.match(/^(https?:\/\/[^/?#]+)/i);
-    return m ? m[1] : null;
-  }
-  const looksLikeSubpage = (url: string | null) =>
-    !!url && /^https?:\/\/[^/]+\/.+/i.test(url);
+  let websiteOrDomain: string | null = lead.domain ?? null;
 
-  let websiteOrDomain: string | null = null;
-  if (lead.domain) {
-    websiteOrDomain = lead.domain;
-  } else if (lead.website) {
-    // Falls website-Feld eine Unterseite enthält → Root extrahieren
-    const root = looksLikeSubpage(lead.website) ? rootFromUrl(lead.website) : lead.website;
-    websiteOrDomain = root ?? lead.website;
-  }
-
-  // Wenn keine Website hinterlegt: automatisch suchen
+  // Wenn keine Domain hinterlegt: automatisch suchen
   if (!websiteOrDomain) {
     const foundDomain = await findCompanyWebsite(lead.company_name, lead.city);
     if (foundDomain) {
@@ -72,7 +56,6 @@ export async function enrichLead(
       // Domain im Lead speichern
       await db.from("leads").update({
         domain: foundDomain,
-        website: `https://${foundDomain}`,
         updated_at: new Date().toISOString(),
       }).eq("id", leadId);
     } else {
@@ -236,20 +219,10 @@ export async function enrichLead(
     if (isFieldAllowed("legal_form")) fillIfEmpty("legal_form", ai.legal_form);
     if (isFieldAllowed("register_id")) fillIfEmpty("register_id", ai.register_id);
 
-    // Karriereseite ins dedizierte Feld — vom Extraktor oder vom bisherigen Lead (Alt-Datensätze)
-    if (!lead.career_page_url) {
-      if (result.career_page_url) {
-        leadUpdates.career_page_url = result.career_page_url;
-      } else if (looksLikeSubpage(lead.website)) {
-        // Alt-Daten: website war eine Karriere-Unterseite → ins neue Feld verschieben
-        leadUpdates.career_page_url = lead.website;
-      }
-    }
-
-    // Website-Feld auf Homepage korrigieren falls dort noch eine Sub-URL steht
-    if (looksLikeSubpage(lead.website)) {
-      const root = rootFromUrl(lead.website!);
-      if (root) leadUpdates.website = root;
+    // Karriereseite ins dedizierte Feld — vom Extraktor übernehmen (Altdaten-
+    // Migration aus dem alten website-Feld läuft einmalig in Migration 055).
+    if (!lead.career_page_url && result.career_page_url) {
+      leadUpdates.career_page_url = result.career_page_url;
     }
 
     // Tatsächliche Counts aus DB — inklusive BA-Import & manuelle Einträge.

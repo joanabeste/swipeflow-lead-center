@@ -44,7 +44,6 @@ export interface Lead {
   company_size: string | null;
   legal_form: string | null;
   register_id: string | null;
-  website: string | null;
   career_page_url: string | null;
   description: string | null;
   /** Vertikale aus dem Import-Tab (Webdesign oder Recruiting). Null = generischer Import. */

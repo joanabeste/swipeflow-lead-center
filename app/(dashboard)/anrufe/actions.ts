@@ -39,7 +39,6 @@ export interface QueueLead {
   state: string | null;
   country: string | null;
   domain: string | null;
-  website: string | null;
   industry: string | null;
   career_page_url: string | null;
   description: string | null;
@@ -172,7 +171,7 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
   const { data: leads } = await db
     .from("leads")
     .select(
-      "id, company_name, phone, email, street, zip, city, state, country, domain, website, industry, career_page_url, description, company_size, legal_form, register_id, has_ssl, page_speed_score, website_tech, enriched_at, enrichment_source, latitude, longitude, crm_status_id, updated_at",
+      "id, company_name, phone, email, street, zip, city, state, country, domain, industry, career_page_url, description, company_size, legal_form, register_id, has_ssl, page_speed_score, website_tech, enriched_at, enrichment_source, latitude, longitude, crm_status_id, updated_at",
     )
     .in("crm_status_id", statusIds)
     .not("phone", "is", null)
@@ -300,7 +299,6 @@ export async function loadCallQueue(): Promise<QueueLead[]> {
         state: (l.state as string | null) ?? null,
         country: (l.country as string | null) ?? null,
         domain: (l.domain as string | null) ?? null,
-        website: (l.website as string | null) ?? null,
         industry: (l.industry as string | null) ?? null,
         career_page_url: (l.career_page_url as string | null) ?? null,
         description: (l.description as string | null) ?? null,

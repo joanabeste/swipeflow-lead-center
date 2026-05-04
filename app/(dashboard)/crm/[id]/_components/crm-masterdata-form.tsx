@@ -20,7 +20,6 @@ const FIELD_LABELS: Record<string, string> = {
   company_size: "Unternehmensgröße",
   legal_form: "Rechtsform",
   register_id: "Handelsregister-Nr.",
-  website: "Website",
   career_page_url: "Karriereseite",
 };
 const EDIT_FIELDS = Object.keys(FIELD_LABELS);

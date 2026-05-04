@@ -260,7 +260,6 @@ export async function processJobListingImport(fileContent: string): Promise<{
           if (!existingLead.email && first.email) updates.email = first.email;
           if (!existingLead.phone && first.phone) updates.phone = first.phone;
           if (!existingLead.domain && domain) updates.domain = domain;
-          if (!existingLead.website && domain) updates.website = `https://${domain}`;
           if (!existingLead.career_page_url && first.careerPage) updates.career_page_url = first.careerPage;
           if (!existingLead.city && descData.city) updates.city = descData.city;
           if (!existingLead.zip && descData.zip) updates.zip = descData.zip;
@@ -298,7 +297,6 @@ export async function processJobListingImport(fileContent: string): Promise<{
       email: nl.company.email,
       phone: nl.company.phone,
       domain: nl.domain,
-      website: nl.domain ? `https://${nl.domain}` : null,
       career_page_url: nl.company.careerPage,
       city: nl.descData.city,
       zip: nl.descData.zip,

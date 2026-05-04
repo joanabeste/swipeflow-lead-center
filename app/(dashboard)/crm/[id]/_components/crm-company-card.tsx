@@ -14,7 +14,7 @@ export function CrmCompanyCard({
       <h3 className="mt-2 text-lg font-bold tracking-tight">{lead.company_name}</h3>
       {lead.domain && (
         <a
-          href={lead.website ?? `https://${lead.domain}`}
+          href={`https://${lead.domain}`}
           target="_blank"
           rel="noreferrer"
           className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"

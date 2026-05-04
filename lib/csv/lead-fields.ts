@@ -22,7 +22,6 @@ export const leadFields: LeadField[] = [
   { key: "company_size", label: "Unternehmensgröße", type: "text", required: false },
   { key: "legal_form", label: "Rechtsform", type: "text", required: false },
   { key: "register_id", label: "Handelsregister-Nr.", type: "text", required: false },
-  { key: "website", label: "Website", type: "url", required: false },
   { key: "description", label: "Beschreibung", type: "text", required: false },
 ];
 
@@ -49,10 +48,12 @@ export const knownColumnAliases: Record<string, string> = {
   "e-mail": "email",
   "email": "email",
   "mail": "email",
-  "website": "website",
-  "webseite": "website",
-  "url": "website",
-  "homepage": "website",
+  // URL-haltige Spalten werden auf das domain-Feld gemappt — der Normalizer
+  // extrahiert die nackte Domain aus der eingegebenen URL.
+  "website": "domain",
+  "webseite": "domain",
+  "url": "domain",
+  "homepage": "domain",
   "domain": "domain",
   "branche": "industry",
   "industry": "industry",

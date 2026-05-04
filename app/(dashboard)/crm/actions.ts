@@ -448,6 +448,7 @@ async function startCallWebex(input: {
 export async function createManualLead(input: {
   companyName: string;
   domain?: string | null;
+  /** Akzeptiert auch volle URLs — wird intern zu Domain extrahiert. */
   website?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -463,15 +464,14 @@ export async function createManualLead(input: {
   if (!input.companyName.trim()) return { error: "Firmenname fehlt." };
 
   const db = createServiceClient();
-  const website = normalizeUrl(input.website ?? null);
-  const domain = input.domain?.trim() || extractDomain(website) || extractDomain(input.email ?? null);
+  const websiteInput = normalizeUrl(input.website ?? null);
+  const domain = input.domain?.trim() || extractDomain(websiteInput) || extractDomain(input.email ?? null);
 
   const { data, error } = await db
     .from("leads")
     .insert({
       company_name: input.companyName.trim(),
       domain: domain || null,
-      website: website,
       phone: normalizePhone(input.phone ?? null),
       email: normalizeEmail(input.email ?? null),
       street: input.street?.trim() || null,

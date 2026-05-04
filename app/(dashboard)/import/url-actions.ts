@@ -224,7 +224,6 @@ export async function createLeadsFromDirectory(
     const leadData: Record<string, string | null> = {
       company_name: company.name,
       domain,
-      website: company.website,
     };
 
     // Blacklist-Check
@@ -264,7 +263,6 @@ export async function createLeadsFromDirectory(
     await db.from("leads").insert({
       company_name: company.name,
       domain,
-      website: company.website,
       source_type: "directory",
       source_url: sourceUrl,
       source_import_id: importLog?.id,

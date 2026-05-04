@@ -20,7 +20,6 @@ import { addContact } from "../../actions";
 interface LeadBrand {
   primaryColor: string | null;
   logoUrl: string | null;
-  website: string | null;
   domain: string | null;
 }
 
@@ -369,7 +368,7 @@ function LandingPageDialog({
   );
   useEffect(() => {
     if (didBrandExtract.current) return;
-    if (!brand.website && !brand.domain) return;
+    if (!brand.domain) return;
     didBrandExtract.current = true;
     (async () => {
       setBrandLoading(true);
@@ -651,10 +650,10 @@ function LandingPageDialog({
               <button
                 type="button"
                 onClick={refreshBrand}
-                disabled={brandLoading || (!brand.website && !brand.domain)}
+                disabled={brandLoading || !brand.domain}
                 title={
-                  !brand.website && !brand.domain
-                    ? "Lead hat weder Website noch Domain."
+                  !brand.domain
+                    ? "Lead hat keine Domain."
                     : "Farbe & Logo aus der Website des Leads neu auslesen."
                 }
                 className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:text-gray-300 dark:hover:bg-white/5"

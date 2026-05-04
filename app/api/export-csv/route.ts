@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   const baseHeaders = [
     "Firmenname", "Domain", "Telefon", "E-Mail", "Straße", "Ort", "PLZ",
     "Bundesland", "Land", "Branche", "Unternehmensgröße", "Rechtsform",
-    "Handelsregister-Nr.", "Website", "Beschreibung", "Status",
+    "Handelsregister-Nr.", "Beschreibung", "Status",
   ];
 
   const contactHeaders: string[] = [];
@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       lead.company_name, lead.domain, lead.phone, lead.email,
       lead.street, lead.city, lead.zip, lead.state, lead.country,
       lead.industry, lead.company_size, lead.legal_form,
-      lead.register_id, lead.website, lead.description, lead.status,
+      lead.register_id, lead.description, lead.status,
     ];
 
     const contacts = (contactsByLead.get(lead.id) ?? []).slice(0, maxContacts);

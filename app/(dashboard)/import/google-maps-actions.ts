@@ -73,7 +73,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
     const category = sanitizeCellValue(fixMojibake(row[col.category]));
     const address = sanitizeCellValue(fixMojibake(row[col.address]));
 
-    const { website, domain } = extractWebsiteAndDomain(row[col.website]);
+    const { domain } = extractWebsiteAndDomain(row[col.website]);
 
     // Blacklist + Cancel
     const leadData: Record<string, string | null> = { company_name: companyName, domain, phone };
@@ -89,7 +89,6 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
         const updates: Record<string, unknown> = {};
         if (!existingLead.phone && phone) updates.phone = phone;
         if (!existingLead.domain && domain) updates.domain = domain;
-        if (!existingLead.website && website) updates.website = website;
         if (!existingLead.industry && category) updates.industry = category;
         if (!existingLead.street && address) updates.street = address;
         if (Object.keys(updates).length > 0) {
@@ -103,7 +102,6 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
         company_name: companyName,
         phone,
         domain,
-        website,
         industry: category || null,
         street: address || null,
         country: "Deutschland",

@@ -126,10 +126,11 @@ export async function processInstantScraperImport(
     street = sanitizeCellValue(street);
     phone = sanitizeCellValue(phone);
 
-    // Website primär aus eigener Spalte, Fallback aus addrPhone
+    // Website primär aus eigener Spalte, Fallback aus addrPhone — nur die
+    // Domain wird gespeichert, die volle URL wird verworfen.
     const websiteRaw = cWebsite >= 0 ? row[cWebsite] : null;
     const websitePrimary = extractWebsiteAndDomain(websiteRaw);
-    const { website, domain } = websitePrimary.domain
+    const { domain } = websitePrimary.domain
       ? websitePrimary
       : extractWebsiteAndDomain(websiteFromAddrPhone);
 
@@ -151,7 +152,6 @@ export async function processInstantScraperImport(
         const updates: Record<string, unknown> = {};
         if (!existingLead.phone && phone) updates.phone = phone;
         if (!existingLead.domain && domain) updates.domain = domain;
-        if (!existingLead.website && website) updates.website = website;
         if (!existingLead.industry && industry) updates.industry = industry;
         if (!existingLead.street && street) updates.street = street;
         if (!existingLead.city && city) updates.city = city;
@@ -168,7 +168,6 @@ export async function processInstantScraperImport(
         company_name: companyName,
         phone,
         domain,
-        website,
         industry,
         street,
         city,

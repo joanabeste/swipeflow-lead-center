@@ -31,7 +31,6 @@ const fieldLabels: Record<string, string> = {
   company_size: "Unternehmensgröße",
   legal_form: "Rechtsform",
   register_id: "Handelsregister-Nr.",
-  website: "Website",
   description: "Beschreibung",
   status: "Status",
   enrichment_source: "Anreicherung",

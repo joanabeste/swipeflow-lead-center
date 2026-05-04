@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import type { ActiveLeadDetails, QueueLead } from "../actions";
 import { LastCallStatusPill } from "./call-status-badges";
+import { leadHomepageUrl } from "@/lib/leads/url";
 
 // ─── Kleine Bausteine ─────────────────────────────────────────
 
@@ -78,7 +79,7 @@ export function LeadDetailSections({
     lead.register_id ||
     lead.description;
   const hasTechData =
-    lead.website ||
+    lead.domain ||
     lead.career_page_url ||
     lead.has_ssl != null ||
     lead.page_speed_score != null ||
@@ -189,19 +190,22 @@ export function LeadDetailSections({
       {hasTechData && (
         <DetailCard icon={Globe} title="Website & Tech">
           <dl className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
-            {lead.website && (
-              <DataRow label="Website">
-                <a
-                  href={lead.website}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-primary hover:underline"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {lead.website}
-                </a>
-              </DataRow>
-            )}
+            {(() => {
+              const homepage = leadHomepageUrl(lead);
+              return homepage ? (
+                <DataRow label="Website">
+                  <a
+                    href={homepage}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {lead.domain}
+                  </a>
+                </DataRow>
+              ) : null;
+            })()}
             {lead.career_page_url && (
               <DataRow label="Karriereseite">
                 <a

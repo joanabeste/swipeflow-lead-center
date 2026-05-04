@@ -61,7 +61,6 @@ export function CrmLeftColumn({
         brand={{
           primaryColor: lead.primary_color,
           logoUrl: lead.logo_url,
-          website: lead.website,
           domain: lead.domain,
         }}
       />

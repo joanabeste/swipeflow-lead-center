@@ -73,7 +73,7 @@ export function LeadProfilePanel({
   const enrichmentRunning = latestEnrichment?.status === "running";
   const enrichmentFailed = latestEnrichment?.status === "failed";
 
-  const hasWebsite = !!(lead.website || lead.domain);
+  const hasWebsite = !!lead.domain;
   const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
 
   // Aussortier-Banner: ist der zugewiesene CRM-Status archived markiert?
