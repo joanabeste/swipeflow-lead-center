@@ -12,6 +12,7 @@ const FALLBACK: Record<ServiceMode, EnrichmentConfig> = {
     job_postings: false,
     career_page: false,
     company_details: true,
+    capture_screenshot: true,
   },
 };
 
@@ -24,7 +25,11 @@ export async function getEnrichmentDefault(mode: ServiceMode): Promise<Enrichmen
       .select("config")
       .eq("service_mode", mode)
       .single();
-    return (data?.config as EnrichmentConfig) ?? FALLBACK[mode];
+    // FALLBACK unten reinmergen, damit alte DB-Rows fehlende Felder
+    // (z. B. capture_screenshot, das später hinzugefügt wurde) erben.
+    return data?.config
+      ? { ...FALLBACK[mode], ...(data.config as EnrichmentConfig) }
+      : FALLBACK[mode];
   } catch {
     return FALLBACK[mode];
   }
@@ -41,7 +46,7 @@ export async function getAllEnrichmentDefaults(): Promise<Record<ServiceMode, En
     const map: Record<ServiceMode, EnrichmentConfig> = { ...FALLBACK };
     for (const row of data ?? []) {
       const mode = row.service_mode as ServiceMode;
-      if (mode in map) map[mode] = row.config as EnrichmentConfig;
+      if (mode in map) map[mode] = { ...FALLBACK[mode], ...(row.config as EnrichmentConfig) };
     }
     return map;
   } catch {

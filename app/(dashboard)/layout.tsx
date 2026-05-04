@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LogOut, UserCircle } from "lucide-react";
 import { logout } from "@/app/login/actions";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { SidebarNav } from "./sidebar-nav";
 import { GlobalSearch } from "./global-search";
 import { SwipeflowLogo } from "./swipeflow-logo";
@@ -39,6 +39,22 @@ export default async function DashboardLayout({
     webex: webexCreds !== null,
   };
 
+  // Badge-Counter für die Sidebar — überfällig + heute fällig.
+  // Service-Client umgeht RLS, weil der Counter aggregiert ist.
+  const today = new Date().toISOString().slice(0, 10);
+  let todosDueOrOverdue = 0;
+  try {
+    const db = createServiceClient();
+    const { count } = await db
+      .from("lead_todos")
+      .select("id", { count: "exact", head: true })
+      .is("done_at", null)
+      .lte("due_date", today);
+    todosDueOrOverdue = count ?? 0;
+  } catch {
+    // Tabelle fehlt o.Ä. — Badge bleibt 0
+  }
+
   return (
     <ServiceModeProvider initialMode={serviceMode}>
     <CallProvidersProvider value={callProviders}>
@@ -54,7 +70,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
 
-        <SidebarNav />
+        <SidebarNav badges={{ todos_due_today_or_overdue: todosDueOrOverdue }} />
 
         <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">
           <Link

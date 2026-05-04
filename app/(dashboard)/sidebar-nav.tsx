@@ -11,6 +11,7 @@ import {
   Banknote,
   ShieldBan,
   Settings,
+  ListTodo,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -18,6 +19,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Optionaler Schlüssel zum Auflösen von Live-Zählern aus dem Layout. */
+  badgeKey?: "todos_due_today_or_overdue";
 }
 
 // Einträge nach Workflow-Phase gruppiert — oben → daily home, dann
@@ -33,6 +36,7 @@ const akquiseNav: NavItem[] = [
 
 const vertriebNav: NavItem[] = [
   { href: "/crm", label: "CRM", icon: Users },
+  { href: "/todos", label: "Todos", icon: ListTodo, badgeKey: "todos_due_today_or_overdue" },
   { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
   { href: "/deals", label: "Deals", icon: Banknote },
 ];
@@ -42,7 +46,11 @@ const verwaltungNav: NavItem[] = [
   { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];
 
-export function SidebarNav() {
+export interface SidebarBadges {
+  todos_due_today_or_overdue?: number;
+}
+
+export function SidebarNav({ badges }: { badges?: SidebarBadges }) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -52,6 +60,7 @@ export function SidebarNav() {
 
   function renderItem(item: NavItem) {
     const active = isActive(item.href);
+    const badgeValue = item.badgeKey ? badges?.[item.badgeKey] ?? 0 : 0;
     return (
       <Link
         key={item.href}
@@ -63,7 +72,12 @@ export function SidebarNav() {
         }`}
       >
         <item.icon className="h-[18px] w-[18px]" />
-        {item.label}
+        <span className="flex-1">{item.label}</span>
+        {badgeValue > 0 && (
+          <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white">
+            {badgeValue > 99 ? "99+" : badgeValue}
+          </span>
+        )}
       </Link>
     );
   }
