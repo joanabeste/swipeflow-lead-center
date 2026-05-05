@@ -193,6 +193,33 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
   const cancelledCount = results.filter((r) => r.cancelled).length;
   const errorCount = results.filter((r) => !r.success).length;
 
+  // Auswahl beim ersten Übergang in Phase "complete" mit den "Export-bereit"-
+  // Leads vorbelegen. React-19-Pattern (compare-prev statt useEffect), analog
+  // zum Service-Mode-Reset oben.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [prevPhase, setPrevPhase] = useState<Phase>(phase);
+  if (prevPhase !== phase) {
+    setPrevPhase(phase);
+    if (phase === "complete") {
+      setSelected(new Set(readyResults.map((r) => r.leadId).filter(Boolean)));
+    }
+  }
+  const selectableIds = results.map((r) => r.leadId).filter(Boolean);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  function toggleAll() {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(selectableIds));
+  }
+  function toggleOne(id: string) {
+    if (!id) return;
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  }
+  const targetStatusLabel =
+    POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label ?? targetStatus;
+
   async function handleQualify(ids: string[]) {
     setQualifying(true);
     await bulkUpdateStatus(ids, targetStatus, targetCrmStatusId);
@@ -471,6 +498,16 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                   <table className="min-w-full divide-y divide-gray-200 text-sm dark:divide-[#2c2c2e]">
                     <thead className="bg-gray-50 dark:bg-[#232325]">
                       <tr>
+                        <th className="w-10 px-3 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={toggleAll}
+                            disabled={selectableIds.length === 0}
+                            aria-label="Alle auswählen"
+                            className="rounded border-gray-300 dark:border-gray-600"
+                          />
+                        </th>
                         <th className="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Firma</th>
                         {serviceMode === "webdev" ? (
                           <>
@@ -496,8 +533,19 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                         const isWebdev = serviceMode === "webdev";
                         const isOk = r.success && !r.cancelled;
 
+                        const hasId = Boolean(r.leadId);
                         return (
                         <tr key={r.leadId}>
+                          <td className="w-10 px-3 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              checked={hasId && selected.has(r.leadId)}
+                              onChange={() => toggleOne(r.leadId)}
+                              disabled={!hasId}
+                              aria-label={`${r.name} auswählen`}
+                              className="rounded border-gray-300 dark:border-gray-600"
+                            />
+                          </td>
                           <td className="px-3 py-2 font-medium">{r.name}</td>
                           {isOk && isWebdev && (
                             <>
@@ -569,26 +617,17 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
               )}
 
               {/* Aktions-Buttons */}
-              <div className="flex flex-wrap gap-2">
-                {readyResults.length > 0 && (
-                  <button
-                    onClick={() => handleQualify(readyResults.map((r) => r.leadId))}
-                    disabled={qualifying}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    {qualifying ? "Wird gesetzt…" : `${readyResults.length} auf „${POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label}“ setzen`}
-                  </button>
-                )}
-                {successResults.length > readyResults.length && (
-                  <button
-                    onClick={() => handleQualify(successResults.map((r) => r.leadId))}
-                    disabled={qualifying}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
-                  >
-                    Alle {successResults.length} auf „{POST_ENRICH_STATUS_OPTIONS.find((o) => o.value === targetStatus)?.label}“ setzen
-                  </button>
-                )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => handleQualify(Array.from(selected).filter(Boolean))}
+                  disabled={qualifying || selected.size === 0}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  {qualifying
+                    ? "Wird gesetzt…"
+                    : `${selected.size} ausgewählte auf „${targetStatusLabel}“ setzen`}
+                </button>
                 <button
                   onClick={onClose}
                   className="rounded-md border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"

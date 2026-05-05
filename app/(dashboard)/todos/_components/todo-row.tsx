@@ -101,9 +101,13 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
           {todo.title}
         </p>
         {todo.lead && (
-          <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-gray-500 dark:text-gray-400">
+          <Link
+            href={`/crm/${todo.lead.id}?from=${encodeURIComponent("/todos")}`}
+            className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-gray-500 transition hover:text-primary dark:text-gray-400 dark:hover:text-primary"
+            title={`Zum Lead: ${todo.lead.company_name}`}
+          >
             <Building2 className="h-3 w-3" />
-            <span className="truncate">{todo.lead.company_name}</span>
+            <span className="truncate hover:underline">{todo.lead.company_name}</span>
             {todo.lead.city && (
               <>
                 <span className="text-gray-300 dark:text-gray-600">·</span>
@@ -111,7 +115,7 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
                 <span className="truncate">{todo.lead.city}</span>
               </>
             )}
-          </p>
+          </Link>
         )}
       </div>
 
