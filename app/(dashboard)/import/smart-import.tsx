@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Database, Info } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
-import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, INSTANT_SCRAPER_COLUMNS, type CsvFormat } from "@/lib/csv/format-detector";
+import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, INSTANT_SCRAPER_COLUMNS, buildColumnIndex, type CsvFormat } from "@/lib/csv/format-detector";
 import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import { processJobListingImport } from "./job-listing-actions";
@@ -146,7 +146,7 @@ export function SmartImport({ templates, forcedFormat }: Props) {
       setTotalRows(validRows.filter((r) => r[companyIdx]?.trim()).length);
       setPhase("detected");
     } else if (detection.format === "google_maps") {
-      const col = GOOGLE_MAPS_COLUMNS;
+      const col = buildColumnIndex(h, GOOGLE_MAPS_COLUMNS);
       setPreviewHeaders(["Firma", "Bewertung", "Branche", "Adresse", "Telefon", "Website"]);
       setPreview(validRows.slice(0, 15).map((r) => ({
         cells: [
@@ -202,7 +202,7 @@ export function SmartImport({ templates, forcedFormat }: Props) {
         const res = await processJobListingImport(fileContent);
         setResult(res);
       } else if (format === "google_maps") {
-        const res = await processGoogleMapsImport(allRows);
+        const res = await processGoogleMapsImport(allRows, headers);
         setResult(res);
       } else if (format === "google_maps_directory") {
         const res = await processInstantScraperImport(allRows, headers, vertical);

@@ -108,18 +108,41 @@ export function detectCsvFormat(
   };
 }
 
-/** Google Maps Spalten-Mapping (Position-basiert, da Header kryptisch sind) */
+/**
+ * Google Maps Spalten-Mapping (Header-basiert).
+ * Wichtig: positionsbasiertes Mapping bricht, weil der Scraper je nach Treffer-Set
+ * unterschiedlich viele Detail-Spalten exportiert (z.B. zusätzliche `doJOZc` /
+ * `W4Efsd 7`). Header-Namen sind dagegen über Scraper-Versionen stabil.
+ */
 export const GOOGLE_MAPS_COLUMNS = {
-  mapsUrl: 0,      // hfpxzc href
-  companyName: 1,   // qBF1Pd
-  rating: 2,        // MW4etd
-  reviewCount: 3,   // UY7F9
-  category: 4,      // W4Efsd (Branche)
-  address: 6,       // W4Efsd 3 (Straße)
-  phone: 10,        // UsdlK
-  website: 11,      // lcr4fd href
-  review: 17,       // ah5Ghc (Bewertungstext)
-};
+  mapsUrl: "hfpxzc href",
+  companyName: "qBF1Pd",
+  rating: "MW4etd",
+  reviewCount: "UY7F9",
+  category: "W4Efsd",
+  address: "W4Efsd 3",
+  phone: "UsdlK",
+  website: "lcr4fd href",
+  review: "ah5Ghc",
+} as const;
+
+export type GoogleMapsColumnKey = keyof typeof GOOGLE_MAPS_COLUMNS;
+
+/**
+ * Baut aus Headers + Header-Name-Mapping eine Position-Map (`{ phone: 12, ... }`).
+ * Unbekannte Header (nicht in `headers` enthalten) erhalten `-1`.
+ */
+export function buildColumnIndex<M extends Record<string, string>>(
+  headers: string[],
+  mapping: M,
+): Record<keyof M, number> {
+  const lower = headers.map((h) => h.trim().toLowerCase());
+  const out = {} as Record<keyof M, number>;
+  for (const key in mapping) {
+    out[key] = lower.indexOf(mapping[key].trim().toLowerCase());
+  }
+  return out;
+}
 
 /** Instant Data Scraper (Google Maps Liste) — Header-basiertes Mapping. */
 export const INSTANT_SCRAPER_COLUMNS = {

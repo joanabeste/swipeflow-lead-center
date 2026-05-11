@@ -3,7 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import { GOOGLE_MAPS_COLUMNS } from "@/lib/csv/format-detector";
+import { GOOGLE_MAPS_COLUMNS, buildColumnIndex, type GoogleMapsColumnKey } from "@/lib/csv/format-detector";
 import { logAudit } from "@/lib/audit-log";
 import { revalidatePath } from "next/cache";
 import {
@@ -20,7 +20,15 @@ import {
   extractPhoneSafe,
 } from "@/lib/csv/import-helpers";
 
-export async function processGoogleMapsImport(rows: string[][]): Promise<{
+export async function processGoogleMapsImport(
+  rows: string[][],
+  headers: string[],
+  /**
+   * Optionales Override-Mapping: ersetzt Auto-Detection einzelner Felder.
+   * Werte sind Header-Namen aus der CSV (oder `null` zum Deaktivieren).
+   */
+  overrideMapping?: Partial<Record<GoogleMapsColumnKey, string | null>>,
+): Promise<{
   success: boolean;
   imported: number;
   updated: number;
@@ -32,7 +40,21 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, imported: 0, updated: 0, skipped: 0, error: "Nicht authentifiziert." };
 
-  const col = GOOGLE_MAPS_COLUMNS;
+  // Effektives Mapping: Defaults + User-Overrides (null = explizit aus)
+  const effectiveMapping = { ...GOOGLE_MAPS_COLUMNS } as Record<GoogleMapsColumnKey, string>;
+  if (overrideMapping) {
+    for (const k in overrideMapping) {
+      const key = k as GoogleMapsColumnKey;
+      const v = overrideMapping[key];
+      if (v === null) effectiveMapping[key] = "__none__"; // ergibt -1 im Index
+      else if (typeof v === "string") effectiveMapping[key] = v;
+    }
+  }
+  const col = buildColumnIndex(headers, effectiveMapping);
+
+  if (col.companyName < 0) {
+    return { success: false, imported: 0, updated: 0, skipped: 0, error: "Spalte für Firmenname nicht gefunden." };
+  }
 
   // Valide Zeilen filtern (müssen Firmenname haben)
   const validRows = rows.filter((r) => r[col.companyName]?.trim());
