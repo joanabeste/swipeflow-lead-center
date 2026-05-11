@@ -3,6 +3,7 @@ import { logAudit } from "@/lib/audit-log";
 import { fetchCompanyPages } from "./web-fetcher";
 import { extractFromPages } from "./extractor";
 import { findCompanyWebsite } from "./website-finder";
+import { verifyDomainOwnership } from "./domain-verifier";
 import { analyzeWebsite } from "./website-analyzer";
 import { getWebdevScoringConfig } from "./webdev-scoring";
 import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
@@ -48,16 +49,37 @@ export async function enrichLead(
 
   let websiteOrDomain: string | null = lead.website ?? null;
 
-  // Wenn keine Website hinterlegt: automatisch suchen
+  // Wenn keine Website hinterlegt: automatisch suchen UND verifizieren.
+  // Discovery alleine ist nicht genug — Suchmaschinen + LLM-Disambiguation
+  // koennen falsche Domains liefern (parked, Fremdfirma, gleichlautend).
+  // Wir uebernehmen nur, wenn Impressum/Homepage Firmennamen-Token UND
+  // Ort/PLZ enthalten (verifyDomainOwnership).
   if (!websiteOrDomain) {
     const foundDomain = await findCompanyWebsite(lead.company_name, lead.city);
     if (foundDomain) {
-      websiteOrDomain = foundDomain;
-      // Im Lead speichern
-      await db.from("leads").update({
-        website: foundDomain,
-        updated_at: new Date().toISOString(),
-      }).eq("id", leadId);
+      const verification = await verifyDomainOwnership(
+        foundDomain,
+        lead.company_name,
+        lead.city,
+        lead.zip,
+      );
+      if (verification.verified) {
+        websiteOrDomain = foundDomain;
+        await db.from("leads").update({
+          website: foundDomain,
+          enrichment_source: `auto_discovered_verified:${verification.score}:${verification.evidence.join("|")}`,
+          updated_at: new Date().toISOString(),
+        }).eq("id", leadId);
+      } else {
+        await db.from("leads").update({
+          enrichment_source: `nicht_moeglich:domain_unverifiziert:${foundDomain}:score=${verification.score}`,
+          updated_at: new Date().toISOString(),
+        }).eq("id", leadId);
+        return {
+          success: false,
+          error: `Domain-Kandidat "${foundDomain}" konnte nicht als zur Firma "${lead.company_name}" gehoerend verifiziert werden (Score ${verification.score}/9).`,
+        };
+      }
     } else {
       await db.from("leads").update({
         enrichment_source: "nicht_moeglich:keine_website_gefunden",
