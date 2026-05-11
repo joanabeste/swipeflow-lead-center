@@ -154,3 +154,48 @@ export const INSTANT_SCRAPER_COLUMNS = {
   website: "yYlJEf href",
   mapsUrl: "yYlJEf href 2",
 } as const;
+
+export type InstantScraperColumnKey = keyof typeof INSTANT_SCRAPER_COLUMNS;
+
+/** Felder, die im Custom-Mapping-Editor pro Format angezeigt werden. */
+export interface MappingTarget {
+  key: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+}
+
+export const GOOGLE_MAPS_TARGETS: MappingTarget[] = [
+  { key: "companyName", label: "Firmenname", required: true },
+  { key: "category", label: "Branche" },
+  { key: "address", label: "Straße + Hausnr." },
+  { key: "phone", label: "Telefon" },
+  { key: "website", label: "Website" },
+  { key: "mapsUrl", label: "Google-Maps-Link", hint: "Quelle für PLZ/Ort-Extraktion" },
+];
+
+export const INSTANT_SCRAPER_TARGETS: MappingTarget[] = [
+  { key: "companyName", label: "Firmenname", required: true },
+  { key: "category", label: "Branche" },
+  { key: "addressPhone", label: "Adresse · Telefon", hint: "kombinierte Spalte mit „·\"-Separator" },
+  { key: "website", label: "Website" },
+  { key: "mapsUrl", label: "Google-Maps-Link", hint: "Quelle für PLZ/Ort-Extraktion" },
+];
+
+/**
+ * Berechnet das Default-Mapping (targetKey → headerName) für ein Format,
+ * basierend auf den Default-Konstanten und den tatsächlich vorhandenen Headers.
+ * Headers, die nicht in der CSV vorkommen, werden auf "" (nicht zuordnen) gesetzt.
+ */
+export function autoMappingFor(
+  defaults: Record<string, string>,
+  headers: string[],
+): Record<string, string> {
+  const lower = new Set(headers.map((h) => h.trim().toLowerCase()));
+  const out: Record<string, string> = {};
+  for (const key in defaults) {
+    const headerName = defaults[key];
+    out[key] = lower.has(headerName.trim().toLowerCase()) ? headerName : "";
+  }
+  return out;
+}

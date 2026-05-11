@@ -3,7 +3,9 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
-import { INSTANT_SCRAPER_COLUMNS } from "@/lib/csv/format-detector";
+import { INSTANT_SCRAPER_COLUMNS, buildColumnIndex } from "@/lib/csv/format-detector";
+
+type InstantScraperColumnKey = keyof typeof INSTANT_SCRAPER_COLUMNS;
 import { logAudit } from "@/lib/audit-log";
 import { revalidatePath } from "next/cache";
 import {
@@ -34,6 +36,8 @@ export async function processInstantScraperImport(
   rows: string[][],
   headers: string[],
   vertical: "webdesign" | "recruiting" | null,
+  /** Optionales Override-Mapping (User aus Custom-Mapping-UI). */
+  overrideMapping?: Partial<Record<InstantScraperColumnKey, string | null>>,
 ): Promise<InstantScraperResult> {
   const supabase = await createClient();
   const db = createServiceClient();
@@ -42,13 +46,22 @@ export async function processInstantScraperImport(
     return { success: false, imported: 0, updated: 0, skipped: 0, error: "Nicht authentifiziert." };
   }
 
-  // Header → Index. Trim, weil Instant-Data-Scraper teilweise Whitespace anhängt.
-  const findCol = (name: string) => headers.findIndex((h) => h.trim() === name);
-  const cName = findCol(INSTANT_SCRAPER_COLUMNS.companyName);
-  const cCategory = findCol(INSTANT_SCRAPER_COLUMNS.category);
-  const cAddressPhone = findCol(INSTANT_SCRAPER_COLUMNS.addressPhone);
-  const cWebsite = findCol(INSTANT_SCRAPER_COLUMNS.website);
-  const cMapsUrl = findCol(INSTANT_SCRAPER_COLUMNS.mapsUrl);
+  // Effektives Mapping: Defaults + User-Overrides (null = explizit aus)
+  const effectiveMapping = { ...INSTANT_SCRAPER_COLUMNS } as Record<InstantScraperColumnKey, string>;
+  if (overrideMapping) {
+    for (const k in overrideMapping) {
+      const key = k as InstantScraperColumnKey;
+      const v = overrideMapping[key];
+      if (v === null) effectiveMapping[key] = "__none__";
+      else if (typeof v === "string") effectiveMapping[key] = v;
+    }
+  }
+  const idx = buildColumnIndex(headers, effectiveMapping);
+  const cName = idx.companyName;
+  const cCategory = idx.category;
+  const cAddressPhone = idx.addressPhone;
+  const cWebsite = idx.website;
+  const cMapsUrl = idx.mapsUrl;
 
   if (cName === -1) {
     return {
@@ -56,7 +69,7 @@ export async function processInstantScraperImport(
       imported: 0,
       updated: 0,
       skipped: 0,
-      error: `Spalte "${INSTANT_SCRAPER_COLUMNS.companyName}" nicht gefunden — kein Instant-Data-Scraper-Export?`,
+      error: `Spalte "${effectiveMapping.companyName}" nicht gefunden — kein Instant-Data-Scraper-Export?`,
     };
   }
 

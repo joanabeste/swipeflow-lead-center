@@ -1,14 +1,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Database, Info } from "lucide-react";
+import { Upload, Loader2, Check, FileSpreadsheet, Briefcase, MapPin, Database, Info, Settings2 } from "lucide-react";
 import { parseCSV, detectDelimiter, decodeBuffer } from "@/lib/csv/parser";
-import { detectCsvFormat, GOOGLE_MAPS_COLUMNS, INSTANT_SCRAPER_COLUMNS, buildColumnIndex, type CsvFormat } from "@/lib/csv/format-detector";
+import {
+  detectCsvFormat,
+  GOOGLE_MAPS_COLUMNS,
+  INSTANT_SCRAPER_COLUMNS,
+  GOOGLE_MAPS_TARGETS,
+  INSTANT_SCRAPER_TARGETS,
+  buildColumnIndex,
+  autoMappingFor,
+  type CsvFormat,
+  type GoogleMapsColumnKey,
+  type InstantScraperColumnKey,
+} from "@/lib/csv/format-detector";
 import { leadFields, knownColumnAliases } from "@/lib/csv/lead-fields";
 import { processImport } from "./actions";
 import { processJobListingImport } from "./job-listing-actions";
 import { processGoogleMapsImport } from "./google-maps-actions";
 import { processInstantScraperImport } from "./instant-scraper-actions";
+import { ColumnMapper } from "./column-mapper";
 import { useServiceMode } from "@/lib/service-mode";
 import type { MappingTemplate } from "@/lib/types";
 
@@ -58,8 +70,10 @@ export function SmartImport({ templates, forcedFormat }: Props) {
   const [totalRows, setTotalRows] = useState(0);
   const [delimiter, setDelimiter] = useState(",");
 
-  // Standard-CSV Mapping
+  // Standard-CSV Mapping (header → leadFieldKey)
   const [mapping, setMapping] = useState<Record<string, string>>({});
+  // Scraper-Mapping für Google Maps / Instant Scraper (logischerKey → headerName)
+  const [scraperMapping, setScraperMapping] = useState<Record<string, string>>({});
 
   const [importPending, startImport] = useTransition();
   const [dragging, setDragging] = useState(false);
@@ -146,7 +160,9 @@ export function SmartImport({ templates, forcedFormat }: Props) {
       setTotalRows(validRows.filter((r) => r[companyIdx]?.trim()).length);
       setPhase("detected");
     } else if (detection.format === "google_maps") {
-      const col = buildColumnIndex(h, GOOGLE_MAPS_COLUMNS);
+      const auto = autoMappingFor(GOOGLE_MAPS_COLUMNS, h);
+      setScraperMapping(auto);
+      const col = buildColumnIndex(h, { ...GOOGLE_MAPS_COLUMNS, ...auto });
       setPreviewHeaders(["Firma", "Bewertung", "Branche", "Adresse", "Telefon", "Website"]);
       setPreview(validRows.slice(0, 15).map((r) => ({
         cells: [
@@ -161,21 +177,19 @@ export function SmartImport({ templates, forcedFormat }: Props) {
       setTotalRows(validRows.filter((r) => r[col.companyName]?.trim()).length);
       setPhase("detected");
     } else if (detection.format === "google_maps_directory") {
-      const findIdx = (name: string) => h.findIndex((x) => x.trim() === name);
-      const iName = findIdx(INSTANT_SCRAPER_COLUMNS.companyName);
-      const iCategory = findIdx(INSTANT_SCRAPER_COLUMNS.category);
-      const iAddrPhone = findIdx(INSTANT_SCRAPER_COLUMNS.addressPhone);
-      const iWebsite = findIdx(INSTANT_SCRAPER_COLUMNS.website);
+      const auto = autoMappingFor(INSTANT_SCRAPER_COLUMNS, h);
+      setScraperMapping(auto);
+      const idx = buildColumnIndex(h, { ...INSTANT_SCRAPER_COLUMNS, ...auto });
       setPreviewHeaders(["Firma", "Branche", "Adresse · Telefon", "Website"]);
       setPreview(validRows.slice(0, 15).map((r) => ({
         cells: [
-          truncate(r[iName], 35),
-          truncate(r[iCategory]?.replace(/^[·\s]+/, ""), 20),
-          truncate(r[iAddrPhone], 35),
-          truncate(r[iWebsite], 30),
+          truncate(r[idx.companyName], 35),
+          truncate(r[idx.category]?.replace(/^[·\s]+/, ""), 20),
+          truncate(r[idx.addressPhone], 35),
+          truncate(r[idx.website], 30),
         ],
       })));
-      setTotalRows(validRows.filter((r) => r[iName]?.trim()).length);
+      setTotalRows(validRows.filter((r) => r[idx.companyName]?.trim()).length);
       setPhase("detected");
     } else {
       // Standard CSV → Auto-Mapping + Mapping-Schritt
@@ -196,16 +210,32 @@ export function SmartImport({ templates, forcedFormat }: Props) {
     }
   }
 
+  /**
+   * Wandelt das Scraper-Mapping (logischerKey → headerName) in das Override-
+   * Format der Server-Action: Werte != "" landen als String, "" wird `null`
+   * (= Spalte explizit deaktiviert).
+   */
+  function buildScraperOverride<K extends string>(): Partial<Record<K, string | null>> {
+    const out: Partial<Record<K, string | null>> = {};
+    for (const k in scraperMapping) {
+      const v = scraperMapping[k];
+      out[k as K] = v === "" ? null : v;
+    }
+    return out;
+  }
+
   function handleImport() {
     startImport(async () => {
       if (format === "job_listing") {
         const res = await processJobListingImport(fileContent);
         setResult(res);
       } else if (format === "google_maps") {
-        const res = await processGoogleMapsImport(allRows, headers);
+        const override = buildScraperOverride<GoogleMapsColumnKey>();
+        const res = await processGoogleMapsImport(allRows, headers, override);
         setResult(res);
       } else if (format === "google_maps_directory") {
-        const res = await processInstantScraperImport(allRows, headers, vertical);
+        const override = buildScraperOverride<InstantScraperColumnKey>();
+        const res = await processInstantScraperImport(allRows, headers, vertical, override);
         setResult(res);
       } else {
         const res = await processImport(fileContent, mapping, delimiter, undefined, vertical);
@@ -222,6 +252,35 @@ export function SmartImport({ templates, forcedFormat }: Props) {
     setResult(null);
     setPreview([]);
     setMapping({});
+    setScraperMapping({});
+  }
+
+  /** Aus dem aktuellen Mapping eine neue Preview bauen (für "detected"-Phase). */
+  function rebuildScraperPreview(nextMapping: Record<string, string>) {
+    const validRows = allRows.filter((r) => r.some((c) => c.trim()));
+    if (format === "google_maps") {
+      const col = buildColumnIndex(headers, { ...GOOGLE_MAPS_COLUMNS, ...nextMapping });
+      setPreview(validRows.slice(0, 15).map((r) => ({
+        cells: [
+          truncate(r[col.companyName], 35),
+          truncate(r[col.rating], 5),
+          truncate(r[col.category], 20),
+          truncate(r[col.address], 25),
+          truncate(r[col.phone], 18),
+          truncate(r[col.website], 25),
+        ],
+      })));
+    } else if (format === "google_maps_directory") {
+      const idx = buildColumnIndex(headers, { ...INSTANT_SCRAPER_COLUMNS, ...nextMapping });
+      setPreview(validRows.slice(0, 15).map((r) => ({
+        cells: [
+          truncate(r[idx.companyName], 35),
+          truncate(r[idx.category]?.replace(/^[·\s]+/, ""), 20),
+          truncate(r[idx.addressPhone], 35),
+          truncate(r[idx.website], 30),
+        ],
+      })));
+    }
   }
 
   const FormatIcon = FORMAT_ICONS[format];
@@ -281,8 +340,17 @@ export function SmartImport({ templates, forcedFormat }: Props) {
           </div>
           {totalRows > 15 && <p className="text-xs text-gray-400">Vorschau: erste 15 von {totalRows}</p>}
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={reset} className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-gray-700">Zurück</button>
+            {(format === "google_maps" || format === "google_maps_directory") && (
+              <button
+                onClick={() => setPhase("mapping")}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Spalten anpassen
+              </button>
+            )}
             <button
               onClick={handleImport}
               disabled={importPending}
@@ -295,8 +363,51 @@ export function SmartImport({ templates, forcedFormat }: Props) {
         </div>
       )}
 
+      {/* Mapping — Scraper-Formate (Google Maps, Instant Scraper) */}
+      {phase === "mapping" && (format === "google_maps" || format === "google_maps_directory") && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-4 dark:bg-[#161618]">
+            <Settings2 className="h-5 w-5 text-gray-400" />
+            <div>
+              <p className="text-sm font-medium">Spalten zuordnen — {fileName}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Vorbelegt aus Auto-Erkennung. Pflichtfelder rot markiert.
+              </p>
+            </div>
+          </div>
+
+          <ColumnMapper
+            targets={format === "google_maps" ? GOOGLE_MAPS_TARGETS : INSTANT_SCRAPER_TARGETS}
+            headers={headers}
+            value={scraperMapping}
+            onChange={(next) => {
+              setScraperMapping(next);
+              rebuildScraperPreview(next);
+            }}
+            rows={allRows.filter((r) => r.some((c) => c.trim()))}
+          />
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setPhase("detected")}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm dark:border-gray-700"
+            >
+              Zurück zur Vorschau
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={importPending || !scraperMapping.companyName}
+              className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
+            >
+              {importPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+              {importPending ? "Importiere…" : `${totalRows} importieren`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mapping (Standard CSV) */}
-      {phase === "mapping" && (
+      {phase === "mapping" && format !== "google_maps" && format !== "google_maps_directory" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-4 dark:bg-[#161618]">
             <Info className="h-5 w-5 text-gray-400" />
