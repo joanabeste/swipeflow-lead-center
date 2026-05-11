@@ -87,6 +87,23 @@ export function looksLikePhone(s: string): boolean {
 }
 
 /**
+ * Defensive Telefon-Extraktion fuer positionsbasierte Scraper-CSVs (Google Maps):
+ * nimmt zuerst die erwartete Spalte; wenn dort kein Telefon-Pattern steht
+ * (z.B. „Schliesst um 17:00" wegen verschobener W4Efsd-Spalten), durchsucht
+ * die restlichen Zellen der Zeile nach dem ersten Telefon-tauglichen Wert.
+ */
+export function extractPhoneSafe(row: string[], primaryIndex: number): string | null {
+  const primary = sanitizeCellValue(fixMojibake(row[primaryIndex] ?? ""));
+  if (primary && looksLikePhone(primary)) return primary;
+  for (let i = 0; i < row.length; i++) {
+    if (i === primaryIndex) continue;
+    const v = sanitizeCellValue(fixMojibake(row[i] ?? ""));
+    if (v && looksLikePhone(v)) return v;
+  }
+  return null;
+}
+
+/**
  * Parst PLZ + Stadt aus dem Adress-Pfad einer Google-Maps-`/maps/dir/`-URL.
  * Beispiel-Eingabe (URL-encoded): `…/Auewiesen+9,+32339+Espelkamp/data=…`
  * → `{ zip: "32339", city: "Espelkamp" }`. Bei Miss → beide null.

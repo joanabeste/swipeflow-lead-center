@@ -17,6 +17,7 @@ import {
   batchInsert,
   fixMojibake,
   extractWebsiteAndDomain,
+  extractPhoneSafe,
 } from "@/lib/csv/import-helpers";
 
 export async function processGoogleMapsImport(rows: string[][]): Promise<{
@@ -69,7 +70,7 @@ export async function processGoogleMapsImport(rows: string[][]): Promise<{
 
   for (const row of validRows) {
     const companyName = sanitizeCellValue(fixMojibake(row[col.companyName])) ?? "";
-    const phone = sanitizeCellValue(fixMojibake(row[col.phone]));
+    const phone = extractPhoneSafe(row, col.phone);
     const category = sanitizeCellValue(fixMojibake(row[col.category]));
     const address = sanitizeCellValue(fixMojibake(row[col.address]));
 
