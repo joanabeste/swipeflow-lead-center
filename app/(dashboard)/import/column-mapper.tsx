@@ -38,6 +38,28 @@ export function ColumnMapper({ targets, headers, value, onChange, rows }: Props)
     return m;
   }, [headers]);
 
+  // Pro Header: bis zu 2 nicht-leere Beispielwerte als kompakte Vorschau für
+  // das Dropdown. Hilft beim Mappen, weil viele Scraper-Header kryptisch sind
+  // (z.B. "W4Efsd 4" sagt nichts; "Borsigstr. 2 • Carl-Zeiss-Str. 2" zeigt sofort
+  // dass das die Adress-Spalte ist).
+  const headerSamples = useMemo(() => {
+    const out = new Map<string, string>();
+    headers.forEach((h, i) => {
+      const samples: string[] = [];
+      for (const r of rows) {
+        const v = r[i];
+        if (!v) continue;
+        const cleaned = v.replace(/\s+/g, " ").trim();
+        if (!cleaned || cleaned === "·") continue;
+        if (samples.includes(cleaned)) continue;
+        samples.push(cleaned.length > 30 ? cleaned.slice(0, 29) + "…" : cleaned);
+        if (samples.length >= 2) break;
+      }
+      out.set(h, samples.join(" • "));
+    });
+    return out;
+  }, [headers, rows]);
+
   // Bereits anderswo benutzte Headers (für visuellen Hinweis)
   const usedHeaders = new Set(Object.values(value).filter(Boolean));
 
@@ -82,10 +104,12 @@ export function ColumnMapper({ targets, headers, value, onChange, rows }: Props)
                 <option value="">— Nicht zuordnen —</option>
                 {headers.map((h) => {
                   const used = usedHeaders.has(h) && h !== selectedHeader;
+                  const sample = headerSamples.get(h);
                   return (
                     <option key={h} value={h}>
                       {h}
                       {used ? "  · bereits vergeben" : ""}
+                      {sample ? `  —  ${sample}` : ""}
                     </option>
                   );
                 })}
