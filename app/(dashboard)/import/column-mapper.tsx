@@ -23,21 +23,7 @@ interface Props {
   rows: string[][];
 }
 
-function truncate(s: string | undefined | null, max: number): string {
-  if (!s) return "–";
-  const clean = s.replace(/\s+/g, " ").trim();
-  if (clean.length === 0) return "–";
-  return clean.length > max ? clean.slice(0, max - 1) + "…" : clean;
-}
-
 export function ColumnMapper({ targets, headers, value, onChange, rows }: Props) {
-  // Header → Index, einmalig berechnet
-  const headerIndex = useMemo(() => {
-    const m = new Map<string, number>();
-    headers.forEach((h, i) => m.set(h, i));
-    return m;
-  }, [headers]);
-
   // Pro Header: bis zu 2 nicht-leere Beispielwerte als kompakte Vorschau für
   // das Dropdown. Hilft beim Mappen, weil viele Scraper-Header kryptisch sind
   // (z.B. "W4Efsd 4" sagt nichts; "Borsigstr. 2 • Carl-Zeiss-Str. 2" zeigt sofort
@@ -68,60 +54,47 @@ export function ColumnMapper({ targets, headers, value, onChange, rows }: Props)
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {targets.map((t) => {
         const selectedHeader = value[t.key] ?? "";
-        const idx = selectedHeader ? headerIndex.get(selectedHeader) ?? -1 : -1;
-        const samples = idx >= 0
-          ? rows.slice(0, 3).map((r) => r[idx] ?? "").filter((v) => v && v.trim())
-          : [];
         const missing = t.required && !selectedHeader;
 
         return (
           <div
             key={t.key}
-            className={`flex flex-col gap-2 rounded-lg border px-3 py-2.5 sm:flex-row sm:items-center ${
+            className={`grid grid-cols-[12rem_1fr] items-center gap-3 rounded-lg border px-3 py-2 ${
               missing
                 ? "border-red-300 bg-red-50 dark:border-red-900/40 dark:bg-red-900/10"
                 : "border-gray-100 dark:border-[#2c2c2e]"
             }`}
           >
-            <div className="sm:w-1/3">
-              <div className="text-sm font-medium">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">
                 {t.label}
                 {t.required && <span className="ml-1 text-red-600">*</span>}
               </div>
               {t.hint && (
-                <div className="text-[11px] text-gray-500 dark:text-gray-400">{t.hint}</div>
+                <div className="truncate text-[11px] text-gray-500 dark:text-gray-400">{t.hint}</div>
               )}
             </div>
-            <div className="flex flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-              <select
-                value={selectedHeader}
-                onChange={(e) => setOne(t.key, e.target.value)}
-                className="flex-1 rounded-md border border-gray-200 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-[#1c1c1e] dark:text-gray-100"
-              >
-                <option value="">— Nicht zuordnen —</option>
-                {headers.map((h) => {
-                  const used = usedHeaders.has(h) && h !== selectedHeader;
-                  const sample = headerSamples.get(h);
-                  return (
-                    <option key={h} value={h}>
-                      {h}
-                      {used ? "  · bereits vergeben" : ""}
-                      {sample ? `  —  ${sample}` : ""}
-                    </option>
-                  );
-                })}
-              </select>
-              <div className="min-w-0 flex-1 truncate text-xs text-gray-500 dark:text-gray-400">
-                {samples.length > 0
-                  ? samples.map((s) => truncate(s, 30)).join("  •  ")
-                  : selectedHeader
-                    ? "(keine Beispielwerte)"
-                    : ""}
-              </div>
-            </div>
+            <select
+              value={selectedHeader}
+              onChange={(e) => setOne(t.key, e.target.value)}
+              className="w-full rounded-md border border-gray-200 px-3 py-1.5 text-sm dark:border-gray-700 dark:bg-[#1c1c1e] dark:text-gray-100"
+            >
+              <option value="">— Nicht zuordnen —</option>
+              {headers.map((h) => {
+                const used = usedHeaders.has(h) && h !== selectedHeader;
+                const sample = headerSamples.get(h);
+                return (
+                  <option key={h} value={h}>
+                    {h}
+                    {used ? "  · bereits vergeben" : ""}
+                    {sample ? `  —  ${sample}` : ""}
+                  </option>
+                );
+              })}
+            </select>
           </div>
         );
       })}
