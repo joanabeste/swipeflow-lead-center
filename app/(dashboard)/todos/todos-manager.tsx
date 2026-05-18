@@ -156,7 +156,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       <div className="flex items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
           <ListTodo className="h-5 w-5 text-primary" />
-          Aufgaben
+          ToDos
         </h1>
         {stats.totalOpen > 0 && (
           <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -239,7 +239,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
           <div className="ml-auto flex gap-2">
             <button
               disabled={pending}
-              onClick={() => runBulk(() => bulkCompleteTodos(selectedIds), `${selected.size} Aufgaben erledigt`)}
+              onClick={() => runBulk(() => bulkCompleteTodos(selectedIds), `${selected.size} ToDos erledigt`)}
               className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
             >
               Erledigen
@@ -261,8 +261,8 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
             <button
               disabled={pending}
               onClick={() => {
-                if (!confirm(`${selected.size} Aufgaben löschen?`)) return;
-                runBulk(() => bulkDeleteTodos(selectedIds), `${selected.size} Aufgaben gelöscht`);
+                if (!confirm(`${selected.size} ToDos löschen?`)) return;
+                runBulk(() => bulkDeleteTodos(selectedIds), `${selected.size} ToDos gelöscht`);
               }}
               className="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/40 dark:hover:bg-red-900/20"
             >
@@ -344,7 +344,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
 
       {/* Footer-Tipp */}
       <p className="pt-4 text-center text-[11px] text-gray-400">
-        Tipp: <kbd className="rounded border border-gray-200 px-1 dark:border-[#2c2c2e]">n</kbd> für neue Aufgabe ·{" "}
+        Tipp: <kbd className="rounded border border-gray-200 px-1 dark:border-[#2c2c2e]">n</kbd> für neues ToDo ·{" "}
         <kbd className="rounded border border-gray-200 px-1 dark:border-[#2c2c2e]">Esc</kbd> hebt Auswahl auf
       </p>
     </div>
@@ -420,7 +420,7 @@ function EmptyState({ search, status, totalOpen }: { search: string; status: Sta
       <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center dark:border-[#2c2c2e]">
         <p className="text-sm text-gray-700 dark:text-gray-300">🎯 Heute alles erledigt. Schöner Tag.</p>
         <p className="mt-1 text-xs text-gray-400">
-          Tipp: <kbd className="rounded border border-gray-200 px-1 dark:border-[#2c2c2e]">n</kbd> drücken und neue Aufgabe anlegen.
+          Tipp: <kbd className="rounded border border-gray-200 px-1 dark:border-[#2c2c2e]">n</kbd> drücken und neues ToDo anlegen.
         </p>
       </div>
     );

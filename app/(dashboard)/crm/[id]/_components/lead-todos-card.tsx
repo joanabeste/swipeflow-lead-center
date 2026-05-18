@@ -69,11 +69,11 @@ export function LeadTodosCard({ leadId, todos }: Props) {
   }
 
   function handleDelete(todoId: string) {
-    if (!confirm("Aufgabe löschen?")) return;
+    if (!confirm("ToDo löschen?")) return;
     startTransition(async () => {
       const res = await deleteLeadTodo(todoId, leadId);
       if (res.error) addToast(res.error, "error");
-      else { addToast("Aufgabe gelöscht", "success"); refresh(); }
+      else { addToast("ToDo gelöscht", "success"); refresh(); }
     });
   }
 
@@ -82,7 +82,7 @@ export function LeadTodosCard({ leadId, todos }: Props) {
       <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-[#2c2c2e]">
         <h2 className="flex items-center gap-1.5 text-sm font-medium">
           <CalendarClock className="h-3.5 w-3.5 text-primary" />
-          Aufgaben
+          ToDos
           {open.length > 0 && (
             <span className="ml-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
               {open.length}
@@ -95,7 +95,7 @@ export function LeadTodosCard({ leadId, todos }: Props) {
             className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
           >
             <Plus className="h-3.5 w-3.5" />
-            Aufgabe
+            ToDo
           </button>
         )}
       </div>
@@ -110,7 +110,7 @@ export function LeadTodosCard({ leadId, todos }: Props) {
 
       {open.length === 0 && !composing ? (
         <p className="px-4 py-6 text-center text-sm text-gray-400">
-          Keine offenen Aufgaben. Lege eine Wiedervorlage mit Datum an.
+          Keine offenen ToDos. Lege eine Wiedervorlage mit Datum an.
         </p>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-[#2c2c2e]">
@@ -245,7 +245,7 @@ function TodoComposer({
         : await addLeadTodo(leadId, title, dueDate);
       if (res.error) addToast(res.error, "error");
       else {
-        addToast(isEdit ? "Aufgabe aktualisiert" : "Aufgabe gespeichert", "success");
+        addToast(isEdit ? "ToDo aktualisiert" : "ToDo gespeichert", "success");
         onSaved();
       }
     });
@@ -255,7 +255,7 @@ function TodoComposer({
     <div className="border-b border-gray-100 bg-primary/5 p-3 dark:border-[#2c2c2e] dark:bg-primary/[0.04]">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium text-primary">
-          {isEdit ? "Aufgabe bearbeiten" : "Neue Aufgabe"}
+          {isEdit ? "ToDo bearbeiten" : "Neues ToDo"}
         </p>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
           <X className="h-3.5 w-3.5" />

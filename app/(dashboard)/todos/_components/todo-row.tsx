@@ -37,12 +37,12 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
   }
 
   function handleDelete() {
-    if (!confirm("Aufgabe löschen?")) return;
+    if (!confirm("ToDo löschen?")) return;
     startTransition(async () => {
       const res = await deleteLeadTodo(todo.id, todo.lead_id);
       if (res.error) addToast(res.error, "error");
       else {
-        addToast("Aufgabe gelöscht", "success");
+        addToast("ToDo gelöscht", "success");
         router.refresh();
       }
     });
@@ -257,7 +257,7 @@ function TodoRowEditor({
   return (
     <div className="border-b border-gray-100 bg-primary/5 p-3 dark:border-[#2c2c2e] dark:bg-primary/[0.04]">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-primary">Aufgabe bearbeiten</p>
+        <p className="text-xs font-medium text-primary">ToDo bearbeiten</p>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
           <X className="h-3.5 w-3.5" />
         </button>

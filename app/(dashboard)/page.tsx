@@ -93,10 +93,10 @@ function motivationText(data: Awaited<ReturnType<typeof loadDashboardData>>, ser
   const overdueTodos = data.openTodoItems.filter((t) => t.tone === "overdue").length;
   const todayTodos = data.openTodoItems.filter((t) => t.tone === "today").length;
   if (overdueTodos > 0) {
-    return `${overdueTodos} ${overdueTodos === 1 ? "Aufgabe ist" : "Aufgaben sind"} überfällig — ran ans Telefon.`;
+    return `${overdueTodos} ${overdueTodos === 1 ? "ToDo ist" : "ToDos sind"} überfällig — ran ans Telefon.`;
   }
   if (todayTodos > 0) {
-    return `${todayTodos} ${todayTodos === 1 ? "Aufgabe ist heute fällig" : "Aufgaben sind heute fällig"}. Auf geht's.`;
+    return `${todayTodos} ${todayTodos === 1 ? "ToDo ist heute fällig" : "ToDos sind heute fällig"}. Auf geht's.`;
   }
   if (data.crmQueue.length > 0) return `${data.crmQueue.length} ${data.crmQueue.length === 1 ? "Lead wartet" : "Leads warten"} im CRM auf Kontakt. Let's go.`;
   if (readyToExport > 0) return `${readyToExport} ${readyToExport === 1 ? "Lead ist" : "Leads sind"} bereit fürs CRM. Zeit zu closen.`;

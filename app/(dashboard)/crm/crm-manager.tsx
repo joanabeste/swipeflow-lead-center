@@ -267,7 +267,7 @@ export function CrmManager({
         />
 
         <FilterSelect
-          label="Aufgabe"
+          label="ToDo"
           value={currentTodo}
           onChange={(v) => updateParams({ todo: v, page: "1" })}
           options={[
@@ -275,8 +275,8 @@ export function CrmManager({
             { value: "overdue", label: "Überfällig" },
             { value: "today", label: "Heute fällig" },
             { value: "week", label: "Diese Woche" },
-            { value: "any", label: "Mit offener Aufgabe" },
-            { value: "none", label: "Ohne Aufgabe" },
+            { value: "any", label: "Mit offenem ToDo" },
+            { value: "none", label: "Ohne ToDo" },
           ]}
         />
 

@@ -214,7 +214,7 @@ export function CrmQueueWidget({ data }: { data: DashboardData }) {
       </div>
       <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">
         {data.crmQueue.length === 0 && (
-          <p className="px-5 py-6 text-center text-sm text-gray-400">Nichts zu tun — alle Todos erledigt.</p>
+          <p className="px-5 py-6 text-center text-sm text-gray-400">Nichts zu tun — alle ToDos erledigt.</p>
         )}
         {data.crmQueue.map((lead) => (
           <Link key={lead.id} href={`/crm/${lead.id}`}
@@ -306,7 +306,7 @@ export function OpenTodosWidget({ data }: { data: DashboardData }) {
       <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-[#2c2c2e]/50">
         <h2 className="flex items-center gap-1.5 text-sm font-medium">
           <CalendarClock className="h-3.5 w-3.5 text-primary" />
-          Anstehende Aufgaben
+          Anstehende ToDos
           {urgent > 0 && (
             <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/40 dark:text-red-300">
               {urgent}
@@ -317,7 +317,7 @@ export function OpenTodosWidget({ data }: { data: DashboardData }) {
       </div>
       {items.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-gray-400">
-          Keine anstehenden Aufgaben — alles aktuell.
+          Keine anstehenden ToDos — alles aktuell.
         </p>
       ) : (
         <div className="divide-y divide-gray-50 dark:divide-[#2c2c2e]/50">

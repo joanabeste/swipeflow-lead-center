@@ -36,7 +36,7 @@ const akquiseNav: NavItem[] = [
 
 const vertriebNav: NavItem[] = [
   { href: "/crm", label: "CRM", icon: Users },
-  { href: "/todos", label: "Todos", icon: ListTodo, badgeKey: "todos_due_today_or_overdue" },
+  { href: "/todos", label: "ToDos", icon: ListTodo, badgeKey: "todos_due_today_or_overdue" },
   { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
   { href: "/deals", label: "Deals", icon: Banknote },
 ];

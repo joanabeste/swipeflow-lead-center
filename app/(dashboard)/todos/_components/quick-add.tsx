@@ -80,7 +80,7 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
         addToast(res.error, "error");
         return;
       }
-      addToast("Aufgabe angelegt", "success");
+      addToast("ToDo angelegt", "success");
       setText("");
       setPickedLead(null);
       router.refresh();
