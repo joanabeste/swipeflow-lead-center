@@ -22,10 +22,32 @@ export async function updateLead(
 
   if (!oldLead) return { error: "Lead nicht gefunden." };
 
+  // Wenn eine Adress-Komponente geaendert wurde: Koordinaten + geocoded_at
+  // zuruecksetzen, damit die naechste Lead-Detail-Anfrage automatisch
+  // re-geocodet (siehe ensureLeadCoords-Call in app/(dashboard)/crm/[id]/page.tsx).
+  // Sonst zeigt die Standort-Karte den alten Ort.
+  const ADDRESS_FIELDS = ["street", "zip", "city", "country"] as const;
+  const addressChanged = ADDRESS_FIELDS.some((f) => {
+    if (!(f in updates)) return false;
+    const oldVal = (oldLead as Record<string, unknown>)[f];
+    const newVal = (updates as Record<string, unknown>)[f];
+    return String(oldVal ?? "") !== String(newVal ?? "");
+  });
+
+  const finalUpdates: Record<string, unknown> = {
+    ...updates,
+    updated_at: new Date().toISOString(),
+  };
+  if (addressChanged) {
+    finalUpdates.latitude = null;
+    finalUpdates.longitude = null;
+    finalUpdates.geocoded_at = null;
+  }
+
   // Update durchführen
   const { error } = await db
     .from("leads")
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update(finalUpdates)
     .eq("id", leadId);
 
   if (error) return { error: error.message };
@@ -58,6 +80,7 @@ export async function updateLead(
   });
 
   revalidatePath("/leads");
+  revalidatePath(`/crm/${leadId}`);
   return { success: true };
 }
 
