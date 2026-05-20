@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { updateLead } from "../../../leads/actions";
@@ -25,6 +26,7 @@ const FIELD_LABELS: Record<string, string> = {
 const EDIT_FIELDS = Object.keys(FIELD_LABELS);
 
 export function CrmMasterdataForm({ lead }: { lead: Lead }) {
+  const router = useRouter();
   async function handleSubmit(
     _prev: { error?: string; success?: boolean } | undefined,
     formData: FormData,
@@ -40,6 +42,16 @@ export function CrmMasterdataForm({ lead }: { lead: Lead }) {
     return updateLead(lead.id, updates);
   }
   const [state, formAction, pending] = useActionState(handleSubmit, undefined);
+
+  // Nach erfolgreichem Save Client-Router refreshen, damit die Standort-Karte
+  // (die `lat`/`lng` aus dem Server-rendered Lead-Prop bezieht) den neu
+  // geocodeten Punkt zeigt. revalidatePath alleine reicht nicht, weil der
+  // React-Tree auf dieser Page nicht neu mounted.
+  useEffect(() => {
+    if (state && "success" in state && state.success) {
+      router.refresh();
+    }
+  }, [state, router]);
 
   return (
     <Card>
