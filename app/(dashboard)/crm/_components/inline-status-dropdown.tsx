@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Check, Loader2 } from "lucide-react";
 import type { CustomLeadStatus } from "@/lib/types";
@@ -28,11 +29,35 @@ export function InlineStatusDropdown({
   const router = useRouter();
   const { addToast } = useToastContext();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  // Position des Popovers in viewport-Koordinaten. Wir rendern via Portal
+  // in document.body, weil der Tabellen-Container `overflow-x-auto`/`overflow-hidden`
+  // jedes absolute-positionierte Kind wegklippt.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    function updatePos() {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    updatePos();
+    window.addEventListener("scroll", updatePos, true); // capture-phase, fängt scroll in jedem Ancestor
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onClickAway(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (rootRef.current?.contains(t)) return;
+      if (popoverRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onEscape(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -69,6 +94,7 @@ export function InlineStatusDropdown({
   return (
     <div className="relative inline-block" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation();
@@ -93,10 +119,12 @@ export function InlineStatusDropdown({
         )}
       </button>
 
-      {open && (
+      {open && pos && typeof document !== "undefined" && createPortal(
         <div
+          ref={popoverRef}
           onClick={(e) => e.stopPropagation()}
-          className="absolute left-0 top-full z-30 mt-1 min-w-[200px] rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-[#2c2c2e] dark:bg-[#1c1c1e]"
+          style={{ position: "fixed", top: pos.top, left: pos.left }}
+          className="z-50 min-w-[200px] rounded-md border border-gray-200 bg-white p-1 shadow-lg dark:border-[#2c2c2e] dark:bg-[#1c1c1e]"
         >
           <button
             type="button"
@@ -123,7 +151,8 @@ export function InlineStatusDropdown({
               {s.id === currentStatusId && <Check className="h-3 w-3" />}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
