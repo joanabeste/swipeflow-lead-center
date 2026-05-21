@@ -15,8 +15,8 @@ import { EnrichmentDiagnosisModal } from "./enrichment-diagnosis-modal";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { useServiceMode } from "@/lib/service-mode";
 import { LeadMasterDataForm } from "./_components/lead-master-data-form";
-import { LeadContactsList } from "./_components/lead-contacts-list";
-import { LeadJobPostingsList } from "./_components/lead-job-postings-list";
+import { CrmContactsCard } from "../crm/[id]/_components/crm-contacts-card";
+import { CrmJobsCard } from "../crm/[id]/_components/crm-jobs-card";
 import { LeadLocationCard } from "./_components/lead-location-card";
 import { LeadDuplicatesCard } from "./_components/lead-duplicates-card";
 import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
@@ -121,8 +121,17 @@ export function LeadProfilePanel({
   const leftContent = (
     <>
       <LeadMasterDataForm lead={lead} />
-      <LeadContactsList leadId={lead.id} contacts={contacts} hasWebsite={hasWebsite} />
-      <LeadJobPostingsList jobPostings={jobPostings} latestEnrichment={latestEnrichment} hasWebsite={hasWebsite} />
+      <CrmContactsCard
+        leadId={lead.id}
+        contacts={contacts}
+        jobs={jobPostings}
+        companyName={lead.company_name}
+      />
+      <CrmJobsCard
+        leadId={lead.id}
+        jobs={jobPostings}
+        careerPageUrl={latestEnrichment?.career_page_url ?? null}
+      />
     </>
   );
 

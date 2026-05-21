@@ -546,6 +546,7 @@ export async function addContact(input: {
     return { error: error?.message ? `DB-Fehler: ${error.message}` : "Konnte Kontakt nicht anlegen." };
   }
   revalidatePath(`/crm/${input.leadId}`);
+  revalidatePath(`/leads/${input.leadId}`);
   return { success: true, contactId: data.id as string };
 }
 
@@ -571,6 +572,7 @@ export async function updateContact(contactId: string, leadId: string, input: {
   const { error } = await db.from("lead_contacts").update(patch).eq("id", contactId);
   if (error) return { error: error.message };
   revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/leads/${leadId}`);
   return { success: true };
 }
 
@@ -592,7 +594,10 @@ export async function updateContactSalutation(
     .select("lead_id")
     .single();
   if (error) return { error: error.message };
-  if (data?.lead_id) revalidatePath(`/crm/${data.lead_id}`);
+  if (data?.lead_id) {
+    revalidatePath(`/crm/${data.lead_id}`);
+    revalidatePath(`/leads/${data.lead_id}`);
+  }
   return { success: true };
 }
 
@@ -603,6 +608,7 @@ export async function deleteContact(contactId: string, leadId: string) {
   const { error } = await db.from("lead_contacts").delete().eq("id", contactId);
   if (error) return { error: error.message };
   revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/leads/${leadId}`);
   return { success: true };
 }
 
@@ -631,6 +637,7 @@ export async function addJobPosting(input: {
     return { error: `DB-Fehler: ${error.message}` };
   }
   revalidatePath(`/crm/${input.leadId}`);
+  revalidatePath(`/leads/${input.leadId}`);
   return { success: true };
 }
 
@@ -641,6 +648,7 @@ export async function deleteJobPosting(jobId: string, leadId: string) {
   const { error } = await db.from("lead_job_postings").delete().eq("id", jobId);
   if (error) return { error: error.message };
   revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/leads/${leadId}`);
   return { success: true };
 }
 
