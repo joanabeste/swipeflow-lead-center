@@ -44,6 +44,8 @@ interface Props {
   hq: HqLocation;
   backHref?: string;
   backLabel?: string;
+  /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
+  onBack?: () => void;
   headerExtras?: React.ReactNode;
   extraRightColumn?: React.ReactNode;
   activityItems?: ActivityItem[];
@@ -56,6 +58,7 @@ export function LeadProfilePanel({
   customStatuses = [],
   backHref = "/leads",
   backLabel = "Zurück zur Liste",
+  onBack,
   headerExtras,
   extraRightColumn,
   activityItems,
@@ -114,7 +117,10 @@ export function LeadProfilePanel({
     if (!confirm("Lead in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.")) return;
     startDeleteTransition(async () => {
       const res = await deleteLead(lead.id);
-      if (!res.error) router.push(backHref);
+      if (!res.error) {
+        if (onBack) onBack();
+        else router.push(backHref);
+      }
     });
   }
 
@@ -151,7 +157,7 @@ export function LeadProfilePanel({
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <button
-          onClick={() => router.push(backHref)}
+          onClick={() => (onBack ? onBack() : router.push(backHref))}
           className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <ArrowLeft className="h-4 w-4" />

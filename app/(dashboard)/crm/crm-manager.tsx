@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Download, Trash2, StickyNote, MessageSquare, Plus, CircleX, CalendarClock } from "lucide-react";
+import { Download, Trash2, StickyNote, MessageSquare, Plus, CircleX, CalendarClock, Eye } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -17,6 +17,7 @@ import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
+import { CrmPreviewDrawer } from "./_components/crm-preview-drawer";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
@@ -126,6 +127,20 @@ export function CrmManager({
       else params.delete(k);
     }
     router.push(`/crm?${params.toString()}`);
+  }
+
+  // Preview-Drawer: ?preview=<lead-id> im Query-State.
+  const previewId = searchParams.get("preview");
+  function openPreview(leadId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("preview", leadId);
+    router.push(`/crm?${params.toString()}`, { scroll: false });
+  }
+  function closePreview() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("preview");
+    const qs = params.toString();
+    router.push(qs ? `/crm?${qs}` : "/crm", { scroll: false });
   }
 
   function toggleAll() {
@@ -475,7 +490,7 @@ export function CrmManager({
                 leads.map((lead, i) => (
                   <tr
                     key={lead.id}
-                    className={`cursor-pointer transition ${
+                    className={`group cursor-pointer transition ${
                       selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                     }`}
                   >
@@ -508,6 +523,7 @@ export function CrmManager({
                           statuses={statuses}
                           dropdownStatuses={verticalStatuses}
                           formatDate={formatDate}
+                          onPreview={openPreview}
                         />
                       </td>
                     ))}
@@ -524,6 +540,8 @@ export function CrmManager({
         totalPages={totalPages}
         onPageChange={(p) => updateParams({ page: String(p) })}
       />
+
+      <CrmPreviewDrawer previewId={previewId} onClose={closePreview} />
     </div>
   );
 }
@@ -564,17 +582,32 @@ function FilterSelect({
 }
 
 function CellRenderer({
-  lead, colKey, statuses, dropdownStatuses, formatDate,
+  lead, colKey, statuses, dropdownStatuses, formatDate, onPreview,
 }: {
   lead: CrmLead;
   colKey: string;
   statuses: CustomLeadStatus[];
   dropdownStatuses: CustomLeadStatus[];
   formatDate: (iso: string | null) => string;
+  onPreview: (leadId: string) => void;
 }) {
   switch (colKey) {
     case "company_name":
-      return <span>{lead.company_name}</span>;
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="truncate">{lead.company_name}</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview(lead.id);
+            }}
+            title="Vorschau"
+            className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      );
     case "phone":
       return lead.phone ? (
         <PhoneCallLink

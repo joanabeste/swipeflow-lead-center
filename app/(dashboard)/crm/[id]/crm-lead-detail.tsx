@@ -57,6 +57,8 @@ interface Props {
   landingPages: LandingPage[];
   todos: LeadTodo[];
   backHref?: string;
+  /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
+  onBack?: () => void;
   screenshotCard?: React.ReactNode;
 }
 
@@ -64,6 +66,7 @@ export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
   backHref = "/crm",
+  onBack,
   screenshotCard,
 }: Props) {
   const router = useRouter();
@@ -108,7 +111,10 @@ export function CrmLeadDetail({
     if (!confirm("Lead in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.")) return;
     startDeleteTransition(async () => {
       const res = await deleteLead(lead.id);
-      if (!res.error) router.push(backHref);
+      if (!res.error) {
+        if (onBack) onBack();
+        else router.push(backHref);
+      }
     });
   }
 
@@ -116,13 +122,23 @@ export function CrmLeadDetail({
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href={backHref}
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Zurück zum CRM
-        </Link>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Zurück zum CRM
+          </button>
+        ) : (
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Zurück zum CRM
+          </Link>
+        )}
         <div className="flex items-center gap-2">
           <button
             onClick={handleEnrich}

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Sparkles, Trash2, ShieldBan, Send, Download, CircleX } from "lucide-react";
+import { Sparkles, Trash2, ShieldBan, Send, Download, CircleX, Eye } from "lucide-react";
 import {
   DndContext,
   PointerSensor,
@@ -22,6 +22,7 @@ import { TablePagination } from "@/components/table/pagination";
 import { ColumnPicker } from "@/components/table/column-picker";
 import { DraggableResizableHeader } from "@/components/table/draggable-resizable-header";
 import { useColumnLayout } from "@/components/table/use-column-layout";
+import { LeadPreviewDrawer } from "./_components/lead-preview-drawer";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -144,6 +145,20 @@ export function LeadTable({
         router.refresh();
       }
     });
+  }
+
+  // Preview-Drawer: ?preview=<lead-id> im Query-State.
+  const previewId = searchParams.get("preview");
+  function openPreview(leadId: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("preview", leadId);
+    router.push(`/leads?${params.toString()}`, { scroll: false });
+  }
+  function closePreview() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("preview");
+    const qs = params.toString();
+    router.push(qs ? `/leads?${qs}` : "/leads", { scroll: false });
   }
 
   function updateParams(updates: Record<string, string>) {
@@ -477,7 +492,7 @@ export function LeadTable({
                   return (
                     <tr
                       key={lead.id}
-                      className={`cursor-pointer transition ${selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
+                      className={`group cursor-pointer transition ${selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
                     >
                       <td className="px-4 py-3" onClick={(e) => { e.stopPropagation(); toggleOne(lead.id, leadIndex, e); }}>
                         <input
@@ -520,6 +535,20 @@ export function LeadTable({
                             >
                               {lead.website}
                             </a>
+                          ) : col.key === "company_name" ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="truncate">{getCellValue(lead, col.key)}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPreview(lead.id);
+                                }}
+                                title="Vorschau"
+                                className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                            </span>
                           ) : (
                             getCellValue(lead, col.key)
                           )}
@@ -539,6 +568,8 @@ export function LeadTable({
         totalPages={totalPages}
         onPageChange={(p) => updateParams({ page: String(p) })}
       />
+
+      <LeadPreviewDrawer previewId={previewId} onClose={closePreview} />
     </div>
   );
 }

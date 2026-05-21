@@ -57,7 +57,7 @@ export function EnrichmentDiagnosisModal({ enrichment, leadId, onClose }: Props)
   const elapsed = enrichment.started_at ? formatElapsed(enrichment.started_at, isRunning ? now : new Date(enrichment.completed_at ?? enrichment.started_at).getTime()) : "—";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-lg bg-white shadow-xl dark:bg-[#1c1c1e]"
         onClick={(e) => e.stopPropagation()}
