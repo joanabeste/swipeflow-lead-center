@@ -16,6 +16,7 @@ import type { ColumnPref } from "@/lib/table-prefs";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, bulkArchiveLeads, bulkRestoreCrmStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { SearchBox } from "@/components/table/search-box";
 import { TablePagination } from "@/components/table/pagination";
 import { ColumnPicker } from "@/components/table/column-picker";
@@ -292,9 +293,7 @@ export function LeadTable({
             onClick={() => {
               const ids = Array.from(selected);
               const count = ids.length;
-              const defaultCrmId = serviceMode === "webdev"
-                ? "webdesign-manuelle-ueberpruefung"
-                : "recruiting-manuelle-ueberpruefung";
+              const defaultCrmId = DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode];
               startBulkTransition(async () => {
                 const res = await bulkUpdateStatus(ids, "qualified", defaultCrmId);
                 if (res.error) {

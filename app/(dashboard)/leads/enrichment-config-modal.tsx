@@ -6,6 +6,7 @@ import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus, Cus
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -17,9 +18,7 @@ interface Props {
 }
 
 function defaultCrmStatusFor(mode: ServiceMode, list: CustomLeadStatus[]): string | null {
-  const targetId = mode === "recruiting"
-    ? "recruiting-manuelle-ueberpruefung"
-    : "webdesign-manuelle-ueberpruefung";
+  const targetId = DEFAULT_QUALIFY_STATUS_BY_MODE[mode];
   if (list.some((s) => s.id === targetId)) return targetId;
   const prefix = mode === "recruiting" ? "Recruiting" : "Webdesign";
   return list.find((s) => s.label.startsWith(prefix))?.id ?? null;

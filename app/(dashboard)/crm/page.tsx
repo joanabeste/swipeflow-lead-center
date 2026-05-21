@@ -1,7 +1,8 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import type { CustomLeadStatus, Lead } from "@/lib/types";
+import type { CustomLeadStatus, Lead, ServiceMode } from "@/lib/types";
 import { CrmManager, type CrmLead } from "./crm-manager";
 import { loadTablePrefs } from "@/lib/table-prefs";
+import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 
 const PAGE_SIZE = 50;
 
@@ -18,6 +19,16 @@ export default async function CrmPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // Service-Mode (Recruiting / Webdev) bestimmt die sichtbare Vertikale.
+  // Identische Logik wie in app/(dashboard)/layout.tsx beim Provider-Init.
+  const { data: profile } = await db
+    .from("profiles")
+    .select("service_mode")
+    .eq("id", user.id)
+    .maybeSingle();
+  const serviceMode: ServiceMode = (profile?.service_mode as ServiceMode) ?? "recruiting";
+  const vertical = MODE_TO_VERTICAL[serviceMode];
 
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
   const offset = (page - 1) * PAGE_SIZE;
@@ -75,6 +86,9 @@ export default async function CrmPage({
   } else {
     query = query.eq("status", "qualified");
   }
+
+  // Vertikale-Filter: Slider „Recruiting/Webentwicklung" filtert das CRM-Board.
+  query = query.eq("vertical", vertical);
 
   if (archivedStatusIds.length > 0) {
     query = query.not("crm_status_id", "in", `(${archivedStatusIds.join(",")})`);

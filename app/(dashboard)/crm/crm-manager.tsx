@@ -16,6 +16,7 @@ import type { ColumnPref } from "@/lib/table-prefs";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
+import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
@@ -91,7 +92,13 @@ export function CrmManager({
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
+  const vertical = MODE_TO_VERTICAL[serviceMode];
   const activeStatuses = statuses.filter((s) => s.is_active);
+  // Status-Liste fuer Inline-/Bulk-Dropdowns: nur Status der aktuellen
+  // Vertikale (oder neutrale). Verhindert versehentliches Cross-Vertical-Setzen.
+  const verticalStatuses = activeStatuses.filter(
+    (s) => !s.vertical || s.vertical === vertical,
+  );
 
   const { visible, widthOf, totalVisibleWidth, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
     tableKey: "crm",
@@ -234,7 +241,7 @@ export function CrmManager({
           onChange={(v) => updateParams({ crm_status: v, page: "1" })}
           options={[
             { value: "", label: "Alle Status" },
-            ...activeStatuses.map((s) => ({ value: s.id, label: s.label })),
+            ...verticalStatuses.map((s) => ({ value: s.id, label: s.label })),
           ]}
           activeColor={currentStatus ? activeStatuses.find((s) => s.id === currentStatus)?.color : undefined}
         />
@@ -347,7 +354,7 @@ export function CrmManager({
             onChange={(e) => setBulkStatus(e.target.value)}
             className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
           >
-            {activeStatuses.map((s) => (
+            {verticalStatuses.map((s) => (
               <option key={s.id} value={s.id}>{s.label}</option>
             ))}
           </select>
@@ -495,7 +502,13 @@ export function CrmManager({
                           col.key === "company_name" ? "font-medium" : "text-gray-600 dark:text-gray-400"
                         }`}
                       >
-                        <CellRenderer lead={lead} colKey={col.key} statuses={statuses} formatDate={formatDate} />
+                        <CellRenderer
+                          lead={lead}
+                          colKey={col.key}
+                          statuses={statuses}
+                          dropdownStatuses={verticalStatuses}
+                          formatDate={formatDate}
+                        />
                       </td>
                     ))}
                   </tr>
@@ -551,11 +564,12 @@ function FilterSelect({
 }
 
 function CellRenderer({
-  lead, colKey, statuses, formatDate,
+  lead, colKey, statuses, dropdownStatuses, formatDate,
 }: {
   lead: CrmLead;
   colKey: string;
   statuses: CustomLeadStatus[];
+  dropdownStatuses: CustomLeadStatus[];
   formatDate: (iso: string | null) => string;
 }) {
   switch (colKey) {
@@ -584,7 +598,12 @@ function CellRenderer({
         <InlineStatusDropdown
           leadId={lead.id}
           currentStatusId={lead.crm_status_id}
-          statuses={statuses.filter((s) => s.is_active)}
+          statuses={
+            // aktuellen Status immer behalten, auch wenn er zur anderen Vertikale gehoert
+            dropdownStatuses.some((s) => s.id === lead.crm_status_id) || !lead.crm_status_id
+              ? dropdownStatuses
+              : [...dropdownStatuses, ...statuses.filter((s) => s.id === lead.crm_status_id)]
+          }
         />
       );
     case "call_count":

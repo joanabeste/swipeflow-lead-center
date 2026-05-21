@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
-import type { Lead } from "@/lib/types";
+import type { Lead, ServiceMode } from "@/lib/types";
+import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 
 export async function updateLead(
   leadId: string,
@@ -343,16 +344,14 @@ export async function bulkUpdateStatus(
 
 export async function bulkArchiveLeads(
   leadIds: string[],
-  serviceMode: "recruiting" | "webdev",
+  serviceMode: ServiceMode,
 ): Promise<{ success: true; previous: { id: string; crm_status_id: string | null }[] } | { error: string }> {
   if (leadIds.length === 0) return { success: true, previous: [] };
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const targetId = serviceMode === "webdev"
-    ? "webdesign-passt-nicht"
-    : "recruiting-passt-nicht";
+  const targetId = ARCHIVE_STATUS_BY_MODE[serviceMode];
 
   const { data: exists } = await db
     .from("custom_lead_statuses")
