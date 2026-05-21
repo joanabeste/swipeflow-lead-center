@@ -320,8 +320,10 @@ export function LeadProfilePanel({
             maxRight={900}
           />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="space-y-6 lg:col-span-2">{leftContent}</div>
+          // @3xl: reagiert auf Container-Breite (Drawer ~768px+), lg: auf
+          // Viewport — fuer die Vollseite. Beides parallel anwendbar.
+          <div className="grid gap-6 @3xl:grid-cols-3 lg:grid-cols-3">
+            <div className="space-y-6 @3xl:col-span-2 lg:col-span-2">{leftContent}</div>
             <div className="space-y-4">{rightContent}</div>
           </div>
         )}

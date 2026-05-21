@@ -24,9 +24,9 @@ const MOBILE_BREAKPOINT = 768;
 export function Drawer({
   open,
   onClose,
-  defaultWidth = 880,
+  defaultWidth = 560,
   storageKey,
-  minWidth = 480,
+  minWidth = 360,
   maxWidth = 1200,
   title,
   headerExtras,
@@ -57,19 +57,19 @@ export function Drawer({
     return () => mq.removeEventListener("change", update);
   }, [storageKey, minWidth, maxWidth]);
 
-  // ESC schliesst, Body-Scroll-Lock waehrend offen.
+  // ESC schliesst — Drawer ist non-modal, kein Body-Scroll-Lock, kein Backdrop.
+  // ESC wird ignoriert, wenn der Fokus in einem Input/Textarea liegt (sonst
+  // koennte der User beim Tippen versehentlich den Drawer zumachen).
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      onClose();
     }
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   function startResize(e: React.PointerEvent<HTMLDivElement>) {
@@ -105,38 +105,32 @@ export function Drawer({
   const panelWidth = isMobile ? "100vw" : `${width}px`;
 
   return createPortal(
+    // Non-modal: Outer-Layer ist immer pointer-events-none, nur das Panel
+    // selbst faengt Klicks. Dadurch passieren Klicks ausserhalb des Drawers
+    // den Listen-Hintergrund und sind weiter interaktiv.
     <div
       aria-hidden={!open}
-      className={`fixed inset-0 z-[60] ${open ? "pointer-events-auto" : "pointer-events-none"}`}
+      className="pointer-events-none fixed inset-0 z-[60]"
     >
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
-        }`}
-      />
-
-      {/* Panel */}
+      {/* Panel — pointer-events-auto, damit Inhalte klickbar bleiben */}
       <aside
-        role="dialog"
-        aria-modal="true"
+        role="complementary"
         style={{ width: panelWidth }}
-        className={`absolute inset-y-0 right-0 flex flex-col bg-white shadow-xl transition-transform duration-200 ease-out dark:bg-[#111] ${
+        className={`pointer-events-auto absolute inset-y-0 right-0 flex flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-200 ease-out dark:border-[#2c2c2e] dark:bg-[#111] ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        {/* Resize-Handle (Desktop only) */}
+        {/* Resize-Handle (Desktop only) — Hit-Area 8px, sichtbarer Strich 2px */}
         {!isMobile && (
           <div
             onPointerDown={startResize}
             onPointerMove={onResizeMove}
             onPointerUp={endResize}
             onPointerCancel={endResize}
-            className="group absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-col-resize"
+            className="group absolute inset-y-0 left-0 z-10 w-2 -translate-x-1/2 cursor-col-resize"
             title="Breite anpassen"
           >
-            <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-200 transition group-hover:bg-primary dark:bg-[#2c2c2e]" />
+            <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-gray-200 transition-colors group-hover:bg-primary dark:bg-[#2c2c2e]" />
           </div>
         )}
 
@@ -157,8 +151,10 @@ export function Drawer({
           </div>
         </header>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto">{children}</div>
+        {/* Body — `@container` aktiviert Tailwind-v4 Container-Queries fuer
+            Kinder, sodass z.B. `@3xl:grid-cols-3` auf die Drawer-Breite reagiert
+            (statt auf den Viewport). */}
+        <div className="@container flex-1 overflow-y-auto">{children}</div>
       </aside>
     </div>,
     document.body,

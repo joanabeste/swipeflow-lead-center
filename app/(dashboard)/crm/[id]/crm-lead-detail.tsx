@@ -59,6 +59,8 @@ interface Props {
   backHref?: string;
   /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
   onBack?: () => void;
+  /** Wenn true: kein ResizableColumns, sondern vertikal gestackt (z.B. fuer Drawer). */
+  forceStackedLayout?: boolean;
   screenshotCard?: React.ReactNode;
 }
 
@@ -67,6 +69,7 @@ export function CrmLeadDetail({
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
   backHref = "/crm",
   onBack,
+  forceStackedLayout = false,
   screenshotCard,
 }: Props) {
   const router = useRouter();
@@ -222,14 +225,10 @@ export function CrmLeadDetail({
         </div>
       )}
 
-      {/* Zwei-Spalten-Layout: links schmal (Lead-Info), rechts dominant (Activity-Feed) */}
-      <ResizableColumns
-        storageKey="crm-detail-left-width"
-        fixedSide="left"
-        defaultWidth={380}
-        minWidth={300}
-        maxWidth={560}
-        left={
+      {/* Zwei-Spalten-Layout: links schmal (Lead-Info), rechts dominant (Activity-Feed)
+          — falls forceStackedLayout: vertikal stacken (z.B. im Drawer). */}
+      {(() => {
+        const leftCol = (
           <CrmLeftColumn
             lead={lead}
             contacts={contacts}
@@ -245,8 +244,8 @@ export function CrmLeadDetail({
             landingPages={landingPages}
             screenshotCard={screenshotCard}
           />
-        }
-        right={
+        );
+        const rightCol = (
           <div className="space-y-4">
             <CrmActivityFeed
               leadId={lead.id}
@@ -266,8 +265,27 @@ export function CrmLeadDetail({
             />
             <LeadTodosCard leadId={lead.id} todos={todos} />
           </div>
+        );
+        if (forceStackedLayout) {
+          return (
+            <div className="space-y-4">
+              {leftCol}
+              {rightCol}
+            </div>
+          );
         }
-      />
+        return (
+          <ResizableColumns
+            storageKey="crm-detail-left-width"
+            fixedSide="left"
+            defaultWidth={380}
+            minWidth={300}
+            maxWidth={560}
+            left={leftCol}
+            right={rightCol}
+          />
+        );
+      })()}
 
       {enrichModalOpen && (
         <SingleLeadEnrichModal

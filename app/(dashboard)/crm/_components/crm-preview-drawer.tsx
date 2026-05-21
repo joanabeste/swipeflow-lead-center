@@ -106,6 +106,7 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
             landingPages={data.landingPages}
             todos={data.todos}
             onBack={onClose}
+            forceStackedLayout={true}
             screenshotCard={
               <LeadScreenshotCardClient
                 signedUrl={data.screenshotSignedUrl}
@@ -124,14 +125,10 @@ function PreviewSkeleton() {
   return (
     <div className="space-y-4">
       <div className="h-8 w-2/3 animate-pulse rounded bg-gray-200 dark:bg-[#2c2c2e]" />
-      <div className="grid gap-4 md:grid-cols-[380px_1fr]">
-        <div className="space-y-3">
-          <div className="h-40 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
-          <div className="h-32 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
-          <div className="h-32 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
-        </div>
-        <div className="h-96 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
-      </div>
+      <div className="h-40 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
+      <div className="h-32 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
+      <div className="h-32 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
+      <div className="h-64 animate-pulse rounded bg-gray-100 dark:bg-[#1c1c1e]" />
     </div>
   );
 }
