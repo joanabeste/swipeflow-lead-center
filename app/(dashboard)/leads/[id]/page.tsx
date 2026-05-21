@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCard } from "../_components/lead-screenshot-card";
 import { loadLeadDetail } from "@/lib/leads/load-lead-detail";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -21,7 +22,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
     <LeadScreenshotCard
       screenshotPath={data.lead.website_screenshot_path}
       takenAt={data.lead.website_screenshot_taken_at}
-      websiteUrl={data.lead.website ? `https://${data.lead.website}` : null}
+      websiteUrl={normalizeWebsiteUrl(data.lead.website)}
     />
   );
 

@@ -7,6 +7,7 @@ import { Drawer } from "@/components/drawer";
 import { CrmLeadDetail } from "../[id]/crm-lead-detail";
 import { LeadScreenshotCardClient } from "../../leads/_components/lead-screenshot-card-client";
 import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 interface Props {
   previewId: string | null;
@@ -111,7 +112,7 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
               <LeadScreenshotCardClient
                 signedUrl={data.screenshotSignedUrl}
                 takenAt={data.lead.website_screenshot_taken_at}
-                websiteUrl={data.lead.website ? `https://${data.lead.website}` : null}
+                websiteUrl={normalizeWebsiteUrl(data.lead.website)}
               />
             }
           />

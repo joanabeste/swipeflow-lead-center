@@ -23,6 +23,7 @@ import { ColumnPicker } from "@/components/table/column-picker";
 import { DraggableResizableHeader } from "@/components/table/draggable-resizable-header";
 import { useColumnLayout } from "@/components/table/use-column-layout";
 import { LeadPreviewDrawer } from "./_components/lead-preview-drawer";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
   imported: { label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
@@ -527,7 +528,7 @@ export function LeadTable({
                             </span>
                           ) : col.key === "website" && lead.website ? (
                             <a
-                              href={`https://${lead.website}`}
+                              href={normalizeWebsiteUrl(lead.website) ?? "#"}
                               target="_blank"
                               rel="noreferrer noopener"
                               onClick={(e) => e.stopPropagation()}

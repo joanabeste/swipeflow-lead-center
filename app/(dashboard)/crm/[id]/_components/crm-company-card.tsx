@@ -2,6 +2,7 @@ import { Briefcase, Mail, Phone, MapPin, User, ExternalLink, Search } from "luci
 import type { Lead, LeadEnrichment } from "@/lib/types";
 import { Card, Row } from "./crm-shared";
 import { PhoneCallLink } from "@/components/phone-call-link";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 export function CrmCompanyCard({
   lead, latestEnrichment,
@@ -25,7 +26,7 @@ export function CrmCompanyCard({
       </div>
       {lead.website && (
         <a
-          href={`https://${lead.website}`}
+          href={normalizeWebsiteUrl(lead.website) ?? "#"}
           target="_blank"
           rel="noreferrer"
           className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary hover:underline"

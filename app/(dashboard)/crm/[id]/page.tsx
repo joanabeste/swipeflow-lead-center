@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CrmLeadDetail } from "./crm-lead-detail";
 import { LeadScreenshotCard } from "../../leads/_components/lead-screenshot-card";
 import { loadCrmDetail } from "@/lib/crm/load-crm-detail";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 export default async function CrmLeadPage({
   params,
@@ -22,7 +23,7 @@ export default async function CrmLeadPage({
     <LeadScreenshotCard
       screenshotPath={data.lead.website_screenshot_path}
       takenAt={data.lead.website_screenshot_taken_at}
-      websiteUrl={data.lead.website ? `https://${data.lead.website}` : null}
+      websiteUrl={normalizeWebsiteUrl(data.lead.website)}
     />
   );
 

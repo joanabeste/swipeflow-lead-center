@@ -18,6 +18,7 @@ import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../lead
 import { useServiceMode } from "@/lib/service-mode";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { CrmPreviewDrawer } from "./_components/crm-preview-drawer";
+import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
 import { useToastContext } from "../toast-provider";
@@ -676,7 +677,7 @@ function CellRenderer({
     case "website":
       return lead.website ? (
         <a
-          href={`https://${lead.website}`}
+          href={normalizeWebsiteUrl(lead.website) ?? "#"}
           target="_blank"
           rel="noreferrer noopener"
           onClick={(e) => e.stopPropagation()}
