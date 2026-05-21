@@ -1,4 +1,4 @@
-import { Briefcase, Mail, Phone, MapPin, User, ExternalLink } from "lucide-react";
+import { Briefcase, Mail, Phone, MapPin, User, ExternalLink, Search } from "lucide-react";
 import type { Lead, LeadEnrichment } from "@/lib/types";
 import { Card, Row } from "./crm-shared";
 import { PhoneCallLink } from "@/components/phone-call-link";
@@ -11,7 +11,18 @@ export function CrmCompanyCard({
       <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         Firma
       </h2>
-      <h3 className="mt-2 text-lg font-bold tracking-tight">{lead.company_name}</h3>
+      <div className="mt-2 flex items-center gap-1.5">
+        <h3 className="text-lg font-bold tracking-tight">{lead.company_name}</h3>
+        <a
+          href={`https://www.google.com/search?q=${encodeURIComponent(lead.company_name)}`}
+          target="_blank"
+          rel="noreferrer"
+          title="Firma googeln"
+          className="inline-flex h-6 w-6 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+        >
+          <Search className="h-3.5 w-3.5" />
+        </a>
+      </div>
       {lead.website && (
         <a
           href={`https://${lead.website}`}

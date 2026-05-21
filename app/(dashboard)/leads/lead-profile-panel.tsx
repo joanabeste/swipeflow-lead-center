@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive, Search,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
@@ -235,7 +235,18 @@ export function LeadProfilePanel({
 
       {/* Firmenname + Erstellt */}
       <div className="mt-4">
-        <h1 className="text-2xl font-bold tracking-tight">{lead.company_name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight">{lead.company_name}</h1>
+          <a
+            href={`https://www.google.com/search?q=${encodeURIComponent(lead.company_name)}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Firma googeln"
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          >
+            <Search className="h-4 w-4" />
+          </a>
+        </div>
         <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
           Erstellt: {new Date(lead.created_at).toLocaleDateString("de-DE")}
           {latestEnrichment?.status === "completed" && (

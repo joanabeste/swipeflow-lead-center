@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2, Archive } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
   EmailMessage, LeadTodo,
@@ -17,7 +17,7 @@ import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
 import { LeadTodosCard } from "./_components/lead-todos-card";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
-import { deleteLead } from "../../leads/actions";
+import { deleteLead, bulkArchiveLeads, bulkRestoreCrmStatus } from "../../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
 
 type AuthorProfile = { name: string; avatar_url: string | null };
@@ -71,10 +71,37 @@ export function CrmLeadDetail({
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
   const [enrichError] = useState<string | null>(null);
   const [deletePending, startDeleteTransition] = useTransition();
+  const [archivePending, startArchiveTransition] = useTransition();
+  const [unarchivePending, startUnarchiveTransition] = useTransition();
   const latestEnrichment = enrichments[0] ?? null;
+
+  // Aussortier-Banner: zugeordneter CRM-Status mit is_archived=true.
+  const archivedStatus = lead.crm_status_id
+    ? statuses.find((s) => s.id === lead.crm_status_id && s.is_archived)
+    : null;
 
   function handleEnrich() {
     setEnrichModalOpen(true);
+  }
+
+  function handleArchive() {
+    if (archivedStatus) return;
+    if (!confirm("Lead aussortieren? Er erscheint nicht mehr in Neue Leads oder im CRM und wird der KI als Negativ-Signal gemeldet. Du kannst ihn jederzeit ueber das Banner wiederherstellen.")) return;
+    startArchiveTransition(async () => {
+      const res = await bulkArchiveLeads([lead.id], serviceMode);
+      if ("error" in res && res.error) {
+        alert(res.error);
+        return;
+      }
+      router.refresh();
+    });
+  }
+
+  function handleUnarchive() {
+    startUnarchiveTransition(async () => {
+      const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
+      if (!("error" in res) || !res.error) router.refresh();
+    });
   }
 
   function handleDelete() {
@@ -104,6 +131,17 @@ export function CrmLeadDetail({
             <Sparkles className="h-3.5 w-3.5" />
             Anreichern…
           </button>
+          {!archivedStatus && (
+            <button
+              onClick={handleArchive}
+              disabled={archivePending}
+              title="Lead aussortieren — erscheint nicht mehr in Neue Leads oder im CRM"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              {archivePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+              Aussortieren
+            </button>
+          )}
           <button
             onClick={handleDelete}
             disabled={deletePending}
@@ -115,6 +153,29 @@ export function CrmLeadDetail({
           </button>
         </div>
       </div>
+
+      {/* Aussortier-Banner — Lead ist auf einen archived Status gesetzt. */}
+      {archivedStatus && (
+        <div className="flex items-start gap-3 rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-900/15">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-400" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">
+              Aussortiert · {archivedStatus.label}
+            </p>
+            <p className="mt-0.5 text-xs text-red-700/90 dark:text-red-400/90">
+              Erscheint nicht in Neue Leads oder im CRM. Wird der KI als Negativ-Signal gemeldet.
+            </p>
+          </div>
+          <button
+            onClick={handleUnarchive}
+            disabled={unarchivePending}
+            className="inline-flex items-center gap-1 rounded-md border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-900/30"
+          >
+            {unarchivePending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+            Wiederherstellen
+          </button>
+        </div>
+      )}
 
       {/* Status-Banner (Cancel/Blacklist) */}
       {(lead.cancel_reason || (lead.blacklist_hit && lead.blacklist_reason)) && (
