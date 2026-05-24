@@ -114,7 +114,7 @@ export function ClickupListMapper({ projects }: { projects: Project[] }) {
                     <button
                       onClick={() => save(p.id)}
                       disabled={!isDirty || isSaving}
-                      className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-40"
+                      className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-40"
                     >
                       <Check className="h-3.5 w-3.5" /> {isSaving ? "…" : "Speichern"}
                     </button>

@@ -141,7 +141,7 @@ export function ProjectNotes({ projectId, notes, currentUserId }: { projectId: s
             type="button"
             onClick={add}
             disabled={(!draft.trim() && pendingFiles.length === 0) || pending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-40"
           >
             <Send className="h-3.5 w-3.5" /> {pending ? "Speichern…" : "Notiz speichern"}
           </button>
