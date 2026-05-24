@@ -63,6 +63,47 @@ export async function attachThreadToLead(input: { threadId: string; leadId: stri
   return { success: true };
 }
 
+/** Ordnet einen Mail-Thread einem konkreten Projekt zu (oder loest die Zuordnung mit projectId=null). */
+export async function assignThreadToProject(input: { threadId: string; projectId: string | null }): Promise<Ok | { error: string }> {
+  const user = await getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+
+  // Wenn Projekt gesetzt: lead_id des Threads passend zur project.lead_id setzen,
+  // damit der Thread auf der richtigen Kunden-Seite erscheint.
+  let leadIdUpdate: string | null | undefined = undefined;
+  if (input.projectId) {
+    const { data: project, error: projErr } = await db
+      .from("projects")
+      .select("lead_id")
+      .eq("id", input.projectId)
+      .maybeSingle();
+    if (projErr) return { error: projErr.message };
+    if (!project) return { error: "Projekt nicht gefunden." };
+    leadIdUpdate = project.lead_id as string;
+  }
+
+  const patch: Record<string, unknown> = { project_id: input.projectId };
+  if (leadIdUpdate !== undefined) patch.lead_id = leadIdUpdate;
+
+  const { error } = await db.from("email_threads").update(patch).eq("id", input.threadId);
+  if (error) {
+    if (/column.*project_id.*does not exist/i.test(error.message)) {
+      return { error: "Spalte email_threads.project_id fehlt — Migration 084 muss ausgefuehrt werden." };
+    }
+    return { error: error.message };
+  }
+
+  await logAudit({
+    userId: user.id, action: "email.thread.assign_project",
+    entityType: "email_thread", entityId: input.threadId,
+    details: { project_id: input.projectId },
+  });
+  if (input.projectId) revalidatePath(`/fulfillment/projekte/${input.projectId}`);
+  if (leadIdUpdate) revalidatePath(`/fulfillment/kunden/${leadIdUpdate}`);
+  return { success: true };
+}
+
 async function sendMailViaSmtpAndStore(args: {
   userId: string;
   to: string;

@@ -8,6 +8,8 @@ import { formatDateDe } from "@/lib/zeit/format";
 import { ProjectStatusEditor } from "./_components/status-editor";
 import { TaskList } from "./_components/task-list";
 import { ProjectNotes } from "./_components/project-notes";
+import { ProjectMails } from "./_components/project-mails";
+import { loadThreadsForProject } from "@/lib/email/data";
 
 export default async function ProjektDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,10 +17,11 @@ export default async function ProjektDetailPage({ params }: { params: Promise<{ 
   if (!project) notFound();
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
-  const [customer, tasks, notes] = await Promise.all([
+  const [customer, tasks, notes, threads] = await Promise.all([
     loadCustomer(project.lead_id),
     loadCachedTasks(id),
     loadProjectNotes(id),
+    loadThreadsForProject(id).catch(() => []),
   ]);
 
   return (
@@ -58,6 +61,11 @@ export default async function ProjektDetailPage({ params }: { params: Promise<{ 
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Notizen</h2>
         <ProjectNotes projectId={project.id} notes={notes} currentUserId={user?.id ?? null} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">E-Mails</h2>
+        <ProjectMails projectId={project.id} leadId={project.lead_id} threads={threads} />
       </section>
 
       <section>

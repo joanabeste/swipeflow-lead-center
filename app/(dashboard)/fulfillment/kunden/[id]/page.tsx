@@ -7,7 +7,7 @@ import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
 import { MailsTab } from "./_components/mails-tab";
-import { loadThreadsForLead } from "@/lib/email/data";
+import { enrichThreadsWithProjects, loadThreadsForLead } from "@/lib/email/data";
 
 type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
 
@@ -89,7 +89,8 @@ export default async function KundenDetailPage({
       {tab === "mails" && (
         <MailsTab
           leadId={id}
-          initialThreads={await loadThreadsForLead(id).catch(() => [])}
+          initialThreads={await loadThreadsForLead(id).then(enrichThreadsWithProjects).catch(() => [])}
+          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
           defaultTo={contacts.find((c) => c.is_primary && c.email)?.email ?? contacts.find((c) => c.email)?.email ?? customer.email ?? null}
         />
       )}

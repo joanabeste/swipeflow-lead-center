@@ -3,16 +3,18 @@
 import { useEffect, useState, useTransition } from "react";
 import { Inbox, RefreshCw, Send, ChevronLeft, Paperclip } from "lucide-react";
 import type { ThreadRow, MessageRow } from "@/lib/email/data";
-import { syncMyMailbox, loadThreadMessages, markRead, sendReply, attachThreadToLead, sendNewMail } from "../../../mail-actions";
+import { syncMyMailbox, loadThreadMessages, markRead, sendReply, attachThreadToLead, sendNewMail, assignThreadToProject } from "../../../mail-actions";
 import { useToastContext } from "../../../../toast-provider";
 
 export function MailsTab({
   leadId,
   initialThreads,
+  projects,
   defaultTo,
 }: {
   leadId: string;
   initialThreads: ThreadRow[];
+  projects: Array<{ id: string; name: string }>;
   defaultTo: string | null;
 }) {
   const { addToast } = useToastContext();
@@ -103,6 +105,15 @@ export function MailsTab({
     }
   }
 
+  async function handleAssignProject(threadId: string, projectId: string | null) {
+    const res = await assignThreadToProject({ threadId, projectId });
+    if ("error" in res) addToast(res.error, "error");
+    else {
+      setThreads((cur) => cur.map((t) => t.id === threadId ? { ...t, project_id: projectId, project_name: projects.find((p) => p.id === projectId)?.name ?? null } : t));
+      addToast(projectId ? "Thread Projekt zugeordnet." : "Projekt-Zuordnung entfernt.", "success");
+    }
+  }
+
   return (
     <div className="grid gap-4 md:grid-cols-[320px_1fr]">
       <aside className="space-y-2">
@@ -161,6 +172,11 @@ export function MailsTab({
                       {t.message_count} Nachricht{t.message_count === 1 ? "" : "en"}
                       {t.last_message_at && ` · ${new Date(t.last_message_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}`}
                     </p>
+                    {t.project_name && (
+                      <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                        📁 {t.project_name}
+                      </span>
+                    )}
                   </button>
                 </li>
               );
@@ -196,6 +212,8 @@ export function MailsTab({
             leadId={leadId}
             currentThread={threads.find((t) => t.id === selected) ?? null}
             onAttachToLead={handleAttach}
+            projects={projects}
+            onAssignProject={handleAssignProject}
           />
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-200 p-12 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">
@@ -220,6 +238,8 @@ function ThreadView({
   leadId,
   currentThread,
   onAttachToLead,
+  projects,
+  onAssignProject,
 }: {
   threadId: string;
   messages: MessageRow[];
@@ -232,6 +252,8 @@ function ThreadView({
   leadId: string;
   currentThread: ThreadRow | null;
   onAttachToLead: (threadId: string) => void;
+  projects: Array<{ id: string; name: string }>;
+  onAssignProject: (threadId: string, projectId: string | null) => void;
 }) {
   return (
     <div className="space-y-3">
@@ -247,6 +269,24 @@ function ThreadView({
           <button type="button" onClick={() => onAttachToLead(threadId)} className="ml-2 font-semibold underline">
             Jetzt zuordnen
           </button>
+        </div>
+      )}
+
+      {currentThread && projects.length > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
+          <label htmlFor="thread-project-select" className="text-gray-500">Projekt:</label>
+          <select
+            id="thread-project-select"
+            value={currentThread.project_id ?? ""}
+            onChange={(e) => onAssignProject(threadId, e.target.value || null)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs dark:border-[#2c2c2e]/60 dark:bg-[#1c1c1e]"
+          >
+            <option value="">— keinem Projekt —</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <span className="ml-auto text-[10px] text-gray-400">Mail wird in der Projekt-Detail-Ansicht angezeigt.</span>
         </div>
       )}
 

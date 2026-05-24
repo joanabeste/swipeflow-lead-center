@@ -1,5 +1,5 @@
 -- BUNDLED PENDING MIGRATIONS — ausfuehren im Supabase SQL-Editor
--- Aktuell: 080 deal_link · 081 project_notes · 082 attachments · 083 notifications
+-- Aktuell: 080 deal_link · 081 project_notes · 082 attachments · 083 notifications · 084 mail<->project
 
 
 -- ===========================================
@@ -201,3 +201,14 @@ CREATE POLICY notifications_delete_own ON public.notifications
   USING (user_id = auth.uid());
 
 -- Inserts laufen ausschliesslich serverseitig via Service-Role (kein Client-Insert).
+
+
+-- ===========================================
+-- 084_email_threads_project_link.sql
+-- ===========================================
+ALTER TABLE public.email_threads
+  ADD COLUMN IF NOT EXISTS project_id uuid REFERENCES public.projects(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS email_threads_project_idx
+  ON public.email_threads(project_id, last_message_at DESC)
+  WHERE project_id IS NOT NULL;

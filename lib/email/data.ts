@@ -4,11 +4,14 @@ import { createServiceClient } from "@/lib/supabase/server";
 export interface ThreadRow {
   id: string;
   lead_id: string | null;
+  project_id: string | null;
   subject_normalized: string | null;
   participants: string[];
   message_count: number;
   last_message_at: string | null;
   unread_count: number;
+  /** Optional vom Server angereichert — Projekt-Name fuer Anzeige. */
+  project_name?: string | null;
 }
 
 export interface MessageRow {
@@ -32,7 +35,7 @@ export async function loadThreadsForLead(leadId: string): Promise<ThreadRow[]> {
   const db = createServiceClient();
   const { data } = await db
     .from("email_threads")
-    .select("id, lead_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
     .eq("lead_id", leadId)
     .order("last_message_at", { ascending: false });
   return (data ?? []) as ThreadRow[];
@@ -42,13 +45,33 @@ export async function loadAllThreads(filter: "all" | "unread" | "unassigned" = "
   const db = createServiceClient();
   let query = db
     .from("email_threads")
-    .select("id, lead_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
     .order("last_message_at", { ascending: false })
     .limit(200);
   if (filter === "unread") query = query.gt("unread_count", 0);
   if (filter === "unassigned") query = query.is("lead_id", null);
   const { data } = await query;
   return (data ?? []) as ThreadRow[];
+}
+
+export async function loadThreadsForProject(projectId: string): Promise<ThreadRow[]> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("email_threads")
+    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .eq("project_id", projectId)
+    .order("last_message_at", { ascending: false });
+  return (data ?? []) as ThreadRow[];
+}
+
+/** Erweitert eine Thread-Liste um den Projekt-Namen (fuer Anzeige im Mails-Tab). */
+export async function enrichThreadsWithProjects(threads: ThreadRow[]): Promise<ThreadRow[]> {
+  const projectIds = Array.from(new Set(threads.map((t) => t.project_id).filter((x): x is string => !!x)));
+  if (projectIds.length === 0) return threads;
+  const db = createServiceClient();
+  const { data: projects } = await db.from("projects").select("id, name").in("id", projectIds);
+  const nameById = new Map((projects ?? []).map((p) => [p.id as string, p.name as string]));
+  return threads.map((t) => ({ ...t, project_name: t.project_id ? nameById.get(t.project_id) ?? null : null }));
 }
 
 export async function loadMessages(threadId: string): Promise<MessageRow[]> {
