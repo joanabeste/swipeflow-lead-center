@@ -73,6 +73,10 @@ export async function closeTask(taskId: string) {
   });
 }
 
+export async function deleteTask(taskId: string) {
+  return clickupFetch<unknown>(`/task/${taskId}`, { method: "DELETE" });
+}
+
 export async function updateTaskStatus(taskId: string, status: string) {
   return clickupFetch<ClickupTask>(`/task/${taskId}`, {
     method: "PUT",

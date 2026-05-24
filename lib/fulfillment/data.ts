@@ -134,14 +134,19 @@ export async function loadCachedTasks(projectId: string, includeClosed = false):
 }
 
 export async function loadAllOpenTasks(): Promise<Array<ClickupTaskCached & { project_name?: string; customer_name?: string }>> {
+  return loadAllTasks({ onlyOpen: true });
+}
+
+export async function loadAllTasks(opts?: { onlyOpen?: boolean }): Promise<Array<ClickupTaskCached & { project_name?: string; customer_name?: string }>> {
   const db = createServiceClient();
-  const { data, error } = await db
+  let query = db
     .from("clickup_tasks_cache")
     .select("*, projects!inner(name, lead_id, leads:lead_id(company_name))")
-    .eq("closed", false)
     .order("due_date", { ascending: true, nullsFirst: false });
+  if (opts?.onlyOpen) query = query.eq("closed", false);
+  const { data, error } = await query;
   if (error) {
-    if (!isMissingTable(error)) console.error("[loadAllOpenTasks]", error);
+    if (!isMissingTable(error)) console.error("[loadAllTasks]", error);
     return [];
   }
   return ((data ?? []) as unknown as Array<ClickupTaskCached & { projects?: { name: string; leads?: { company_name: string } } }>).map((r) => ({

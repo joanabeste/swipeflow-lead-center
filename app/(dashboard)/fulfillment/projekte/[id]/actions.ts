@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
-import { closeTask, createTask, syncListIntoCache } from "@/lib/clickup/tasks";
+import { closeTask, createTask, deleteTask, syncListIntoCache } from "@/lib/clickup/tasks";
 import { ClickupError } from "@/lib/clickup/client";
 import { logAudit } from "@/lib/audit-log";
 import {
@@ -91,6 +91,30 @@ export async function closeClickupTask(clickupTaskId: string): Promise<Result> {
   } catch (e) {
     return { error: translateError(e) };
   }
+}
+
+export async function deleteClickupTask(clickupTaskId: string): Promise<Result> {
+  const u = await uid();
+  if (!u) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { data: cached } = await db
+    .from("clickup_tasks_cache")
+    .select("project_id")
+    .eq("clickup_task_id", clickupTaskId)
+    .maybeSingle();
+  try {
+    await deleteTask(clickupTaskId);
+  } catch (e) {
+    // 404 = bereits in ClickUp geloescht — Cache trotzdem aufraeumen.
+    if (!(e instanceof ClickupError && e.status === 404)) {
+      return { error: translateError(e) };
+    }
+  }
+  await db.from("clickup_tasks_cache").delete().eq("clickup_task_id", clickupTaskId);
+  if (cached?.project_id) revalidatePath(`/fulfillment/projekte/${cached.project_id}`);
+  revalidatePath("/fulfillment/tasks");
+  await logAudit({ userId: u, action: "clickup.task.delete", entityType: "clickup_task", entityId: clickupTaskId });
+  return { success: true };
 }
 
 // ─── Projekt-Notizen ─────────────────────────────────────────────

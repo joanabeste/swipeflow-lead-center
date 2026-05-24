@@ -56,7 +56,9 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
 
       {threads.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-gray-200 p-12 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">
-          Keine Threads gefunden. Synchronisiere deine Mails über die Kunden-Detailseite (Tab „E-Mails") oder unter Einstellungen → E-Mail.
+          Keine Threads gefunden. Richte dein IMAP-Konto unter{" "}
+          <Link href="/einstellungen/email" className="text-primary hover:underline">Einstellungen → E-Mail</Link>{" "}
+          ein und starte den Sync.
         </p>
       ) : (
         <ul className="space-y-1">
