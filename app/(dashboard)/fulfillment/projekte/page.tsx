@@ -1,11 +1,8 @@
 import Link from "next/link";
-import { Briefcase } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { listAllProjects } from "@/lib/fulfillment/data";
 import { type ProjectStatus } from "@/lib/fulfillment/types";
-import { ProjectStatusCell } from "./_components/project-status-cell";
-import { ProjectNameCell } from "./_components/project-name-cell";
-import { ProjectStartCell } from "./_components/project-start-cell";
+import { ProjectsTable } from "./_components/projects-table";
 
 const STATUS_OPTIONS: Array<{ id: ProjectStatus | "all"; label: string }> = [
   { id: "all", label: "Alle" },
@@ -18,7 +15,11 @@ const STATUS_OPTIONS: Array<{ id: ProjectStatus | "all"; label: string }> = [
 export default async function ProjekteListePage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const sp = await searchParams;
   const status = sp.status && STATUS_OPTIONS.some((o) => o.id === sp.status) ? (sp.status as ProjectStatus) : undefined;
-  const projects = await listAllProjects(status ? { status } : undefined);
+  const projectsRaw = await listAllProjects(status ? { status } : undefined);
+  const statusOrder: Record<ProjectStatus, number> = { active: 0, onboarding: 1, paused: 2, completed: 3 };
+  const projects = status
+    ? projectsRaw
+    : [...projectsRaw].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
 
   const db = createServiceClient();
   const ids = [...new Set(projects.map((p) => p.lead_id))];
@@ -49,48 +50,17 @@ export default async function ProjekteListePage({ searchParams }: { searchParams
         })}
       </div>
 
-      {projects.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-gray-200 p-12 text-center dark:border-[#2c2c2e]/60">
-          <Briefcase className="mx-auto h-8 w-8 text-gray-400" />
-          <p className="mt-3 text-sm font-medium text-gray-700 dark:text-gray-200">Keine Projekte.</p>
-          <p className="mt-1 text-xs text-gray-500">Lege ein Projekt direkt im Kunden-Profil an (Tab „Projekte").</p>
-        </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-[#1c1c1e]">
-              <tr>
-                <th className="px-4 py-3 text-left">Projekt</th>
-                <th className="px-4 py-3 text-left">Kunde</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Bereich</th>
-                <th className="px-4 py-3 text-left">Start</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]/40">
-              {projects.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                  <td className="px-4 py-3">
-                    <ProjectNameCell projectId={p.id} initial={p.name} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link href={`/fulfillment/kunden/${p.lead_id}`} className="text-gray-600 hover:text-primary dark:text-gray-300">
-                      {nameByLead.get(p.lead_id) ?? "—"}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ProjectStatusCell projectId={p.id} current={p.status} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.vertical ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <ProjectStartCell projectId={p.id} initial={p.started_at} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ProjectsTable
+        projects={projects.map((p) => ({
+          id: p.id,
+          name: p.name,
+          status: p.status,
+          vertical: p.vertical,
+          started_at: p.started_at,
+          lead_id: p.lead_id,
+          customer: nameByLead.get(p.lead_id) ?? "—",
+        }))}
+      />
     </div>
   );
 }

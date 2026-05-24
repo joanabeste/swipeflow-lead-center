@@ -92,7 +92,7 @@ export function ProjectNameCell({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="rounded p-0.5 text-gray-300 opacity-0 transition group-hover:opacity-100 hover:text-primary"
+        className="rounded p-0.5 text-gray-400 opacity-50 transition group-hover:opacity-100 hover:text-primary dark:text-gray-500"
         aria-label="Umbenennen"
         title="Umbenennen"
       >

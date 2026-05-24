@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Loader2 } from "lucide-react";
+import { CalendarDays, Loader2 } from "lucide-react";
 import { updateProject } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import { formatDateDe } from "@/lib/zeit/format";
@@ -28,7 +28,8 @@ export function ProjectStartCell({
 
   return (
     <span className="relative inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5">
-      <span>{initial ? formatDateDe(initial) : "—"}</span>
+      <span>{initial ? formatDateDe(initial) : "Start setzen"}</span>
+      <CalendarDays className="h-3 w-3 opacity-50" />
       {pending && <Loader2 className="h-3 w-3 animate-spin" />}
       <input
         type="date"
