@@ -1,8 +1,14 @@
+import { Mail, Inbox, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getUserSmtp, getUserImap } from "@/lib/email/user-credentials";
+import { listTemplates } from "@/lib/email/templates-server";
 import { AccountForm } from "./account-form";
 import { AvatarUpload } from "./avatar-upload";
 import { ResetDashboardButton } from "./reset-dashboard-button";
 import { ThemeToggle } from "../theme-toggle";
+import { EmailSettingsCard } from "../einstellungen/email/email-settings-card";
+import { ImapSettingsCard } from "../einstellungen/email/imap-settings-card";
+import { EmailTemplatesManager } from "../einstellungen/_components/email-templates-manager";
 
 export default async function MeinKontoPage() {
   const supabase = await createClient();
@@ -13,6 +19,13 @@ export default async function MeinKontoPage() {
     .select("name, email, role, status, service_mode, avatar_url")
     .eq("id", user!.id)
     .single();
+
+  // Mail-Konfiguration des Users — laeuft per-User, gehoert hierhin und nicht in den Admin-Bereich.
+  const [smtp, imap, templates] = await Promise.all([
+    user ? getUserSmtp(user.id) : Promise.resolve(null),
+    user ? getUserImap(user.id) : Promise.resolve(null),
+    user ? listTemplates(user.id) : Promise.resolve([]),
+  ]);
 
   const name = (profile?.name as string | null) ?? "";
   const initials = name
@@ -82,6 +95,39 @@ export default async function MeinKontoPage() {
           Helles oder dunkles Design für die gesamte App.
         </p>
         <ThemeToggle />
+      </div>
+
+      {/* E-Mail — SMTP (Versand) */}
+      <div id="email" className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="flex items-center gap-2 font-semibold"><Mail className="h-4 w-4 text-gray-500" /> E-Mail-Versand (SMTP)</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Deine eigenen SMTP-Zugangsdaten. Mails aus dem Tool gehen damit von deiner Adresse raus.
+        </p>
+        <div className="mt-4">
+          <EmailSettingsCard smtp={smtp} />
+        </div>
+      </div>
+
+      {/* E-Mail — IMAP (Posteingang) */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="flex items-center gap-2 font-semibold"><Inbox className="h-4 w-4 text-gray-500" /> Posteingang (IMAP)</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Mit IMAP zieht das Tool deinen Posteingang + Sent-Ordner und zeigt die Verläufe pro Kunde / Projekt. Mails aus Thunderbird tauchen automatisch auf.
+        </p>
+        <div className="mt-4">
+          <ImapSettingsCard imap={imap} hasSmtp={!!smtp} />
+        </div>
+      </div>
+
+      {/* E-Mail-Vorlagen */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="flex items-center gap-2 font-semibold"><FileText className="h-4 w-4 text-gray-500" /> E-Mail-Vorlagen</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Wiederverwendbare Vorlagen mit Variablen. Built-in: <code className="text-xs">{`{{contact_name}}`}</code>, <code className="text-xs">{`{{contact_first_name}}`}</code>, <code className="text-xs">{`{{company_name}}`}</code>, <code className="text-xs">{`{{sender_name}}`}</code>.
+        </p>
+        <div className="mt-4">
+          <EmailTemplatesManager templates={templates} />
+        </div>
       </div>
 
       {/* Wartung */}
