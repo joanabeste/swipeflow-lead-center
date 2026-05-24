@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { Search, Users } from "lucide-react";
-import { listCustomers } from "@/lib/fulfillment/data";
-import { formatDateDe } from "@/lib/zeit/format";
+import { listCustomersWithActiveProject } from "@/lib/fulfillment/data";
 import { CreateCustomerButton } from "./_components/create-customer-button";
+import { CustomersTable } from "./_components/customers-table";
 
 export default async function KundenListePage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const sp = await searchParams;
   const q = sp.q?.trim().toLowerCase() ?? "";
-  const all = await listCustomers();
+  const all = await listCustomersWithActiveProject();
   const filtered = q ? all.filter((c) => (c.company_name ?? "").toLowerCase().includes(q) || (c.city ?? "").toLowerCase().includes(q)) : all;
 
   return (
@@ -39,32 +38,16 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
       {filtered.length === 0 ? (
         <EmptyState hasQuery={!!q} />
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-[#1c1c1e]">
-              <tr>
-                <th className="px-4 py-3 text-left">Firma</th>
-                <th className="px-4 py-3 text-left">Stadt</th>
-                <th className="px-4 py-3 text-left">Bereich</th>
-                <th className="px-4 py-3 text-left">Kunde seit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]/40">
-              {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                  <td className="px-4 py-3">
-                    <Link href={`/fulfillment/kunden/${c.id}`} className="font-medium text-gray-900 hover:text-primary dark:text-white">
-                      {c.company_name}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.city ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.vertical ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.became_customer_at ? formatDateDe(c.became_customer_at) : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <CustomersTable
+          rows={filtered.map((c) => ({
+            id: c.id,
+            company_name: c.company_name ?? "—",
+            city: c.city,
+            vertical: c.vertical,
+            became_customer_at: c.became_customer_at ?? null,
+            active_project: c.active_project,
+          }))}
+        />
       )}
     </div>
   );

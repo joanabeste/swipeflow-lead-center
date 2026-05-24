@@ -24,6 +24,29 @@ export async function listCustomers(): Promise<Lead[]> {
   return (data ?? []) as Lead[];
 }
 
+export type CustomerWithActive = Lead & {
+  active_project: { id: string; name: string; status: string } | null;
+};
+
+export async function listCustomersWithActiveProject(): Promise<CustomerWithActive[]> {
+  const customers = await listCustomers();
+  if (customers.length === 0) return [];
+  const ids = customers.map((c) => c.id);
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("projects")
+    .select("id, name, status, lead_id, updated_at")
+    .in("lead_id", ids)
+    .neq("status", "completed")
+    .order("updated_at", { ascending: false });
+  if (error && !isMissingTable(error)) console.error("[listCustomersWithActiveProject]", error);
+  const byLead = new Map<string, { id: string; name: string; status: string }>();
+  for (const p of (data ?? []) as Array<{ id: string; name: string; status: string; lead_id: string }>) {
+    if (!byLead.has(p.lead_id)) byLead.set(p.lead_id, { id: p.id, name: p.name, status: p.status });
+  }
+  return customers.map((c) => ({ ...c, active_project: byLead.get(c.id) ?? null }));
+}
+
 export async function loadCustomer(id: string): Promise<Lead | null> {
   const db = createServiceClient();
   const { data, error } = await db.from("leads").select("*").eq("id", id).maybeSingle<Lead>();

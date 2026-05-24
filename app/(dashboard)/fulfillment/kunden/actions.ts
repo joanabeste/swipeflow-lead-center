@@ -124,6 +124,55 @@ export async function updateCustomer(id: string, input: UpdateCustomerInput): Pr
   return { success: true };
 }
 
+export async function deleteCustomer(id: string): Promise<{ success: true } | { error: string }> {
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const db = createServiceClient();
+
+  const { data: lead, error: leadErr } = await db
+    .from("leads")
+    .select("id, company_name, lifecycle_stage")
+    .eq("id", id)
+    .maybeSingle<{ id: string; company_name: string; lifecycle_stage: string | null }>();
+  if (leadErr) {
+    console.error("[deleteCustomer:load]", leadErr);
+    return { error: `DB-Fehler: ${leadErr.message}` };
+  }
+  if (!lead) return { error: "Kunde nicht gefunden." };
+
+  const { count: activeCount, error: actErr } = await db
+    .from("projects")
+    .select("id", { count: "exact", head: true })
+    .eq("lead_id", id)
+    .neq("status", "completed");
+  if (actErr && actErr.code !== "42P01") {
+    console.error("[deleteCustomer:projects]", actErr);
+    return { error: `DB-Fehler: ${actErr.message}` };
+  }
+  if ((activeCount ?? 0) > 0) {
+    return { error: "Kunde hat noch aktive Projekte. Erst diese löschen oder abschließen." };
+  }
+
+  await db.from("projects").delete().eq("lead_id", id);
+  await db.from("customer_contacts").delete().eq("lead_id", id);
+
+  const { error } = await db.from("leads").delete().eq("id", id);
+  if (error) {
+    console.error("[deleteCustomer]", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id, action: "customer.delete", entityType: "lead", entityId: id,
+    details: { company_name: lead.company_name },
+  });
+  revalidatePath("/fulfillment/kunden");
+  revalidatePath("/fulfillment/projekte");
+  return { success: true };
+}
+
 export async function createCustomerAndRedirect(formData: FormData) {
   const res = await createCustomer({
     company_name: String(formData.get("company_name") ?? ""),
