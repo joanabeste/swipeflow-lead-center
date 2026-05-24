@@ -5,12 +5,14 @@ import { Plus, Trash2 } from "lucide-react";
 import type { LearningCategory } from "@/lib/types";
 import { createCategory, deleteCategory, updateCategory } from "../../_actions/courses";
 import { useToastContext } from "../../../toast-provider";
+import { useDialog } from "@/components/dialog";
 
 export function CategoriesManager({ initial }: { initial: LearningCategory[] }) {
   const [cats, setCats] = useState(initial);
   const [name, setName] = useState("");
   const [pending, start] = useTransition();
   const { addToast } = useToastContext();
+  const dialog = useDialog();
 
   const inputCls =
     "block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] dark:text-gray-100";
@@ -31,8 +33,12 @@ export function CategoriesManager({ initial }: { initial: LearningCategory[] }) 
   }
 
   async function handleRename(c: LearningCategory) {
-    const newName = window.prompt("Neuer Name", c.name);
-    if (!newName?.trim() || newName === c.name) return;
+    const newName = await dialog.prompt({
+      title: "Kategorie umbenennen",
+      defaultValue: c.name,
+      placeholder: "Kategorie-Name",
+    });
+    if (newName === null || !newName.trim() || newName === c.name) return;
     setCats(cats.map((x) => (x.id === c.id ? { ...x, name: newName } : x)));
     const res = await updateCategory({ id: c.id, name: newName });
     if (res.error) addToast(res.error, "error");
@@ -40,7 +46,13 @@ export function CategoriesManager({ initial }: { initial: LearningCategory[] }) 
   }
 
   async function handleDelete(c: LearningCategory) {
-    if (!confirm(`Kategorie "${c.name}" löschen? Kurse darin behalten "Ohne Kategorie".`)) return;
+    const ok = await dialog.confirm({
+      title: `Kategorie „${c.name}" löschen?`,
+      body: "Kurse in dieser Kategorie wandern zu „Ohne Kategorie“.",
+      danger: true,
+      confirmLabel: "Löschen",
+    });
+    if (!ok) return;
     setCats(cats.filter((x) => x.id !== c.id));
     const res = await deleteCategory(c.id);
     if (res.error) addToast(res.error, "error");

@@ -23,6 +23,7 @@ import { createLessonUploadTickets, registerLessonUpload } from "../_actions/att
 import { uploadFileToLearningTicket } from "../_lib/client-upload";
 import { LEARNING_ATTACHMENT_BUCKET } from "../_lib/format";
 import { useToastContext } from "../../toast-provider";
+import { useDialog } from "@/components/dialog";
 
 interface Props {
   lessonId: string;
@@ -51,6 +52,7 @@ export function LessonEditor({ lessonId, initialHtml, onChange }: Props) {
 
   const [imgPending, setImgPending] = useState(false);
   const { addToast } = useToastContext();
+  const dialog = useDialog();
 
   // Initial-Sync nach Mount, weil immediatelyRender:false (Next 16 + SSR)
   useEffect(() => {
@@ -68,7 +70,11 @@ export function LessonEditor({ lessonId, initialHtml, onChange }: Props) {
   }
 
   async function handleAddLink() {
-    const url = window.prompt("URL eingeben (leer = Link entfernen)");
+    const url = await dialog.prompt({
+      title: "Link einfügen",
+      body: "URL eingeben (leer lassen, um den Link zu entfernen).",
+      placeholder: "https://…",
+    });
     if (url === null) return;
     if (url === "") {
       editor!.chain().focus().extendMarkRange("link").unsetLink().run();

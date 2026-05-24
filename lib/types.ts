@@ -623,6 +623,7 @@ export interface CommissionEvent {
 
 export type LearningCourseStatus = "draft" | "published";
 export type LearningVideoProvider = "youtube" | "loom";
+export type LearningLessonType = "video" | "text" | "file" | "mixed";
 
 export interface LearningCategory {
   id: string;
@@ -644,6 +645,8 @@ export interface LearningCourse {
   cover_image_path: string | null;
   status: LearningCourseStatus;
   sort_order: number;
+  /** Lernziele (Migration 088). jsonb-Array von Strings. */
+  learning_objectives: string[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -653,6 +656,8 @@ export interface LearningModule {
   id: string;
   course_id: string;
   title: string;
+  /** Optional Markdown/Text-Beschreibung (Migration 088). */
+  description: string | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -663,6 +668,12 @@ export interface LearningLesson {
   module_id: string;
   title: string;
   sort_order: number;
+  /** Lesson-Typ (Migration 088). Steuert Editor-Layout. */
+  lesson_type: LearningLessonType;
+  /** Kurzbeschreibung fuer Curriculum-Vorschau (Migration 088). */
+  summary: string | null;
+  /** Interne Notiz fuer Editoren, nicht fuer Lernende (Migration 088). */
+  editor_notes: string | null;
   content_html: string | null;
   video_url: string | null;
   video_provider: LearningVideoProvider | null;
@@ -679,6 +690,8 @@ export interface LearningLessonAttachment {
   file_name: string;
   mime_type: string;
   size_bytes: number;
+  /** Anzeige-Reihenfolge in der Materialien-Liste (Migration 088). */
+  sort_order: number;
   uploaded_by: string | null;
   created_at: string;
 }
@@ -689,6 +702,7 @@ export interface LoadedLearningAttachment {
   file_name: string;
   mime_type: string;
   size_bytes: number;
+  sort_order: number;
   signed_url: string | null;
 }
 

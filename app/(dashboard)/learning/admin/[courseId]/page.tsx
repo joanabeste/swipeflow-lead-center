@@ -3,6 +3,7 @@ import { requireLearningEditor } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { LearningCourse, LearningCategory, LearningLesson, LearningModule, LoadedLearningAttachment } from "@/lib/types";
 import { getAttachmentsForLessons } from "../../_lib/attachments";
+import { LEARNING_COVER_BUCKET } from "../../_lib/format";
 import { CourseEditor } from "./editor";
 
 export default async function CourseAdminPage({
@@ -34,6 +35,8 @@ export default async function CourseAdminPage({
   const attachments: Record<string, LoadedLearningAttachment[]> = {};
   for (const [k, v] of attachmentMap.entries()) attachments[k] = v;
 
+  const coverPublicBaseUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${LEARNING_COVER_BUCKET}`;
+
   return (
     <CourseEditor
       course={course}
@@ -41,6 +44,7 @@ export default async function CourseAdminPage({
       modules={modules}
       lessons={lessons}
       attachments={attachments}
+      coverPublicBaseUrl={coverPublicBaseUrl}
     />
   );
 }

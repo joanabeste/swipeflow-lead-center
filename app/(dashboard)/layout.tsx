@@ -8,6 +8,7 @@ import { ToastProvider } from "./toast-provider";
 import { ServiceModeProvider } from "@/lib/service-mode";
 import { CallProvidersProvider } from "@/components/call-providers-context";
 import { ConfettiProvider } from "@/components/confetti";
+import { DialogProvider } from "@/components/dialog";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
 import type { ServiceMode, UserRole, SectionPermissions } from "@/lib/types";
@@ -83,6 +84,7 @@ export default async function DashboardLayout({
     <CallProvidersProvider value={callProviders}>
     <ConfettiProvider>
     <ToastProvider>
+    <DialogProvider>
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="flex w-64 flex-col border-r border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
@@ -130,6 +132,7 @@ export default async function DashboardLayout({
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
       </div>
     </div>
+    </DialogProvider>
     </ToastProvider>
     </ConfettiProvider>
     </CallProvidersProvider>

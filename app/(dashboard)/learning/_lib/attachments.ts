@@ -141,8 +141,9 @@ export async function getAttachmentsForLessons(
   const db = createServiceClient();
   const { data: rows } = await db
     .from("learning_lesson_attachments")
-    .select("id, lesson_id, storage_path, file_name, mime_type, size_bytes")
-    .in("lesson_id", lessonIds);
+    .select("id, lesson_id, storage_path, file_name, mime_type, size_bytes, sort_order")
+    .in("lesson_id", lessonIds)
+    .order("sort_order");
   if (!rows || rows.length === 0) return map;
 
   const signed = await Promise.all(
@@ -154,6 +155,7 @@ export async function getAttachmentsForLessons(
         file_name: r.file_name as string,
         mime_type: r.mime_type as string,
         size_bytes: r.size_bytes as number,
+        sort_order: (r.sort_order as number) ?? 0,
         signed_url: url,
       } satisfies LoadedLearningAttachment;
     }),
