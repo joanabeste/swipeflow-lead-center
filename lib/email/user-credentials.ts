@@ -271,6 +271,59 @@ export async function updateImapSyncCursor(
   await db.from("user_smtp_credentials").update(update).eq("user_id", userId);
 }
 
+// ─── Backfill-Settings ─────────────────────────────────────────────
+
+export interface BackfillSettings {
+  /** Tage in die Vergangenheit. 0 = unbegrenzt. */
+  days: number;
+  /** Wenn gesetzt, ignoriert der nächste Sync den UID-Cursor und macht One-Shot-Deep-Backfill. */
+  deepSyncRequestedAt: string | null;
+}
+
+export async function getBackfillSettings(userId: string): Promise<BackfillSettings> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("user_smtp_credentials")
+    .select("imap_backfill_days, imap_deep_sync_requested_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    days: (data?.imap_backfill_days as number | null) ?? 30,
+    deepSyncRequestedAt: (data?.imap_deep_sync_requested_at as string | null) ?? null,
+  };
+}
+
+export async function setBackfillDays(userId: string, days: number): Promise<void> {
+  const db = createServiceClient();
+  const clean = Number.isFinite(days) && days >= 0 ? Math.floor(days) : 30;
+  await db
+    .from("user_smtp_credentials")
+    .update({ imap_backfill_days: clean, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+}
+
+export async function requestDeepSync(userId: string): Promise<void> {
+  const db = createServiceClient();
+  await db
+    .from("user_smtp_credentials")
+    .update({
+      imap_deep_sync_requested_at: new Date().toISOString(),
+      // Cursor zurücksetzen, damit der nächste Sync wirklich von vorne läuft.
+      imap_last_uid_inbox: null,
+      imap_last_uid_sent: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId);
+}
+
+export async function clearDeepSyncMarker(userId: string): Promise<void> {
+  const db = createServiceClient();
+  await db
+    .from("user_smtp_credentials")
+    .update({ imap_deep_sync_requested_at: null })
+    .eq("user_id", userId);
+}
+
 /** Lädt komplettes SmtpConfig inkl. entschlüsseltem Passwort. Nur im Server. */
 export async function loadDecryptedSmtp(userId: string): Promise<SmtpConfig | null> {
   const db = createServiceClient();

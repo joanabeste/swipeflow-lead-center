@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { Inbox, RefreshCw, Send, ChevronLeft, Paperclip, ChevronDown } from "lucide-react";
+import { Inbox, RefreshCw, Send, ChevronLeft, Paperclip, ChevronDown, X, Download, Loader2 } from "lucide-react";
 import type { ThreadRow, MessageRow } from "@/lib/email/data";
-import { syncMyMailbox, loadThreadMessages, markRead, sendReply, attachThreadToLead, sendNewMail, assignThreadToProject } from "../../../mail-actions";
+import { syncMyMailbox, loadThreadMessages, markRead, sendReply, attachThreadToLead, sendNewMail, assignThreadToProject, getAttachmentDownloadUrl } from "../../../mail-actions";
 import { useToastContext } from "../../../../toast-provider";
 
 export function MailsTab({
@@ -369,9 +369,16 @@ function ThreadView({
                 {m.attachments && m.attachments.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {m.attachments.map((a, i) => (
-                      <span key={i} className="inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-white/5 dark:text-gray-300">
-                        <Paperclip className="h-3 w-3" /> {a.filename ?? "Anhang"}
-                      </span>
+                      <AttachmentChip
+                        key={i}
+                        messageId={m.id}
+                        index={i}
+                        filename={a.filename}
+                        contentType={a.contentType}
+                        size={a.size}
+                        hasStorage={!!a.storage_path}
+                        uploadError={a.upload_error ?? null}
+                      />
                     ))}
                   </div>
                 )}
@@ -500,6 +507,169 @@ function EmailBody({ text }: { text: string }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Email Attachment Rendering ───────────────────────────────────────
+
+function isPreviewable(mime: string | null | undefined): "image" | "pdf" | null {
+  if (!mime) return null;
+  if (mime.startsWith("image/")) return "image";
+  if (mime === "application/pdf") return "pdf";
+  return null;
+}
+
+function formatBytes(n: number | null | undefined): string {
+  if (!n || n <= 0) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function AttachmentChip({
+  messageId,
+  index,
+  filename,
+  contentType,
+  size,
+  hasStorage,
+  uploadError,
+}: {
+  messageId: string;
+  index: number;
+  filename: string | null;
+  contentType: string | null;
+  size: number | null;
+  hasStorage: boolean;
+  uploadError: string | null;
+}) {
+  const { addToast } = useToastContext();
+  const [loading, setLoading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; kind: "image" | "pdf"; filename: string | null } | null>(null);
+
+  const disabled = !hasStorage;
+  const title = uploadError
+    ? `Upload-Fehler: ${uploadError}`
+    : !hasStorage
+    ? "Vor Update synchronisiert — Anhang nicht verfügbar."
+    : `${filename ?? "Anhang"}${size ? ` · ${formatBytes(size)}` : ""}`;
+
+  async function handleClick() {
+    if (disabled || loading) return;
+    setLoading(true);
+    const res = await getAttachmentDownloadUrl({ messageId, attachmentIndex: index });
+    setLoading(false);
+    if ("error" in res) {
+      addToast(res.error, "error");
+      return;
+    }
+    const kind = isPreviewable(res.mime_type);
+    if (kind) {
+      setPreview({ url: res.url, kind, filename: res.filename });
+    } else {
+      // Direkt-Download via temporärem Link
+      const a = document.createElement("a");
+      a.href = res.url;
+      a.download = res.filename ?? "anhang";
+      a.target = "_blank";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={disabled || loading}
+        title={title}
+        className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] transition ${
+          disabled
+            ? "cursor-not-allowed bg-gray-50 text-gray-400 dark:bg-white/[0.02] dark:text-gray-500"
+            : "bg-gray-100 text-gray-700 hover:bg-primary/10 hover:text-primary dark:bg-white/5 dark:text-gray-200 dark:hover:bg-primary/20"
+        }`}
+      >
+        {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+        <span className="max-w-[160px] truncate">{filename ?? "Anhang"}</span>
+        {size ? <span className="text-gray-400">· {formatBytes(size)}</span> : null}
+      </button>
+
+      {preview && (
+        <AttachmentPreviewModal
+          url={preview.url}
+          kind={preview.kind}
+          filename={preview.filename}
+          onClose={() => setPreview(null)}
+        />
+      )}
+    </>
+  );
+}
+
+function AttachmentPreviewModal({
+  url,
+  kind,
+  filename,
+  onClose,
+}: {
+  url: string;
+  kind: "image" | "pdf";
+  filename: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="flex w-full max-w-5xl flex-col rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-[#2c2c2e]/60 dark:bg-[#161618]">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-2 dark:border-[#2c2c2e]/60">
+          <span className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">
+            {filename ?? "Anhang"}
+          </span>
+          <div className="flex items-center gap-1">
+            <a
+              href={url}
+              download={filename ?? "anhang"}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              <Download className="h-3.5 w-3.5" /> Download
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+              aria-label="Schliessen"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex max-h-[80vh] items-center justify-center overflow-auto bg-gray-50 p-2 dark:bg-[#0d0d0f]">
+          {kind === "image" ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={filename ?? "Anhang"} className="max-h-[78vh] max-w-full object-contain" />
+          ) : (
+            <iframe src={url} title={filename ?? "PDF"} className="h-[78vh] w-full rounded-md bg-white" />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

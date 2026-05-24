@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 
-type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
+type Tab = "aktivitaeten" | "kontakte" | "projekte";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "projekte", label: "Projekte" },
   { id: "kontakte", label: "Kontakte" },
-  { id: "mails", label: "E-Mails" },
-  { id: "verlauf", label: "Verlauf" },
+  { id: "aktivitaeten", label: "Aktivitäten" },
 ];
 
 export function TabSwitcher({ current, basePath }: { current: Tab; basePath: string }) {

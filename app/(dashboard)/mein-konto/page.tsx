@@ -1,5 +1,5 @@
-import { Mail, Inbox, FileText } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { Mail, Inbox, FileText, Sparkles } from "lucide-react";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getUserSmtp, getUserImap } from "@/lib/email/user-credentials";
 import { listTemplates } from "@/lib/email/templates-server";
 import { AccountForm } from "./account-form";
@@ -9,6 +9,15 @@ import { ThemeToggle } from "../theme-toggle";
 import { EmailSettingsCard } from "../einstellungen/email/email-settings-card";
 import { ImapSettingsCard } from "../einstellungen/email/imap-settings-card";
 import { EmailTemplatesManager } from "../einstellungen/_components/email-templates-manager";
+import { SignatureCard } from "./_components/signature-card";
+import { BackfillCard } from "./_components/backfill-card";
+import { getBackfillSettings } from "@/lib/email/user-credentials";
+
+async function loadSignature(userId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db.from("user_settings").select("signature").eq("user_id", userId).maybeSingle();
+  return ((data?.signature as string | null) ?? null) || null;
+}
 
 export default async function MeinKontoPage() {
   const supabase = await createClient();
@@ -21,10 +30,12 @@ export default async function MeinKontoPage() {
     .single();
 
   // Mail-Konfiguration des Users — laeuft per-User, gehoert hierhin und nicht in den Admin-Bereich.
-  const [smtp, imap, templates] = await Promise.all([
+  const [smtp, imap, templates, signature, backfill] = await Promise.all([
     user ? getUserSmtp(user.id) : Promise.resolve(null),
     user ? getUserImap(user.id) : Promise.resolve(null),
     user ? listTemplates(user.id) : Promise.resolve([]),
+    user ? loadSignature(user.id) : Promise.resolve(null),
+    user ? getBackfillSettings(user.id) : Promise.resolve({ days: 30, deepSyncRequestedAt: null }),
   ]);
 
   const name = (profile?.name as string | null) ?? "";
@@ -116,6 +127,22 @@ export default async function MeinKontoPage() {
         </p>
         <div className="mt-4">
           <ImapSettingsCard imap={imap} hasSmtp={!!smtp} />
+        </div>
+        {imap && (
+          <div className="mt-6 border-t border-gray-100 pt-6 dark:border-[#2c2c2e]/40">
+            <BackfillCard initial={{ days: backfill.days, deepSyncPending: !!backfill.deepSyncRequestedAt }} />
+          </div>
+        )}
+      </div>
+
+      {/* E-Mail-Signatur */}
+      <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <h2 className="flex items-center gap-2 font-semibold"><Sparkles className="h-4 w-4 text-primary" /> E-Mail-Signatur</h2>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Wird automatisch an jede aus dem Tool gesendete Mail angehängt. Lass sie aus deinen bisherigen Sent-Mails extrahieren oder editiere sie manuell.
+        </p>
+        <div className="mt-4">
+          <SignatureCard initial={signature} />
         </div>
       </div>
 

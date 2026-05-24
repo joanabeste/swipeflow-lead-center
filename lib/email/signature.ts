@@ -126,6 +126,37 @@ ${tail}
  * Legt aus extrahierten Daten einen customer_contact an — idempotent über
  * (lead_id, email). Bestehende Kontakte werden NICHT überschrieben.
  */
+export async function isSignatureRejected(leadId: string, email: string): Promise<boolean> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("signature_rejections")
+    .select("id")
+    .eq("lead_id", leadId)
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  return !!data;
+}
+
+export async function rejectSignatureContact(args: {
+  leadId: string;
+  email: string;
+  userId: string | null;
+}): Promise<{ error?: string }> {
+  const db = createServiceClient();
+  const { error } = await db
+    .from("signature_rejections")
+    .upsert(
+      {
+        lead_id: args.leadId,
+        email: args.email.toLowerCase(),
+        rejected_by: args.userId,
+      },
+      { onConflict: "lead_id,email" },
+    );
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function upsertContactFromSignature(args: {
   leadId: string;
   email: string;
@@ -134,6 +165,11 @@ export async function upsertContactFromSignature(args: {
 }): Promise<{ created: boolean }> {
   const db = createServiceClient();
   const email = args.email.toLowerCase();
+
+  // Reject-Memory: User hat diesen Kontakt früher abgelehnt → nicht erneut anlegen.
+  if (await isSignatureRejected(args.leadId, email)) {
+    return { created: false };
+  }
 
   const { data: existing } = await db
     .from("customer_contacts")
@@ -177,4 +213,114 @@ export async function upsertContactFromSignature(args: {
     return { created: false };
   }
   return { created: true };
+}
+
+// ─── Eigene Signatur aus Sent-Mails ─────────────────────────────────
+
+/**
+ * Lädt die User-Signatur aus user_settings. Returnt null wenn nicht gesetzt.
+ */
+export async function getUserSignature(userId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("user_settings")
+    .select("signature")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return ((data?.signature as string | null) ?? null) || null;
+}
+
+export async function saveUserSignature(
+  userId: string,
+  signature: string,
+  source: "manual" | "extracted",
+): Promise<{ error?: string }> {
+  const db = createServiceClient();
+  const { error } = await db
+    .from("user_settings")
+    .upsert(
+      {
+        user_id: userId,
+        signature: signature.trim() || null,
+        signature_source: source,
+        signature_extracted_at: source === "extracted" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+  if (error) {
+    console.error("[saveUserSignature]", error);
+    return { error: error.message };
+  }
+  return {};
+}
+
+/**
+ * Sammelt die letzten N ausgehenden Mails des Users, gibt Claude die Bodies
+ * und lässt die typische User-Signatur als Plaintext-Block extrahieren.
+ * Schreibt das Ergebnis in user_settings mit source='extracted'.
+ */
+export async function extractOwnSignatureFromSent(args: {
+  userId: string;
+  fromEmail: string;
+  limit?: number;
+}): Promise<{ signature: string | null; error?: string }> {
+  const db = createServiceClient();
+  const { data: msgs, error } = await db
+    .from("email_thread_messages")
+    .select("body_text")
+    .eq("user_id", args.userId)
+    .eq("direction", "out")
+    .not("body_text", "is", null)
+    .order("received_at", { ascending: false })
+    .limit(args.limit ?? 30);
+  if (error) return { signature: null, error: error.message };
+  const bodies = (msgs ?? [])
+    .map((m) => (m.body_text as string | null) ?? "")
+    .map((t) => tailBlock(stripQuotedReply(t), 30))
+    .filter((t) => t.length > 20);
+  if (bodies.length === 0) {
+    return { signature: null, error: "Keine geeigneten gesendeten Mails gefunden." };
+  }
+
+  const client = new Anthropic();
+  const prompt = `Du bekommst die Enden von ${bodies.length} E-Mails, die ein und dieselbe Person geschrieben hat (Absender: ${args.fromEmail}). Extrahiere die gemeinsame E-Mail-Signatur, die diese Person verwendet — also den unveränderlichen Block am Ende jeder Mail (Name, Rolle, Firma, Kontaktdaten, Adresse, Rechtshinweise).
+
+Antworte ausschließlich mit dem reinen Signatur-Text (Plaintext, mit Zeilenumbrüchen erhalten), ohne Markdown, ohne Erklärungen, ohne Anführungszeichen. Wenn keine klare wiederkehrende Signatur erkennbar ist, antworte mit dem Wort \`null\`.
+
+Beispiele für eine erfolgreich erkannte Signatur:
+"""
+Viele Grüße
+Max Mustermann
+
+Firma GmbH
+Tel: +49 ...
+"""
+
+Mail-Enden:
+${bodies.map((b, i) => `--- Mail ${i + 1} ---\n${b}`).join("\n\n")}`;
+
+  try {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 800,
+      temperature: 0,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const block = response.content.find((b) => b.type === "text");
+    if (!block || block.type !== "text") {
+      return { signature: null, error: "Keine Antwort vom Modell." };
+    }
+    const raw = block.text.trim().replace(/^```(?:text)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    if (!raw || raw.toLowerCase() === "null") {
+      return { signature: null, error: "Keine wiederkehrende Signatur erkannt." };
+    }
+    const result = await saveUserSignature(args.userId, raw, "extracted");
+    if (result.error) return { signature: raw, error: result.error };
+    return { signature: raw };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[extractOwnSignatureFromSent]", e);
+    return { signature: null, error: msg };
+  }
 }

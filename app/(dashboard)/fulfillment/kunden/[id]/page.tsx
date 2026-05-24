@@ -6,14 +6,18 @@ import { formatDateDe } from "@/lib/zeit/format";
 import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
-import { MailsTab } from "./_components/mails-tab";
+import { ActivitiesTab } from "./_components/activities-tab";
 import { EditCustomerButton } from "./_components/edit-customer-button";
 import { enrichThreadsWithProjects, loadSuggestedThreadsForEmails, loadThreadsForLead } from "@/lib/email/data";
+import { loadActivitiesForLead } from "../../mail-actions";
 
-type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
+type Tab = "aktivitaeten" | "kontakte" | "projekte";
 
-function isTab(s: string | undefined): s is Tab {
-  return s === "verlauf" || s === "kontakte" || s === "projekte" || s === "mails";
+function normalizeTab(s: string | undefined): Tab {
+  if (s === "kontakte" || s === "projekte" || s === "aktivitaeten") return s;
+  // Backcompat: alte Slugs auf Aktivitäten umlenken.
+  if (s === "mails" || s === "verlauf") return "aktivitaeten";
+  return "projekte";
 }
 
 export default async function KundenDetailPage({
@@ -25,7 +29,7 @@ export default async function KundenDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const tab: Tab = isTab(sp.tab) ? sp.tab : "projekte";
+  const tab: Tab = normalizeTab(sp.tab);
 
   const customer = await loadCustomer(id);
   if (!customer) notFound();
@@ -98,20 +102,21 @@ export default async function KundenDetailPage({
 
       <TabSwitcher current={tab} basePath={`/fulfillment/kunden/${id}`} />
 
-      {tab === "verlauf" && <VerlaufTab leadId={id} />}
       {tab === "kontakte" && <ContactsTab leadId={id} contacts={contacts} />}
       {tab === "projekte" && <ProjectsTab leadId={id} projects={projects} />}
-      {tab === "mails" && await (async () => {
+      {tab === "aktivitaeten" && await (async () => {
         const emails = [customer.email, ...contacts.map((c) => c.email)].filter((e): e is string => !!e);
-        const [attached, suggested] = await Promise.all([
+        const [attached, suggested, activities] = await Promise.all([
           loadThreadsForLead(id).then(enrichThreadsWithProjects).catch(() => []),
           loadSuggestedThreadsForEmails(emails).then(enrichThreadsWithProjects).catch(() => []),
+          loadActivitiesForLead(id).catch(() => []),
         ]);
         return (
-          <MailsTab
+          <ActivitiesTab
             leadId={id}
             initialThreads={attached}
             suggestedThreads={suggested}
+            initialActivities={activities}
             projects={projects.map((p) => ({ id: p.id, name: p.name }))}
             defaultTo={contacts.find((c) => c.is_primary && c.email)?.email ?? contacts.find((c) => c.email)?.email ?? customer.email ?? null}
           />
@@ -127,42 +132,5 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
       <p className="mt-0.5 text-xl font-semibold text-gray-900 dark:text-white">{value}</p>
     </div>
-  );
-}
-
-async function VerlaufTab({ leadId }: { leadId: string }) {
-  const { createServiceClient } = await import("@/lib/supabase/server");
-  const db = createServiceClient();
-  const [{ data: notes }, { data: calls }] = await Promise.all([
-    db.from("lead_notes").select("id, content, created_at, created_by").eq("lead_id", leadId).order("created_at", { ascending: false }).limit(50),
-    db.from("lead_calls").select("id, direction, duration_seconds, started_at, note, call_provider").eq("lead_id", leadId).order("started_at", { ascending: false }).limit(50),
-  ]);
-  type Item = { kind: "note" | "call"; at: string; content: string; meta?: string };
-  const items: Item[] = [
-    ...(notes ?? []).map((n: { content: string; created_at: string }) => ({ kind: "note" as const, at: n.created_at, content: n.content })),
-    ...(calls ?? []).map((c: { direction: string; started_at: string; note: string | null; duration_seconds: number | null; call_provider: string }) => ({
-      kind: "call" as const,
-      at: c.started_at,
-      content: c.note ?? "(ohne Notiz)",
-      meta: `${c.direction === "inbound" ? "Eingehend" : "Ausgehend"} · ${c.duration_seconds ?? 0}s · ${c.call_provider}`,
-    })),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
-
-  if (items.length === 0) {
-    return <p className="rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">Noch keine Notizen oder Calls.</p>;
-  }
-  return (
-    <ul className="space-y-3">
-      {items.map((it, i) => (
-        <li key={i} className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <span className="font-semibold uppercase tracking-wider">{it.kind === "note" ? "Notiz" : "Anruf"}</span>
-            <span>{formatDateDe(it.at)}</span>
-          </div>
-          {it.meta && <p className="mt-1 text-xs text-gray-400">{it.meta}</p>}
-          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-200">{it.content}</p>
-        </li>
-      ))}
-    </ul>
   );
 }
