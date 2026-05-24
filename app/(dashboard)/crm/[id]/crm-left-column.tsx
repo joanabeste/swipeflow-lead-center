@@ -4,6 +4,7 @@ import type { Lead, LeadContact, LeadJobPosting, LeadEnrichment } from "@/lib/ty
 import type { HqLocation } from "@/lib/app-settings";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
+import { CrmAssigneeCard } from "./_components/crm-assignee-card";
 import { CrmCompanyCard } from "./_components/crm-company-card";
 import { CrmContactsCard } from "./_components/crm-contacts-card";
 import { CrmDealsCard } from "./_components/crm-deals-card";
@@ -35,6 +36,7 @@ export function CrmLeftColumn({
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
+      <CrmAssigneeCard leadId={lead.id} assignedTo={lead.assigned_to} team={team} />
       {screenshotCard}
       <CrmDealsCard
         leadId={lead.id}

@@ -3,95 +3,119 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { LeadNoteAttachment, LoadedNoteAttachment } from "@/lib/types";
 import {
   NOTE_ATTACHMENT_ALLOWED_MIMES,
+  NOTE_ATTACHMENT_BUCKET,
   NOTE_ATTACHMENT_MAX_BYTES,
   sanitizeFileName,
+  type NoteAttachmentUploadTicket,
+  type UploadedAttachmentRef,
 } from "./format";
 
-export const NOTE_ATTACHMENT_BUCKET = "lead-note-attachments";
+export { NOTE_ATTACHMENT_BUCKET };
+export type { NoteAttachmentUploadTicket, UploadedAttachmentRef };
 
-export interface NewAttachmentInput {
-  /** "data:image/png;base64,…" */
-  dataUrl: string;
-  fileName: string;
-  mimeType: string;
-  sizeBytes: number;
-}
-
-function decodeDataUrl(dataUrl: string): { buffer: Buffer; mime: string } | { error: string } {
-  const match = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl);
-  if (!match) return { error: "Ungültiges Datei-Format (kein Base64-DataURL)." };
-  try {
-    return { buffer: Buffer.from(match[2], "base64"), mime: match[1] };
-  } catch {
-    return { error: "Datei konnte nicht dekodiert werden." };
+function validateMeta(meta: { mimeType: string; sizeBytes: number }): string | null {
+  if (!NOTE_ATTACHMENT_ALLOWED_MIMES.has(meta.mimeType)) {
+    return `Dateityp ${meta.mimeType || "unbekannt"} ist nicht erlaubt.`;
   }
-}
-
-function validateInput(input: NewAttachmentInput): string | null {
-  if (!NOTE_ATTACHMENT_ALLOWED_MIMES.has(input.mimeType)) {
-    return `Dateityp ${input.mimeType || "unbekannt"} ist nicht erlaubt.`;
-  }
-  if (input.sizeBytes <= 0) return "Datei ist leer.";
-  if (input.sizeBytes > NOTE_ATTACHMENT_MAX_BYTES) {
+  if (meta.sizeBytes <= 0) return "Datei ist leer.";
+  if (meta.sizeBytes > NOTE_ATTACHMENT_MAX_BYTES) {
     return `Datei zu groß (max. ${NOTE_ATTACHMENT_MAX_BYTES / (1024 * 1024)} MB).`;
   }
   return null;
 }
 
 /**
- * Laedt einen einzelnen Anhang in den Bucket und schreibt die DB-Zeile.
- * Pfad: `{leadId}/{noteId}/{uuid}-{sanitized-filename}`.
+ * Erzeugt fuer eine Liste angefragter Dateien signed Upload URLs. Der Browser laedt
+ * dann via PUT direkt in den Bucket — Vercel-Function-Payload-Limit (4.5 MB) wird
+ * dadurch umgangen.
  */
-export async function uploadNoteAttachment(params: {
+export async function createNoteAttachmentUploadTickets(params: {
+  leadId: string;
+  files: { clientId: string; fileName: string; mimeType: string; sizeBytes: number }[];
+}): Promise<{ tickets: NoteAttachmentUploadTicket[]; errors: { clientId: string; error: string }[] }> {
+  const db = createServiceClient();
+  const tickets: NoteAttachmentUploadTicket[] = [];
+  const errors: { clientId: string; error: string }[] = [];
+
+  for (const f of params.files) {
+    const v = validateMeta(f);
+    if (v) {
+      errors.push({ clientId: f.clientId, error: v });
+      continue;
+    }
+    const safeName = sanitizeFileName(f.fileName);
+    const path = `${params.leadId}/${crypto.randomUUID()}-${safeName}`;
+    const { data, error } = await db.storage
+      .from(NOTE_ATTACHMENT_BUCKET)
+      .createSignedUploadUrl(path);
+    if (error || !data) {
+      const msg = /Bucket not found/i.test(error?.message ?? "")
+        ? "Bucket lead-note-attachments fehlt — Migration 059 ausführen."
+        : (error?.message ?? "Upload-Ticket konnte nicht erzeugt werden.");
+      errors.push({ clientId: f.clientId, error: msg });
+      continue;
+    }
+    tickets.push({
+      clientId: f.clientId,
+      storagePath: data.path,
+      signedUrl: data.signedUrl,
+      token: data.token,
+      fileName: f.fileName,
+      mimeType: f.mimeType,
+      sizeBytes: f.sizeBytes,
+    });
+  }
+  return { tickets, errors };
+}
+
+/**
+ * Registriert eine bereits ueber Direct-Upload im Bucket liegende Datei als Anhang
+ * einer Notiz. Verifiziert, dass das Storage-Object wirklich existiert und Groesse/MIME
+ * konsistent sind — sonst Cleanup + Fehler.
+ */
+export async function registerNoteAttachment(params: {
   leadId: string;
   noteId: string;
   userId: string | null;
-  input: NewAttachmentInput;
+  ref: UploadedAttachmentRef;
 }): Promise<{ attachment: LeadNoteAttachment } | { error: string }> {
-  const validation = validateInput(params.input);
-  if (validation) return { error: validation };
-
-  const decoded = decodeDataUrl(params.input.dataUrl);
-  if ("error" in decoded) return decoded;
-  if (decoded.buffer.length > NOTE_ATTACHMENT_MAX_BYTES) {
-    return { error: `Datei zu groß (max. ${NOTE_ATTACHMENT_MAX_BYTES / (1024 * 1024)} MB).` };
-  }
+  const v = validateMeta(params.ref);
+  if (v) return { error: v };
 
   const db = createServiceClient();
-  const safeName = sanitizeFileName(params.input.fileName);
-  const path = `${params.leadId}/${params.noteId}/${crypto.randomUUID()}-${safeName}`;
 
-  const { error: uploadErr } = await db.storage
-    .from(NOTE_ATTACHMENT_BUCKET)
-    .upload(path, decoded.buffer, {
-      contentType: params.input.mimeType,
-      upsert: false,
-      cacheControl: "3600",
-    });
-  if (uploadErr) {
-    if (/Bucket not found/i.test(uploadErr.message)) {
-      return { error: "Bucket lead-note-attachments fehlt — Migration 059 ausführen." };
-    }
-    return { error: `Upload fehlgeschlagen: ${uploadErr.message}` };
+  // Pfad-Sicherheit: der vom Client gemeldete Pfad MUSS unter {leadId}/ liegen.
+  // Verhindert, dass jemand fremde Pfade als eigenen Anhang registriert.
+  if (!params.ref.storagePath.startsWith(`${params.leadId}/`)) {
+    return { error: "Ungueltiger Storage-Pfad." };
   }
+
+  // Existenz-Check via list (createSignedUrl wuerde auch klappen, aber list ist billiger).
+  const folder = params.ref.storagePath.split("/").slice(0, -1).join("/");
+  const fileName = params.ref.storagePath.split("/").pop() ?? "";
+  const { data: listing, error: listErr } = await db.storage
+    .from(NOTE_ATTACHMENT_BUCKET)
+    .list(folder, { limit: 1000, search: fileName });
+  if (listErr) return { error: `Storage-Check fehlgeschlagen: ${listErr.message}` };
+  const match = (listing ?? []).find((o) => o.name === fileName);
+  if (!match) return { error: "Hochgeladene Datei nicht im Bucket gefunden." };
 
   const { data: row, error: insertErr } = await db
     .from("lead_note_attachments")
     .insert({
       note_id: params.noteId,
       lead_id: params.leadId,
-      storage_path: path,
-      file_name: params.input.fileName,
-      mime_type: params.input.mimeType,
-      size_bytes: decoded.buffer.length,
+      storage_path: params.ref.storagePath,
+      file_name: params.ref.fileName,
+      mime_type: params.ref.mimeType,
+      size_bytes: params.ref.sizeBytes,
       created_by: params.userId,
     })
     .select()
     .single();
 
   if (insertErr || !row) {
-    // Aufräumen: das soeben hochgeladene Object wieder entfernen.
-    await db.storage.from(NOTE_ATTACHMENT_BUCKET).remove([path]);
+    await db.storage.from(NOTE_ATTACHMENT_BUCKET).remove([params.ref.storagePath]);
     if (insertErr && /relation.*does not exist/i.test(insertErr.message)) {
       return { error: "Tabelle lead_note_attachments fehlt — Migration 059 ausführen." };
     }

@@ -1,7 +1,9 @@
-export type UserRole = "admin" | "sales" | "viewer";
+export type UserRole = "admin" | "sales" | "viewer" | "employee";
 export type UserStatus = "active" | "inactive";
 
 export type ServiceMode = "recruiting" | "webdev";
+
+export type BreakMode = "manual" | "auto_deduct";
 
 export interface Profile {
   id: string;
@@ -13,6 +15,21 @@ export interface Profile {
   lead_table_columns: string[] | null;
   dashboard_widgets: string[] | null;
   phonemondo_extension: string | null;
+  // Zeit-Modul (Migration 062). Optional, weil Migration zum Zeitpunkt der UI-Verifikation
+  // noch nicht zwingend ausgefuehrt ist — Defaults werden in lib/zeit/profile.ts ergaenzt.
+  hours_mon?: number | null;
+  hours_tue?: number | null;
+  hours_wed?: number | null;
+  hours_thu?: number | null;
+  hours_fri?: number | null;
+  hours_sat?: number | null;
+  hours_sun?: number | null;
+  vacation_days_per_year?: number | null;
+  break_mode?: BreakMode | null;
+  // Provisions-/Auszahlungs-Modul (Migration 065). Optional, da Migration evtl.
+  // noch nicht ausgefuehrt ist — UI defaultet auf null/0.
+  hourly_wage_cents?: number | null;
+  wage_currency?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +93,14 @@ export interface Lead {
   primary_color: string | null;
   /** Corporate-Identity-Cache für Landing-Pages: Logo-URL aus Lead-Website (Favicon/Apple-Touch-Icon). */
   logo_url: string | null;
+  /** Mitarbeiter, der fuer diesen Lead zustaendig ist — bekommt die Provision,
+   *  wenn der Lead einen Provisions-Trigger-Status erreicht (Migration 067). */
+  assigned_to: string | null;
+  /** Lifecycle: lead → deal → customer → archived. Migration 071. Optional, weil
+   *  Migration evtl. noch nicht ausgefuehrt; Default in der DB ist 'lead'. */
+  lifecycle_stage?: "lead" | "deal" | "customer" | "archived" | null;
+  /** Wann ein Lead zum Kunden wurde (Migration 071). */
+  became_customer_at?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -507,3 +532,34 @@ export interface CancelRule {
    * und vom Lern-Cron zum Erkennen von Override-Mustern genutzt. */
   reason_code: string | null;
 }
+
+// ─── Provisions-Modul (Migrationen 065-068) ───────────────────────
+
+export type CommissionScope = "all" | "role" | "user";
+
+export interface CommissionRule {
+  id: string;
+  name: string;
+  trigger_status_id: string;
+  amount_cents: number;
+  currency: string;
+  scope: CommissionScope;
+  scope_role: UserRole | null;
+  scope_user_id: string | null;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CommissionEvent {
+  id: string;
+  rule_id: string;
+  lead_id: string;
+  user_id: string;
+  amount_cents: number;
+  currency: string;
+  trigger_status_id: string | null;
+  earned_at: string;
+}
+

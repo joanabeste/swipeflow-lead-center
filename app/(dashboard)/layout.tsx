@@ -3,34 +3,36 @@ import { LogOut, UserCircle } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { SidebarNav } from "./sidebar-nav";
-import { GlobalSearch } from "./global-search";
 import { SwipeflowLogo } from "./swipeflow-logo";
 import { ToastProvider } from "./toast-provider";
 import { ServiceModeProvider } from "@/lib/service-mode";
-import { ServiceModeSwitch } from "./service-mode-switch";
-import { ActiveEnrichmentBadge } from "./active-enrichment-badge";
 import { CallProvidersProvider } from "@/components/call-providers-context";
 import { ConfettiProvider } from "@/components/confetti";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
-import type { ServiceMode } from "@/lib/types";
+import type { ServiceMode, UserRole } from "@/lib/types";
+import { loadPendingAbsencesCount, loadRunningEntry } from "./zeit/_components/data-helpers";
+import { HeaderBar } from "./_components/header-bar";
+import { SidebarSubtitle } from "./_components/sidebar-subtitle";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Service-Mode des aktuellen Users laden
+  // Service-Mode + Rolle des aktuellen Users laden
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   let serviceMode: ServiceMode = "recruiting";
+  let role: UserRole | undefined;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("service_mode")
+      .select("service_mode, role")
       .eq("id", user.id)
       .single();
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
+    if (profile?.role) role = profile.role as UserRole;
   }
 
   const webexCreds = user ? await getWebexCredentials() : null;
@@ -55,6 +57,14 @@ export default async function DashboardLayout({
     // Tabelle fehlt o.Ä. — Badge bleibt 0
   }
 
+  // Zeit-spezifische Daten — defensiv (Migrationen koennen noch fehlen).
+  const [runningEntry, absencesPending] = user
+    ? await Promise.all([
+        loadRunningEntry(user.id),
+        role === "admin" ? loadPendingAbsencesCount() : Promise.resolve(0),
+      ])
+    : [null, 0];
+
   return (
     <ServiceModeProvider initialMode={serviceMode}>
     <CallProvidersProvider value={callProviders}>
@@ -66,11 +76,14 @@ export default async function DashboardLayout({
         <div className="px-5 py-7">
           <Link href="/" className="block">
             <SwipeflowLogo className="h-9 w-auto text-gray-900 dark:text-white" />
-            <span className="mt-2 block text-[10px] font-medium uppercase tracking-widest text-gray-400 dark:text-gray-500">Lead Center</span>
+            <SidebarSubtitle />
           </Link>
         </div>
 
-        <SidebarNav badges={{ todos_due_today_or_overdue: todosDueOrOverdue }} />
+        <SidebarNav
+          badges={{ todos_due_today_or_overdue: todosDueOrOverdue, absences_pending: absencesPending }}
+          role={role}
+        />
 
         <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">
           <Link
@@ -96,13 +109,9 @@ export default async function DashboardLayout({
       {/* min-h-0 + min-w-0: ohne das bläht langer Content das flex-Child über
           100vh auf, body scrollt selbst und die Sidebar wandert aus dem Viewport. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
-          <ServiceModeSwitch />
-          <div className="flex items-center gap-3">
-            <ActiveEnrichmentBadge />
-            <GlobalSearch />
-          </div>
-        </header>
+        <HeaderBar
+          running={runningEntry ? { id: runningEntry.id, started_at: runningEntry.started_at, note: runningEntry.note } : null}
+        />
         <main className="flex-1 overflow-y-auto p-8">{children}</main>
       </div>
     </div>

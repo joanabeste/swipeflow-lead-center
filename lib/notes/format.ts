@@ -17,6 +17,27 @@ export const NOTE_ATTACHMENT_ALLOWED_MIMES: ReadonlySet<string> = new Set([
 
 export const NOTE_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 export const NOTE_ATTACHMENT_ACCEPT = Array.from(NOTE_ATTACHMENT_ALLOWED_MIMES).join(",");
+export const NOTE_ATTACHMENT_BUCKET = "lead-note-attachments";
+
+/** Metadaten einer bereits per Direct-Upload hochgeladenen Datei. Wird an die
+ *  Server-Action geschickt — klein genug, um nicht ans Function-Payload-Limit zu stossen. */
+export interface UploadedAttachmentRef {
+  storagePath: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+/** Vom Server zurueckgegebenes Upload-Ticket fuer Direct-Upload via signed URL. */
+export interface NoteAttachmentUploadTicket {
+  clientId: string;
+  storagePath: string;
+  signedUrl: string;
+  token: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
 
 export function isImageMime(mime: string): boolean {
   return mime.startsWith("image/");

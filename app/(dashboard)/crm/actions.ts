@@ -13,11 +13,14 @@ import { listTemplates } from "@/lib/email/templates-server";
 import type { EmailTemplate } from "@/lib/email/templates";
 import type { CallDirection, CallStatus } from "@/lib/types";
 import {
+  createNoteAttachmentUploadTickets,
   deleteAttachmentsForNote,
   deleteNoteAttachment,
-  uploadNoteAttachment,
-  type NewAttachmentInput,
+  registerNoteAttachment,
+  type NoteAttachmentUploadTicket,
+  type UploadedAttachmentRef,
 } from "@/lib/notes/attachments";
+import { awardCommissionsForStatusChange } from "@/lib/commission/award";
 
 export type CallProvider = "phonemondo" | "webex";
 
@@ -60,15 +63,83 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
     details: { old_status: before?.crm_status_id ?? null, new_status: statusId },
   });
 
+  // Provisions-Trigger. Idempotent (UNIQUE in 068); ein erneutes Setzen
+  // desselben Status erzeugt kein zweites Event.
+  const award = await awardCommissionsForStatusChange(db, leadId, statusId);
+  if (award.inserted > 0) {
+    await logAudit({
+      userId: user.id,
+      action: "lead.commission_awarded",
+      entityType: "lead",
+      entityId: leadId,
+      details: { count: award.inserted, status_id: statusId },
+    });
+    revalidatePath("/zeit/provision");
+  }
+
   revalidatePath("/crm");
   revalidatePath(`/crm/${leadId}`);
   return { success: true };
 }
 
+export async function updateLeadAssignedTo(leadId: string, assignedTo: string | null) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+
+  const { data: before } = await db
+    .from("leads")
+    .select("assigned_to")
+    .eq("id", leadId)
+    .single();
+
+  const { error } = await db
+    .from("leads")
+    .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
+    .eq("id", leadId);
+  if (error) {
+    console.error("[updateLeadAssignedTo] failed:", error);
+    if (/column.*assigned_to.*does not exist/i.test(error.message)) {
+      return { error: "Spalte assigned_to fehlt — Migration 067 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "lead.assigned_to_changed",
+    entityType: "lead",
+    entityId: leadId,
+    details: { old: (before as { assigned_to: string | null } | null)?.assigned_to ?? null, new: assignedTo },
+  });
+
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
+/**
+ * Vom Client aufgerufen, BEVOR die Dateien hochgeladen werden: erzeugt fuer jede
+ * Datei eine signed Upload-URL, gegen die der Browser direkt PUTtet. Umgeht damit
+ * das 4.5-MB-Function-Payload-Limit.
+ */
+export async function createNoteAttachmentUploads(
+  leadId: string,
+  files: { clientId: string; fileName: string; mimeType: string; sizeBytes: number }[],
+): Promise<
+  | { tickets: NoteAttachmentUploadTicket[]; errors: { clientId: string; error: string }[] }
+  | { error: string }
+> {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (files.length === 0) return { tickets: [], errors: [] };
+  return createNoteAttachmentUploadTickets({ leadId, files });
+}
+
 export async function addNote(
   leadId: string,
   content: string,
-  attachments: NewAttachmentInput[] = [],
+  attachments: UploadedAttachmentRef[] = [],
 ) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
@@ -93,14 +164,14 @@ export async function addNote(
   }
 
   const uploadErrors: string[] = [];
-  for (const att of attachments) {
-    const res = await uploadNoteAttachment({
+  for (const ref of attachments) {
+    const res = await registerNoteAttachment({
       leadId,
       noteId: data.id as string,
       userId: user.id,
-      input: att,
+      ref,
     });
-    if ("error" in res) uploadErrors.push(`${att.fileName}: ${res.error}`);
+    if ("error" in res) uploadErrors.push(`${ref.fileName}: ${res.error}`);
   }
 
   await logAudit({
@@ -122,7 +193,7 @@ export async function updateNote(
   noteId: string,
   leadId: string,
   content: string,
-  addAttachments: NewAttachmentInput[] = [],
+  addAttachments: UploadedAttachmentRef[] = [],
   removeAttachmentIds: string[] = [],
 ) {
   const user = await currentUser();
@@ -161,14 +232,14 @@ export async function updateNote(
     const res = await deleteNoteAttachment(id);
     if (res.error) errors.push(`Loeschen fehlgeschlagen (${id}): ${res.error}`);
   }
-  for (const att of addAttachments) {
-    const res = await uploadNoteAttachment({
+  for (const ref of addAttachments) {
+    const res = await registerNoteAttachment({
       leadId,
       noteId,
       userId: user.id,
-      input: att,
+      ref,
     });
-    if ("error" in res) errors.push(`${att.fileName}: ${res.error}`);
+    if ("error" in res) errors.push(`${ref.fileName}: ${res.error}`);
   }
 
   await logAudit({
