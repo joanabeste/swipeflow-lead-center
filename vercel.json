@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/email-sync",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
