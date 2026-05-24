@@ -26,6 +26,10 @@ import {
   Archive,
   Activity as ActivityIcon,
   Download,
+  GraduationCap,
+  BookOpen,
+  TrendingUp,
+  Pencil,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SectionPermissions, UserRole } from "@/lib/types";
@@ -40,10 +44,12 @@ interface NavItem {
 interface NavGroup {
   label?: string;
   rolesAllowed?: UserRole[];
+  /** Wenn true: nur sichtbar, wenn der User Learning-Editor ist. */
+  learningEditorOnly?: boolean;
   items: NavItem[];
 }
 
-type SectionId = "vertrieb" | "fulfillment" | "zeit" | "admin";
+type SectionId = "vertrieb" | "fulfillment" | "zeit" | "learning" | "admin";
 
 interface Section {
   id: SectionId;
@@ -122,6 +128,24 @@ const zeitSection: Section = {
   ],
 };
 
+const learningSection: Section = {
+  id: "learning",
+  label: "Learning",
+  icon: GraduationCap,
+  defaultPath: "/learning",
+  requires: "can_learning",
+  groups: [
+    { items: [
+      { href: "/learning", label: "Kurse", icon: BookOpen },
+      { href: "/learning/mein-fortschritt", label: "Mein Fortschritt", icon: TrendingUp },
+    ]},
+    { label: "Verwalten", learningEditorOnly: true, items: [
+      { href: "/learning/admin", label: "Kurse verwalten", icon: Pencil },
+      { href: "/learning/admin/kategorien", label: "Kategorien", icon: Sliders },
+    ]},
+  ],
+};
+
 const adminSection: Section = {
   id: "admin",
   label: "Admin",
@@ -149,7 +173,7 @@ const adminSection: Section = {
   ],
 };
 
-const ALL_SECTIONS: Section[] = [vertriebSection, fulfillmentSection, zeitSection, adminSection];
+const ALL_SECTIONS: Section[] = [vertriebSection, fulfillmentSection, learningSection, zeitSection, adminSection];
 
 const SECTION_STORAGE_KEY = "lead-center:active-section";
 
@@ -169,10 +193,12 @@ export function SidebarNav({
   badges,
   role,
   permissions,
+  learningEditor,
 }: {
   badges?: SidebarBadges;
   role?: UserRole;
   permissions?: SectionPermissions;
+  learningEditor?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -276,6 +302,7 @@ export function SidebarNav({
 
       {current.groups
         .filter((g) => !g.rolesAllowed || (role && g.rolesAllowed.includes(role)))
+        .filter((g) => !g.learningEditorOnly || learningEditor === true)
         .map((group, idx) => (
           <div key={`${current.id}-${idx}`}>
             {group.label && <SectionLabel>{group.label}</SectionLabel>}

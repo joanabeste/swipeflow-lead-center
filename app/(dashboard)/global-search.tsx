@@ -4,14 +4,19 @@ import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { searchLeads } from "./leads/actions";
+import { searchLearning, type LearningSearchHit } from "./learning/_actions/search";
 
-interface SearchResult {
+interface LeadResult {
   id: string;
   company_name: string;
   website: string | null;
   city: string | null;
   status: string;
 }
+
+type CombinedResult =
+  | { kind: "lead"; lead: LeadResult }
+  | { kind: "learning"; hit: LearningSearchHit };
 
 const statusLabels: Record<string, string> = {
   imported: "Importiert",
@@ -25,7 +30,7 @@ const statusLabels: Record<string, string> = {
 export function GlobalSearch() {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<CombinedResult[]>([]);
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -71,17 +76,28 @@ export function GlobalSearch() {
 
     debounceRef.current = setTimeout(() => {
       startTransition(async () => {
-        const data = await searchLeads(value);
-        setResults(data);
+        const [leads, learning] = await Promise.all([searchLeads(value), searchLearning(value)]);
+        const combined: CombinedResult[] = [
+          ...leads.map((l) => ({ kind: "lead" as const, lead: l })),
+          ...learning.map((h) => ({ kind: "learning" as const, hit: h })),
+        ];
+        setResults(combined);
         setOpen(true);
       });
     }, 300);
   }
 
-  function handleSelect(id: string) {
+  function handleSelect(r: CombinedResult) {
     setOpen(false);
     setQuery("");
-    router.push(`/leads/${id}`);
+    if (r.kind === "lead") {
+      router.push(`/leads/${r.lead.id}`);
+    } else {
+      const target = r.hit.lesson_id
+        ? `/learning/${r.hit.course_slug}/${r.hit.lesson_id}`
+        : `/learning/${r.hit.course_slug}`;
+      router.push(target);
+    }
   }
 
   return (
@@ -106,19 +122,37 @@ export function GlobalSearch() {
 
       {open && results.length > 0 && (
         <div className="absolute top-full z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-          {results.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => handleSelect(r.id)}
-              className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition first:rounded-t-xl last:rounded-b-xl hover:bg-gray-50 dark:hover:bg-white/5"
-            >
-              <div>
-                <span className="font-medium">{r.company_name}</span>
-                {r.city && <span className="ml-2 text-xs text-gray-400">{r.city}</span>}
-              </div>
-              <span className="text-xs text-gray-400">{statusLabels[r.status] ?? r.status}</span>
-            </button>
-          ))}
+          {results.map((r, i) => {
+            if (r.kind === "lead") {
+              return (
+                <button
+                  key={`lead-${r.lead.id}`}
+                  onClick={() => handleSelect(r)}
+                  className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition first:rounded-t-xl last:rounded-b-xl hover:bg-gray-50 dark:hover:bg-white/5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Lead</span>
+                    <span className="font-medium">{r.lead.company_name}</span>
+                    {r.lead.city && <span className="text-xs text-gray-400">{r.lead.city}</span>}
+                  </div>
+                  <span className="text-xs text-gray-400">{statusLabels[r.lead.status] ?? r.lead.status}</span>
+                </button>
+              );
+            }
+            return (
+              <button
+                key={`learning-${i}`}
+                onClick={() => handleSelect(r)}
+                className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition first:rounded-t-xl last:rounded-b-xl hover:bg-gray-50 dark:hover:bg-white/5"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Learning</span>
+                  <span className="font-medium">{r.hit.lesson_title ?? r.hit.course_title}</span>
+                  {r.hit.lesson_title && <span className="text-xs text-gray-400">in {r.hit.course_title}</span>}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 

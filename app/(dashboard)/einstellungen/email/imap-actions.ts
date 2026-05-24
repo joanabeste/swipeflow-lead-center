@@ -24,7 +24,8 @@ function parseForm(formData: FormData): { ok: true; input: ImapFormInput } | { o
   const host = ((formData.get("imap_host") as string) ?? "").trim();
   const portRaw = (formData.get("imap_port") as string) ?? "993";
   const username = ((formData.get("imap_username") as string) ?? "").trim();
-  const password = ((formData.get("imap_password") as string) ?? "");
+  // Trim: Copy-Paste aus Passwort-Managern hat oft trailing \n oder Leerzeichen.
+  const password = ((formData.get("imap_password") as string) ?? "").trim();
   const sentFolder = ((formData.get("imap_sent_folder") as string) ?? "Sent").trim() || "Sent";
 
   if (!host) return { ok: false, error: "Host fehlt." };

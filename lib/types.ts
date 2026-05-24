@@ -34,6 +34,9 @@ export interface Profile {
   can_vertrieb?: boolean | null;
   can_fulfillment?: boolean | null;
   can_zeit?: boolean | null;
+  // Learning-Modul (Migration 085). Admins haben implizit beides.
+  can_learning?: boolean | null;
+  can_learning_edit?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,16 +46,21 @@ export interface SectionPermissions {
   can_vertrieb: boolean;
   can_fulfillment: boolean;
   can_zeit: boolean;
+  can_learning: boolean;
 }
 
-/** Permissions aus dem Profile ableiten, mit Defensiv-Defaults wenn Migration 075 fehlt. */
-export function permissionsFromProfile(profile: Pick<Profile, "role" | "can_vertrieb" | "can_fulfillment" | "can_zeit">): SectionPermissions {
-  if (profile.role === "admin") return { can_vertrieb: true, can_fulfillment: true, can_zeit: true };
+/** Permissions aus dem Profile ableiten, mit Defensiv-Defaults wenn Migration 075/085 fehlt. */
+export function permissionsFromProfile(
+  profile: Pick<Profile, "role" | "can_vertrieb" | "can_fulfillment" | "can_zeit" | "can_learning">,
+): SectionPermissions {
+  if (profile.role === "admin")
+    return { can_vertrieb: true, can_fulfillment: true, can_zeit: true, can_learning: true };
   if (profile.role === "employee") {
     return {
       can_vertrieb: profile.can_vertrieb ?? false,
       can_fulfillment: profile.can_fulfillment ?? false,
       can_zeit: profile.can_zeit ?? true,
+      can_learning: profile.can_learning ?? false,
     };
   }
   // sales / viewer
@@ -60,7 +68,14 @@ export function permissionsFromProfile(profile: Pick<Profile, "role" | "can_vert
     can_vertrieb: profile.can_vertrieb ?? true,
     can_fulfillment: profile.can_fulfillment ?? true,
     can_zeit: profile.can_zeit ?? true,
+    can_learning: profile.can_learning ?? false,
   };
+}
+
+/** Editor-Rechte fuer Learning (Admin oder explizites Flag). */
+export function canEditLearning(profile: Pick<Profile, "role" | "can_learning_edit">): boolean {
+  if (profile.role === "admin") return true;
+  return profile.can_learning_edit === true;
 }
 
 export type LeadStatus =
@@ -602,5 +617,84 @@ export interface CommissionEvent {
   currency: string;
   trigger_status_id: string | null;
   earned_at: string;
+}
+
+// ─── Learning / E-Learning (Migration 085) ───────────────────────
+
+export type LearningCourseStatus = "draft" | "published";
+export type LearningVideoProvider = "youtube" | "loom";
+
+export interface LearningCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningCourse {
+  id: string;
+  category_id: string | null;
+  title: string;
+  slug: string;
+  summary: string | null;
+  cover_image_path: string | null;
+  status: LearningCourseStatus;
+  sort_order: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningModule {
+  id: string;
+  course_id: string;
+  title: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningLesson {
+  id: string;
+  module_id: string;
+  title: string;
+  sort_order: number;
+  content_html: string | null;
+  video_url: string | null;
+  video_provider: LearningVideoProvider | null;
+  estimated_minutes: number | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LearningLessonAttachment {
+  id: string;
+  lesson_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+export interface LoadedLearningAttachment {
+  id: string;
+  lesson_id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  signed_url: string | null;
+}
+
+export interface LearningLessonProgress {
+  user_id: string;
+  lesson_id: string;
+  completed_at: string;
 }
 

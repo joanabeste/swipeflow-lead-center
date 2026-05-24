@@ -1,10 +1,11 @@
 // Server-Loader für Mail-Threads und -Messages.
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 export interface ThreadRow {
   id: string;
   lead_id: string | null;
   project_id: string | null;
+  owner_user_id: string | null;
   subject_normalized: string | null;
   participants: string[];
   message_count: number;
@@ -12,6 +13,25 @@ export interface ThreadRow {
   unread_count: number;
   /** Optional vom Server angereichert — Projekt-Name fuer Anzeige. */
   project_name?: string | null;
+}
+
+/** Aktueller User — null wenn nicht angemeldet (bei Cron z.B.). */
+async function currentUid(): Promise<string | null> {
+  try {
+    const sb = await createClient();
+    const { data } = await sb.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Visibility-Filter: nur Threads mit Projekt-Zuordnung ODER eigene. */
+function applyVisibility<T extends { project_id: string | null; owner_user_id: string | null }>(
+  rows: T[], userId: string | null,
+): T[] {
+  if (!userId) return rows.filter((r) => r.project_id !== null);
+  return rows.filter((r) => r.project_id !== null || r.owner_user_id === userId);
 }
 
 export interface MessageRow {
@@ -35,33 +55,52 @@ export async function loadThreadsForLead(leadId: string): Promise<ThreadRow[]> {
   const db = createServiceClient();
   const { data } = await db
     .from("email_threads")
-    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .select("id, lead_id, project_id, owner_user_id, subject_normalized, participants, message_count, last_message_at, unread_count")
     .eq("lead_id", leadId)
     .order("last_message_at", { ascending: false });
-  return (data ?? []) as ThreadRow[];
+  const uid = await currentUid();
+  return applyVisibility((data ?? []) as ThreadRow[], uid);
 }
 
 export async function loadAllThreads(filter: "all" | "unread" | "unassigned" = "all"): Promise<ThreadRow[]> {
   const db = createServiceClient();
   let query = db
     .from("email_threads")
-    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .select("id, lead_id, project_id, owner_user_id, subject_normalized, participants, message_count, last_message_at, unread_count")
     .order("last_message_at", { ascending: false })
     .limit(200);
   if (filter === "unread") query = query.gt("unread_count", 0);
   if (filter === "unassigned") query = query.is("lead_id", null);
   const { data } = await query;
-  return (data ?? []) as ThreadRow[];
+  const uid = await currentUid();
+  return applyVisibility((data ?? []) as ThreadRow[], uid);
 }
 
 export async function loadThreadsForProject(projectId: string): Promise<ThreadRow[]> {
+  // Projekt-zugeordnete Threads sind per Definition fuer alle sichtbar — kein Owner-Filter noetig.
   const db = createServiceClient();
   const { data } = await db
     .from("email_threads")
-    .select("id, lead_id, project_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .select("id, lead_id, project_id, owner_user_id, subject_normalized, participants, message_count, last_message_at, unread_count")
     .eq("project_id", projectId)
     .order("last_message_at", { ascending: false });
   return (data ?? []) as ThreadRow[];
+}
+
+/** Threads die noch keinem Lead zugeordnet sind, aber Participant-Match haben. */
+export async function loadSuggestedThreadsForEmails(emails: string[]): Promise<ThreadRow[]> {
+  const cleaned = emails.map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (cleaned.length === 0) return [];
+  const db = createServiceClient();
+  const { data } = await db
+    .from("email_threads")
+    .select("id, lead_id, project_id, owner_user_id, subject_normalized, participants, message_count, last_message_at, unread_count")
+    .is("lead_id", null)
+    .overlaps("participants", cleaned)
+    .order("last_message_at", { ascending: false })
+    .limit(50);
+  const uid = await currentUid();
+  return applyVisibility((data ?? []) as ThreadRow[], uid);
 }
 
 /** Erweitert eine Thread-Liste um den Projekt-Namen (fuer Anzeige im Mails-Tab). */
@@ -76,6 +115,17 @@ export async function enrichThreadsWithProjects(threads: ThreadRow[]): Promise<T
 
 export async function loadMessages(threadId: string): Promise<MessageRow[]> {
   const db = createServiceClient();
+  // Sichtbarkeit pruefen: Thread muss entweder eigener oder Projekt-zugeordnet sein.
+  const { data: thread } = await db
+    .from("email_threads")
+    .select("project_id, owner_user_id")
+    .eq("id", threadId)
+    .maybeSingle();
+  if (!thread) return [];
+  const uid = await currentUid();
+  const visible = thread.project_id !== null || (uid !== null && thread.owner_user_id === uid);
+  if (!visible) return [];
+
   const { data } = await db
     .from("email_thread_messages")
     .select("id, thread_id, direction, message_id, from_email, from_name, to_emails, cc_emails, subject, body_text, body_html, attachments, received_at, is_read")

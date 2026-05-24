@@ -75,6 +75,7 @@ export async function findOrCreateThread(args: {
       subject_normalized: subjN || null,
       participants: args.participants,
       last_message_at: args.receivedAt.toISOString(),
+      owner_user_id: args.userId,
     })
     .select("id")
     .single();

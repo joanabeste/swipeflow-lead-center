@@ -67,6 +67,8 @@ export async function updateUser(
     can_vertrieb?: boolean;
     can_fulfillment?: boolean;
     can_zeit?: boolean;
+    can_learning?: boolean;
+    can_learning_edit?: boolean;
   },
 ) {
   const ctx = await checkAdmin();

@@ -8,7 +8,7 @@ import { ProjectsTab } from "./_components/projects-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
 import { MailsTab } from "./_components/mails-tab";
 import { EditCustomerButton } from "./_components/edit-customer-button";
-import { enrichThreadsWithProjects, loadThreadsForLead } from "@/lib/email/data";
+import { enrichThreadsWithProjects, loadSuggestedThreadsForEmails, loadThreadsForLead } from "@/lib/email/data";
 
 type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
 
@@ -100,14 +100,22 @@ export default async function KundenDetailPage({
       {tab === "verlauf" && <VerlaufTab leadId={id} />}
       {tab === "kontakte" && <ContactsTab leadId={id} contacts={contacts} />}
       {tab === "projekte" && <ProjectsTab leadId={id} projects={projects} />}
-      {tab === "mails" && (
-        <MailsTab
-          leadId={id}
-          initialThreads={await loadThreadsForLead(id).then(enrichThreadsWithProjects).catch(() => [])}
-          projects={projects.map((p) => ({ id: p.id, name: p.name }))}
-          defaultTo={contacts.find((c) => c.is_primary && c.email)?.email ?? contacts.find((c) => c.email)?.email ?? customer.email ?? null}
-        />
-      )}
+      {tab === "mails" && await (async () => {
+        const emails = [customer.email, ...contacts.map((c) => c.email)].filter((e): e is string => !!e);
+        const [attached, suggested] = await Promise.all([
+          loadThreadsForLead(id).then(enrichThreadsWithProjects).catch(() => []),
+          loadSuggestedThreadsForEmails(emails).then(enrichThreadsWithProjects).catch(() => []),
+        ]);
+        return (
+          <MailsTab
+            leadId={id}
+            initialThreads={attached}
+            suggestedThreads={suggested}
+            projects={projects.map((p) => ({ id: p.id, name: p.name }))}
+            defaultTo={contacts.find((c) => c.is_primary && c.email)?.email ?? contacts.find((c) => c.email)?.email ?? customer.email ?? null}
+          />
+        );
+      })()}
     </div>
   );
 }

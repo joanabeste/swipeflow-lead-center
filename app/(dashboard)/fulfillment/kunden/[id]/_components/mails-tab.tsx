@@ -9,16 +9,19 @@ import { useToastContext } from "../../../../toast-provider";
 export function MailsTab({
   leadId,
   initialThreads,
+  suggestedThreads = [],
   projects,
   defaultTo,
 }: {
   leadId: string;
   initialThreads: ThreadRow[];
+  suggestedThreads?: ThreadRow[];
   projects: Array<{ id: string; name: string }>;
   defaultTo: string | null;
 }) {
   const { addToast } = useToastContext();
   const [threads, setThreads] = useState<ThreadRow[]>(initialThreads);
+  const [suggestions, setSuggestions] = useState<ThreadRow[]>(suggestedThreads);
   const [selected, setSelected] = useState<string | null>(initialThreads[0]?.id ?? null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
@@ -105,6 +108,21 @@ export function MailsTab({
     }
   }
 
+  async function attachSuggestion(threadId: string) {
+    const res = await attachThreadToLead({ threadId, leadId });
+    if ("error" in res) {
+      addToast(res.error, "error");
+      return;
+    }
+    const moved = suggestions.find((s) => s.id === threadId);
+    setSuggestions((cur) => cur.filter((s) => s.id !== threadId));
+    if (moved) {
+      setThreads((cur) => [{ ...moved, lead_id: leadId }, ...cur]);
+      setSelected(threadId);
+    }
+    addToast("Thread zugeordnet.", "success");
+  }
+
   async function handleAssignProject(threadId: string, projectId: string | null) {
     const res = await assignThreadToProject({ threadId, projectId });
     if ("error" in res) addToast(res.error, "error");
@@ -142,10 +160,12 @@ export function MailsTab({
           </button>
         </div>
 
-        {threads.length === 0 ? (
+        {threads.length === 0 && suggestions.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-xs text-gray-400 dark:border-[#2c2c2e]/60">
             <Inbox className="mx-auto mb-2 h-5 w-5 text-gray-300" />
             Noch keine Mails für diesen Kunden. „Synchronisieren" startet einen IMAP-Pull.
+            <br />
+            <span className="mt-1 inline-block text-[10px]">Tipp: Wenn der Sync ohne Fehler lief, aber nichts auftaucht — pruefe ob die Kontakt-E-Mails (oder die Lead-Mail) zu den importierten Mails passen.</span>
           </p>
         ) : (
           <ul className="space-y-1">
@@ -182,6 +202,34 @@ export function MailsTab({
               );
             })}
           </ul>
+        )}
+
+        {suggestions.length > 0 && (
+          <div className="mt-4 space-y-1">
+            <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              Vorschlaege ({suggestions.length}) — Mails mit passender Adresse
+            </p>
+            <ul className="space-y-1">
+              {suggestions.map((t) => (
+                <li key={t.id} className="rounded-xl border border-dashed border-amber-300/60 bg-amber-50/50 px-3 py-2 dark:border-amber-700/40 dark:bg-amber-900/10">
+                  <p className="line-clamp-1 text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {t.subject_normalized || "(ohne Betreff)"}
+                  </p>
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-gray-500">
+                    {t.message_count} Nachricht{t.message_count === 1 ? "" : "en"}
+                    {t.last_message_at && ` · ${new Date(t.last_message_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}`}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => attachSuggestion(t.id)}
+                    className="mt-1 text-[11px] font-semibold text-primary hover:underline"
+                  >
+                    Diesem Kunden zuordnen
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </aside>
 

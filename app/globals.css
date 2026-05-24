@@ -60,3 +60,21 @@ html {
 .animate-confetti-fall {
   animation: confetti-fall cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
 }
+
+/* Lesson-Content (TipTap-Output): minimal-typografische Defaults statt Tailwind-Typography. */
+.lesson-content h1 { font-size: 1.5rem; font-weight: 600; margin: 1.2em 0 0.4em; }
+.lesson-content h2 { font-size: 1.25rem; font-weight: 600; margin: 1.1em 0 0.4em; }
+.lesson-content h3 { font-size: 1.05rem; font-weight: 600; margin: 1em 0 0.3em; }
+.lesson-content p { margin: 0.6em 0; }
+.lesson-content ul { list-style: disc; padding-left: 1.5em; margin: 0.6em 0; }
+.lesson-content ol { list-style: decimal; padding-left: 1.5em; margin: 0.6em 0; }
+.lesson-content li { margin: 0.25em 0; }
+.lesson-content a { color: var(--color-primary); text-decoration: underline; }
+.lesson-content blockquote { border-left: 3px solid var(--color-primary); padding-left: 1em; color: #6b7280; margin: 0.8em 0; font-style: italic; }
+.lesson-content code { background: rgba(0,0,0,0.06); padding: 0.1em 0.4em; border-radius: 0.25em; font-size: 0.9em; }
+.dark .lesson-content code { background: rgba(255,255,255,0.08); }
+.lesson-content pre { background: rgba(0,0,0,0.06); padding: 0.8em; border-radius: 0.5em; overflow-x: auto; margin: 0.8em 0; }
+.dark .lesson-content pre { background: rgba(255,255,255,0.06); }
+.lesson-content img { border-radius: 0.5em; max-width: 100%; height: auto; margin: 0.8em 0; }
+.lesson-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5em 0; }
+.dark .lesson-content hr { border-top-color: #2c2c2e; }

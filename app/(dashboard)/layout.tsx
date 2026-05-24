@@ -27,10 +27,11 @@ export default async function DashboardLayout({
   let serviceMode: ServiceMode = "recruiting";
   let role: UserRole | undefined;
   let permissions: SectionPermissions | undefined;
+  let learningEditor = false;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("service_mode, role, can_vertrieb, can_fulfillment, can_zeit")
+      .select("service_mode, role, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_learning_edit")
       .eq("id", user.id)
       .single();
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
@@ -41,7 +42,9 @@ export default async function DashboardLayout({
         can_vertrieb: profile.can_vertrieb,
         can_fulfillment: profile.can_fulfillment,
         can_zeit: profile.can_zeit,
+        can_learning: profile.can_learning,
       });
+      learningEditor = role === "admin" || profile.can_learning_edit === true;
     }
   }
 
@@ -94,6 +97,7 @@ export default async function DashboardLayout({
           badges={{ todos_due_today_or_overdue: todosDueOrOverdue, absences_pending: absencesPending }}
           role={role}
           permissions={permissions}
+          learningEditor={learningEditor}
         />
 
         <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">

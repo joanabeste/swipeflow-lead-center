@@ -118,6 +118,8 @@ export function UserManager({ profiles, currentUserId }: Props) {
               <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Vertrieb">Vert.</th>
               <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Fulfillment">Fulf.</th>
               <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Zeit & Lohn">Zeit</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Learning ansehen">Learn</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Learning bearbeiten">L-Edit</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Erstellt</th>
               <th className="px-4 py-3" />
@@ -167,6 +169,22 @@ export function UserManager({ profiles, currentUserId }: Props) {
                   <PermissionCheckbox
                     profile={profile}
                     field="can_zeit"
+                    disabled={profile.role === "admin" || profile.id === currentUserId}
+                    onSave={applyUpdate}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <PermissionCheckbox
+                    profile={profile}
+                    field="can_learning"
+                    disabled={profile.role === "admin" || profile.id === currentUserId}
+                    onSave={applyUpdate}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <PermissionCheckbox
+                    profile={profile}
+                    field="can_learning_edit"
                     disabled={profile.role === "admin" || profile.id === currentUserId}
                     onSave={applyUpdate}
                   />
@@ -249,16 +267,20 @@ function PermissionCheckbox({
   onSave,
 }: {
   profile: Profile;
-  field: "can_vertrieb" | "can_fulfillment" | "can_zeit";
+  field: "can_vertrieb" | "can_fulfillment" | "can_zeit" | "can_learning" | "can_learning_edit";
   disabled?: boolean;
   onSave: (profileId: string, updates: Parameters<typeof updateUser>[1], label: string) => Promise<void>;
 }) {
   // Admins haben implizit alles — UI zeigt das als "haken+disabled".
-  const initial = profile.role === "admin" ? true : (profile[field] ?? (field === "can_zeit" ? true : profile.role !== "employee"));
+  const initial = profile.role === "admin"
+    ? true
+    : (profile[field] ?? (field === "can_zeit" ? true : (field === "can_vertrieb" || field === "can_fulfillment") ? profile.role !== "employee" : false));
   const FIELD_LABELS: Record<typeof field, string> = {
     can_vertrieb: "Vertrieb",
     can_fulfillment: "Fulfillment",
     can_zeit: "Zeit & Lohn",
+    can_learning: "Learning",
+    can_learning_edit: "Learning-Bearbeitung",
   };
   return (
     <input
