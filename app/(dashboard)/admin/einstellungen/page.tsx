@@ -88,7 +88,7 @@ export default async function AdminEinstellungenPage() {
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Globale Einstellungen</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Alle App-weiten Konfigurationen, gruppiert nach Bereich. Modul-spezifische User-Settings
-          (z.B. Pausen-Modus in Timetracking) findest du in der jeweiligen Sektion.
+          (z.B. Pausen-Modus in Zeit & Lohn) findest du in der jeweiligen Sektion.
         </p>
       </div>
 

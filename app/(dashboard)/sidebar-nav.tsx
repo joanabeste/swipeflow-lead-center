@@ -102,7 +102,7 @@ const fulfillmentSection: Section = {
 
 const zeitSection: Section = {
   id: "zeit",
-  label: "Timetracking",
+  label: "Zeit & Lohn",
   icon: Clock,
   defaultPath: "/zeit",
   requires: "can_zeit",
@@ -116,8 +116,8 @@ const zeitSection: Section = {
       { href: "/zeit/provision", label: "Provision", icon: Coins },
       { href: "/zeit/einstellungen", label: "Einstellungen", icon: Settings },
     ]},
-    // Admin-Funktionen fuer Timetracking (Mitarbeiter-Verwaltung, Abwesenheits-Antraege,
-    // Gesamt-Reports) leben jetzt in der Admin-Sektion (Gruppe "Timetracking-Admin").
+    // Admin-Funktionen fuer Zeit & Lohn (Mitarbeiter-Verwaltung, Abwesenheits-Antraege,
+    // Gesamt-Reports) leben jetzt in der Admin-Sektion (Gruppe "Zeit & Lohn-Admin").
   ],
 };
 
@@ -135,7 +135,7 @@ const adminSection: Section = {
       { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
       { href: "/admin/einstellungen/integrationen", label: "Integrationen", icon: CheckSquare },
     ]},
-    { label: "Timetracking-Admin", items: [
+    { label: "Zeit & Lohn-Admin", items: [
       { href: "/zeit/admin/mitarbeiter", label: "Mitarbeiter", icon: UserCog },
       { href: "/zeit/admin/abwesenheiten", label: "Abwesenheits-Antraege", icon: Pause, badgeKey: "absences_pending" },
       { href: "/zeit/admin/reports", label: "Stunden-Reports", icon: BarChart3 },

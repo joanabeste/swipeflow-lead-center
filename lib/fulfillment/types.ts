@@ -18,10 +18,15 @@ export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
   completed: "bg-gray-200 text-gray-700",
 };
 
+export type Salutation = "du" | "sie";
+
 export interface CustomerContact {
   id: string;
   lead_id: string;
-  name: string;
+  first_name: string | null;
+  last_name: string | null;
+  name: string; // generated: first_name + ' ' + last_name
+  salutation: Salutation;
   role: string | null;
   email: string | null;
   phone: string | null;

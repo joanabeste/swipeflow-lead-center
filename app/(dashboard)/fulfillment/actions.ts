@@ -43,7 +43,9 @@ export async function setLifecycleStage(leadId: string, stage: LifecycleStage): 
 
 export async function createContact(input: {
   lead_id: string;
-  name: string;
+  first_name: string;
+  last_name?: string;
+  salutation?: "du" | "sie";
   role?: string;
   email?: string;
   phone?: string;
@@ -52,7 +54,7 @@ export async function createContact(input: {
 }): Promise<Result<{ id: string }>> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
-  if (!input.name?.trim()) return { error: "Name fehlt." };
+  if (!input.first_name?.trim()) return { error: "Vorname fehlt." };
   const db = createServiceClient();
 
   // Wenn neu als primary markiert, zuerst alle anderen zuruecksetzen.
@@ -64,7 +66,9 @@ export async function createContact(input: {
     .from("customer_contacts")
     .insert({
       lead_id: input.lead_id,
-      name: input.name.trim(),
+      first_name: input.first_name.trim(),
+      last_name: input.last_name?.trim() || null,
+      salutation: input.salutation ?? "sie",
       role: input.role?.trim() || null,
       email: input.email?.trim() || null,
       phone: input.phone?.trim() || null,
@@ -81,7 +85,8 @@ export async function createContact(input: {
 }
 
 export async function updateContact(id: string, patch: Partial<{
-  name: string; role: string | null; email: string | null; phone: string | null; is_primary: boolean; notes: string | null;
+  first_name: string; last_name: string | null; salutation: "du" | "sie";
+  role: string | null; email: string | null; phone: string | null; is_primary: boolean; notes: string | null;
 }>): Promise<Result> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
@@ -95,7 +100,7 @@ export async function updateContact(id: string, patch: Partial<{
   }
 
   const update: Record<string, unknown> = {};
-  for (const k of ["name", "role", "email", "phone", "is_primary", "notes"] as const) {
+  for (const k of ["first_name", "last_name", "salutation", "role", "email", "phone", "is_primary", "notes"] as const) {
     if (patch[k] !== undefined) update[k] = patch[k];
   }
   const { error } = await db.from("customer_contacts").update(update).eq("id", id);

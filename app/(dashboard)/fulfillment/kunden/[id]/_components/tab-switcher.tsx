@@ -7,7 +7,7 @@ type Tab = "verlauf" | "kontakte" | "projekte" | "zeit";
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "kontakte", label: "Kontakte" },
   { id: "projekte", label: "Projekte" },
-  { id: "zeit", label: "Timetracking" },
+  { id: "zeit", label: "Zeit & Lohn" },
   { id: "verlauf", label: "Verlauf" },
 ];
 

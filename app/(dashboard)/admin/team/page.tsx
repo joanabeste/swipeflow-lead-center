@@ -115,7 +115,7 @@ export default async function AdminTeamPage() {
 
       {entriesErr && (entriesErr.code === "42P01" || /relation.*does not exist/i.test(entriesErr.message)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Timetracking-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
+          Zeit & Lohn-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
         </div>
       )}
 
@@ -167,7 +167,7 @@ export default async function AdminTeamPage() {
       </div>
 
       <p className="text-[11px] text-gray-400">
-        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Timetracking. Admins haben implizit alle.
+        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit & Lohn. Admins haben implizit alle.
       </p>
 
       <section id="nutzer-verwalten" className="scroll-mt-20">
