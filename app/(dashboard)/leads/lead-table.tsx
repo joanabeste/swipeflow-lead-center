@@ -23,6 +23,7 @@ import { ColumnPicker } from "@/components/table/column-picker";
 import { DraggableResizableHeader } from "@/components/table/draggable-resizable-header";
 import { useColumnLayout } from "@/components/table/use-column-layout";
 import { LeadPreviewDrawer } from "./_components/lead-preview-drawer";
+import { prefetchPreview } from "@/lib/preview/prefetch";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -493,6 +494,7 @@ export function LeadTable({
                   return (
                     <tr
                       key={lead.id}
+                      onMouseEnter={() => prefetchPreview(lead.id, "leads")}
                       className={`group cursor-pointer transition ${selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"}`}
                     >
                       <td className="px-4 py-3" onClick={(e) => { e.stopPropagation(); toggleOne(lead.id, leadIndex, e); }}>
@@ -570,7 +572,11 @@ export function LeadTable({
         onPageChange={(p) => updateParams({ page: String(p) })}
       />
 
-      <LeadPreviewDrawer previewId={previewId} onClose={closePreview} />
+      <LeadPreviewDrawer
+        previewId={previewId}
+        siblingIds={leads.map((l) => l.id)}
+        onClose={closePreview}
+      />
     </div>
   );
 }

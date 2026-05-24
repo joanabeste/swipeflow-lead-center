@@ -11,5 +11,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const data = await loadCrmDetail(id);
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+  });
 }

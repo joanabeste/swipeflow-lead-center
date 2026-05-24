@@ -1,51 +1,60 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { CrmLeadDetail } from "../[id]/crm-lead-detail";
 import { LeadScreenshotCardClient } from "../../leads/_components/lead-screenshot-card-client";
 import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
+import { prefetchNeighbors } from "@/lib/preview/prefetch";
 
 interface Props {
   previewId: string | null;
+  /** Aktuelle CRM-Lead-Liste in Sortier-Reihenfolge fuer Prev/Next + Prefetch. */
+  siblingIds?: string[];
+  /** Basis-Pfad fuer URL-Updates (default /crm). */
+  basePath?: string;
   onClose: () => void;
 }
 
-export function CrmPreviewDrawer({ previewId, onClose }: Props) {
+const SLIDE_OUT_MS = 200;
+
+export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm", onClose }: Props) {
   const router = useRouter();
   const [data, setData] = useState<CrmDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadBundle = useCallback(
     (id: string, opts?: { silent?: boolean }) => {
-      let cancelled = false;
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+
       if (!opts?.silent) setLoading(true);
       setError(null);
-      fetch(`/api/crm/${id}/preview`, { cache: "no-store" })
+      fetch(`/api/crm/${id}/preview`, { signal: ac.signal })
         .then(async (r) => {
           if (!r.ok) throw new Error(`Status ${r.status}`);
           return r.json() as Promise<CrmDetailBundle>;
         })
         .then((bundle) => {
-          if (cancelled) return;
+          if (ac.signal.aborted) return;
           setData(bundle);
         })
         .catch((e: unknown) => {
-          if (cancelled) return;
+          if (ac.signal.aborted) return;
           setError(e instanceof Error ? e.message : "Unbekannter Fehler");
         })
         .finally(() => {
-          if (!cancelled && !opts?.silent) setLoading(false);
+          if (!ac.signal.aborted && !opts?.silent) setLoading(false);
         });
-      return () => {
-        cancelled = true;
-      };
     },
     [],
   );
@@ -56,39 +65,116 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
     if (!previewId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
-
       setError(null);
       return;
     }
-    const cancel = loadBundle(previewId);
-    return cancel;
+    setClosing(false);
+    loadBundle(previewId);
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [previewId, loadBundle]);
+
+  // Nachbarn idle prefetchen, damit Prev/Next instant sind.
+  useEffect(() => {
+    if (!previewId || siblingIds.length === 0) return;
+    prefetchNeighbors(siblingIds, previewId, "crm", 2);
+  }, [previewId, siblingIds]);
 
   const handleRefresh = useCallback(() => {
     if (previewId) loadBundle(previewId, { silent: true });
     router.refresh();
   }, [previewId, loadBundle, router]);
 
-  const open = previewId !== null;
+  const handleClose = useCallback(() => {
+    if (closing) return;
+    abortRef.current?.abort();
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, SLIDE_OUT_MS);
+  }, [closing, onClose]);
+
+  const idx = previewId ? siblingIds.indexOf(previewId) : -1;
+  const prevId = idx > 0 ? siblingIds[idx - 1] : null;
+  const nextId = idx >= 0 && idx < siblingIds.length - 1 ? siblingIds[idx + 1] : null;
+
+  const goTo = useCallback(
+    (id: string) => {
+      router.push(`${basePath}?preview=${id}`, { scroll: false });
+    },
+    [router, basePath],
+  );
+
+  useEffect(() => {
+    if (!previewId || closing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft" && prevId) {
+        e.preventDefault();
+        goTo(prevId);
+      } else if (e.key === "ArrowRight" && nextId) {
+        e.preventDefault();
+        goTo(nextId);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewId, prevId, nextId, goTo, closing]);
+
+  const open = previewId !== null && !closing;
   const title = data?.lead.company_name ?? (loading ? "Lade…" : "Vorschau");
+  const counter = idx >= 0 && siblingIds.length > 0 ? `${idx + 1}/${siblingIds.length}` : null;
 
   return (
     <Drawer
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       storageKey="preview-drawer-width"
       defaultWidth={880}
       title={<span className="truncate">{title}</span>}
       headerExtras={
-        previewId ? (
-          <Link
-            href={`/crm/${previewId}`}
-            title="In Vollansicht öffnen"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </Link>
-        ) : null
+        <>
+          {siblingIds.length > 1 && (
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => prevId && goTo(prevId)}
+                disabled={!prevId}
+                aria-label="Vorheriger Lead"
+                title="Vorheriger Lead (←)"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {counter && (
+                <span className="px-1 text-xs tabular-nums text-gray-500 dark:text-gray-400">{counter}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => nextId && goTo(nextId)}
+                disabled={!nextId}
+                aria-label="Naechster Lead"
+                title="Naechster Lead (→)"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {previewId && (
+            <Link
+              href={`/crm/${previewId}`}
+              title="In Vollansicht öffnen"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Link>
+          )}
+        </>
       }
     >
       <div className="p-4">
@@ -121,7 +207,7 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
             caseStudies={data.caseStudies}
             landingPages={data.landingPages}
             todos={data.todos}
-            onBack={onClose}
+            onBack={handleClose}
             forceStackedLayout={true}
             screenshotCard={
               <LeadScreenshotCardClient

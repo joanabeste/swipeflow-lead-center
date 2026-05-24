@@ -18,6 +18,7 @@ import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../lead
 import { useServiceMode } from "@/lib/service-mode";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { CrmPreviewDrawer } from "./_components/crm-preview-drawer";
+import { prefetchPreview } from "@/lib/preview/prefetch";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { InlineStatusDropdown } from "./_components/inline-status-dropdown";
 import { NewLeadModal } from "./new-lead-modal";
@@ -491,6 +492,7 @@ export function CrmManager({
                 leads.map((lead, i) => (
                   <tr
                     key={lead.id}
+                    onMouseEnter={() => prefetchPreview(lead.id, "crm")}
                     className={`group cursor-pointer transition ${
                       selected.has(lead.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
                     }`}
@@ -542,7 +544,11 @@ export function CrmManager({
         onPageChange={(p) => updateParams({ page: String(p) })}
       />
 
-      <CrmPreviewDrawer previewId={previewId} onClose={closePreview} />
+      <CrmPreviewDrawer
+        previewId={previewId}
+        siblingIds={leads.map((l) => l.id)}
+        onClose={closePreview}
+      />
     </div>
   );
 }

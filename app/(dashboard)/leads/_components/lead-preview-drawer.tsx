@@ -1,55 +1,76 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Maximize2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCardClient } from "./lead-screenshot-card-client";
 import type { LeadDetailBundle } from "@/lib/leads/load-lead-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
+import { prefetchNeighbors } from "@/lib/preview/prefetch";
 
 interface Props {
   /** lead-id im ?preview=… Query-Param; null = zu */
   previewId: string | null;
+  /** Aktuell sichtbare Lead-Liste in Sortier-Reihenfolge. Wird fuer
+   *  Prev/Next-Navigation und Idle-Prefetch der Nachbarn genutzt. */
+  siblingIds?: string[];
+  /** Basis-URL fuer Navigation (Pagination/Filter ohne `preview` Param).
+   *  Default: /leads */
+  basePath?: string;
   onClose: () => void;
 }
+
+const SLIDE_OUT_MS = 200;
 
 /**
  * Vorschau-Sidebar fuer einen Lead auf /leads.
  * Laedt das Daten-Bundle on-open via /api/leads/[id]/preview und rendert
  * das vorhandene LeadProfilePanel im Drawer.
+ *
+ * Schnelles Wechseln: Hover-Prefetch in der Tabelle + 30s Browser-Cache auf
+ *   der API-Route + Idle-Prefetch der ±2 Nachbarn beim Oeffnen.
+ * Snappy Close: lokaler `closing`-State steuert die CSS-Slide-Animation
+ *   sofort; die URL-Aktualisierung folgt erst nach Animationsende.
  */
-export function LeadPreviewDrawer({ previewId, onClose }: Props) {
+export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/leads", onClose }: Props) {
   const router = useRouter();
   const [data, setData] = useState<LeadDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadBundle = useCallback(
     (id: string, opts?: { silent?: boolean }) => {
-      let cancelled = false;
+      // Vorherigen Fetch abbrechen — bei schnellem Lead-zu-Lead-Klick haengt
+      // der alte Request sonst weiter und verschwendet Server-Zeit.
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+
       if (!opts?.silent) setLoading(true);
       setError(null);
-      fetch(`/api/leads/${id}/preview`, { cache: "no-store" })
+      fetch(`/api/leads/${id}/preview`, { signal: ac.signal })
         .then(async (r) => {
           if (!r.ok) throw new Error(`Status ${r.status}`);
           return r.json() as Promise<LeadDetailBundle>;
         })
         .then((bundle) => {
-          if (cancelled) return;
+          if (ac.signal.aborted) return;
           setData(bundle);
           // Geocoding asynchron nachholen, falls Koordinaten fehlen und eine
           // Adresse vorhanden ist. Blockiert nicht den initialen Render.
           const lead = bundle.lead;
           const hasAddr = Boolean(lead.street || lead.zip || lead.city);
           if (hasAddr && (lead.latitude == null || lead.longitude == null)) {
-            fetch(`/api/leads/${id}/geocode`, { method: "POST", cache: "no-store" })
+            fetch(`/api/leads/${id}/geocode`, { method: "POST", cache: "no-store", signal: ac.signal })
               .then((r) => (r.ok ? r.json() : null))
               .then((j: { lat: number | null; lng: number | null } | null) => {
-                if (cancelled || !j || j.lat == null || j.lng == null) return;
+                if (ac.signal.aborted || !j || j.lat == null || j.lng == null) return;
                 setData((prev) =>
                   prev && prev.lead.id === id
                     ? { ...prev, lead: { ...prev.lead, latitude: j.lat, longitude: j.lng } }
@@ -60,15 +81,12 @@ export function LeadPreviewDrawer({ previewId, onClose }: Props) {
           }
         })
         .catch((e: unknown) => {
-          if (cancelled) return;
+          if (ac.signal.aborted) return;
           setError(e instanceof Error ? e.message : "Unbekannter Fehler");
         })
         .finally(() => {
-          if (!cancelled && !opts?.silent) setLoading(false);
+          if (!ac.signal.aborted && !opts?.silent) setLoading(false);
         });
-      return () => {
-        cancelled = true;
-      };
     },
     [],
   );
@@ -79,39 +97,123 @@ export function LeadPreviewDrawer({ previewId, onClose }: Props) {
     if (!previewId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
-
       setError(null);
       return;
     }
-    const cancel = loadBundle(previewId);
-    return cancel;
+    // Sobald ein neuer Lead reinkommt, ist ein gerade laufender Close abgebrochen.
+    setClosing(false);
+    loadBundle(previewId);
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [previewId, loadBundle]);
+
+  // Wenn der Drawer offen ist, Nachbarn idle prefetchen — Prev/Next fuehlen
+  // sich dann instant an.
+  useEffect(() => {
+    if (!previewId || siblingIds.length === 0) return;
+    prefetchNeighbors(siblingIds, previewId, "leads", 2);
+  }, [previewId, siblingIds]);
 
   const handleRefresh = useCallback(() => {
     if (previewId) loadBundle(previewId, { silent: true });
     router.refresh();
   }, [previewId, loadBundle, router]);
 
-  const open = previewId !== null;
+  // Snappy Close: Slide-Animation startet sofort durch local-state Flip.
+  // Erst nach Animationsende rufen wir onClose() — das aktualisiert die URL.
+  const handleClose = useCallback(() => {
+    if (closing) return;
+    abortRef.current?.abort();
+    setClosing(true);
+    setTimeout(() => {
+      setClosing(false);
+      onClose();
+    }, SLIDE_OUT_MS);
+  }, [closing, onClose]);
+
+  // Prev/Next-Navigation
+  const idx = previewId ? siblingIds.indexOf(previewId) : -1;
+  const prevId = idx > 0 ? siblingIds[idx - 1] : null;
+  const nextId = idx >= 0 && idx < siblingIds.length - 1 ? siblingIds[idx + 1] : null;
+
+  const goTo = useCallback(
+    (id: string) => {
+      router.push(`${basePath}?preview=${id}`, { scroll: false });
+    },
+    [router, basePath],
+  );
+
+  // Keyboard-Shortcuts ←/→ wenn der Drawer offen ist und der Fokus nicht in
+  // einem Input liegt.
+  useEffect(() => {
+    if (!previewId || closing) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.key === "ArrowLeft" && prevId) {
+        e.preventDefault();
+        goTo(prevId);
+      } else if (e.key === "ArrowRight" && nextId) {
+        e.preventDefault();
+        goTo(nextId);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewId, prevId, nextId, goTo, closing]);
+
+  const open = previewId !== null && !closing;
   const title = data?.lead.company_name ?? (loading ? "Lade…" : "Vorschau");
+  const counter = idx >= 0 && siblingIds.length > 0 ? `${idx + 1}/${siblingIds.length}` : null;
 
   return (
     <Drawer
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       storageKey="preview-drawer-width"
       defaultWidth={880}
       title={<span className="truncate">{title}</span>}
       headerExtras={
-        previewId ? (
-          <Link
-            href={`/leads/${previewId}`}
-            title="In Vollansicht öffnen"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </Link>
-        ) : null
+        <>
+          {siblingIds.length > 1 && (
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => prevId && goTo(prevId)}
+                disabled={!prevId}
+                aria-label="Vorheriger Lead"
+                title="Vorheriger Lead (←)"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {counter && (
+                <span className="px-1 text-xs tabular-nums text-gray-500 dark:text-gray-400">{counter}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => nextId && goTo(nextId)}
+                disabled={!nextId}
+                aria-label="Naechster Lead"
+                title="Naechster Lead (→)"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-30 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+          {previewId && (
+            <Link
+              href={`/leads/${previewId}`}
+              title="In Vollansicht öffnen"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </Link>
+          )}
+        </>
       }
     >
       <div className="p-4">
@@ -131,7 +233,7 @@ export function LeadPreviewDrawer({ previewId, onClose }: Props) {
               latestEnrichment={data.latestEnrichment}
               customStatuses={data.customStatuses}
               hq={data.hq}
-              onBack={onClose}
+              onBack={handleClose}
               backLabel="Schließen"
               extraRightColumn={
                 <LeadScreenshotCardClient
