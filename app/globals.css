@@ -78,3 +78,21 @@ html {
 .lesson-content img { border-radius: 0.5em; max-width: 100%; height: auto; margin: 0.8em 0; }
 .lesson-content hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5em 0; }
 .dark .lesson-content hr { border-top-color: #2c2c2e; }
+
+/* Tiptap-Placeholder sichtbar machen — sonst ist der Editor optisch leer. */
+.lesson-content p.is-editor-empty:first-child::before,
+.lesson-content h1.is-editor-empty:first-child::before,
+.lesson-content h2.is-editor-empty:first-child::before,
+.lesson-content h3.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.dark .lesson-content p.is-editor-empty:first-child::before,
+.dark .lesson-content h1.is-editor-empty:first-child::before,
+.dark .lesson-content h2.is-editor-empty:first-child::before,
+.dark .lesson-content h3.is-editor-empty:first-child::before {
+  color: #6b7280;
+}
