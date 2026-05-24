@@ -481,4 +481,7 @@ export interface CancelRule {
   is_active: boolean;
   created_by: string | null;
   created_at: string;
+  /** Optionaler normalisierter Code; bei Match wird er auf den Lead propagiert
+   * und vom Lern-Cron zum Erkennen von Override-Mustern genutzt. */
+  reason_code: string | null;
 }

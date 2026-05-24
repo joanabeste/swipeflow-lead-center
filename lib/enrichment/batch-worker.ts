@@ -173,7 +173,7 @@ export async function processEnrichmentJob(jobId: string): Promise<void> {
         cancelRules as CancelRule[],
         "import",
       );
-      if (preCheck.cancelled) {
+      if (preCheck.cancelled && preCheck.reasons.length > 0) {
         const reason = preCheck.reasons.map((r) => r.reason).join("; ");
         await db
           .from("leads")

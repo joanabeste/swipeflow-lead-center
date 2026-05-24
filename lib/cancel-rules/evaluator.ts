@@ -2,7 +2,25 @@ import type { CancelRule, CancelRuleCategory } from "@/lib/types";
 
 export interface CancelCheckResult {
   cancelled: boolean;
-  reasons: { ruleId: string; ruleName: string; reason: string }[];
+  reasons: { ruleId: string; ruleName: string; reason: string; reasonCode: string }[];
+}
+
+/** Fallback-Heuristik wenn an der Rule kein expliziter reason_code haengt.
+ * Damit bekommen auch alte Rules ohne migrierte Codes ein normalisiertes Signal,
+ * das der Lern-Cron aggregieren kann. */
+function deriveReasonCode(field: string, operator: string, value: string): string {
+  const f = field.toLowerCase();
+  if (f.includes("job_postings_count") || f.includes("jobs")) return "no_jobs";
+  if (f.includes("legal_form")) return "legal_form_mismatch";
+  if (f.includes("company_size")) return "size_mismatch";
+  if (f.includes("industry")) return "industry_mismatch";
+  if (f.includes("blacklist") || (f === "company_name" && (operator === "in_list" || operator === "contains"))) {
+    return "blacklist";
+  }
+  if (f.includes("contacts_count") || f.includes("contact")) return "no_contact";
+  if (f.includes("website") || f.includes("domain")) return "website_issue";
+  if (value && value.length > 0) return `custom:${f}`;
+  return "rule_match";
 }
 
 /**
@@ -33,6 +51,7 @@ export function evaluateCancelRules(
         ruleId: rule.id,
         ruleName: rule.name,
         reason: `Regel "${rule.name}": ${rule.field} ${operatorLabel(rule.operator)} "${rule.value}"`,
+        reasonCode: rule.reason_code ?? deriveReasonCode(rule.field, rule.operator, rule.value),
       });
     }
   }

@@ -32,6 +32,12 @@ export interface EnrichmentResult {
     zip: string | null;
     city: string | null;
     state: string | null;
+    /** Wie sicher ist die Adresse als Ganzes?
+     *  "high":   vollstaendig im Impressum/Kontakt-Seite gefunden (Strasse+Hausnr+PLZ+Ort).
+     *  "medium": Teile aus Impressum, Rest aus Kontaktseite oder aehnlicher Quelle.
+     *  "low":    irgendwo geraten/inferiert (Domain, Slogan, Bilder, Footer ohne PLZ).
+     *  null:     keine Adresse gefunden. */
+    address_confidence?: "high" | "medium" | "low" | null;
     legal_form: string | null;
     register_id: string | null;
   };
@@ -70,6 +76,7 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
       subFields.push('"zip":""');
       subFields.push('"city":""');
       subFields.push('"state":""');
+      subFields.push('"address_confidence":""');
     }
     if (includeField("legal_form")) subFields.push('"legal_form":""');
     if (includeField("register_id")) subFields.push('"register_id":""');
@@ -93,7 +100,13 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
     hints.push("Firmenstammdaten bevorzugt aus Impressum.");
     if (includeField("legal_form")) hints.push("legal_form: z.B. 'GmbH', 'AG', 'UG', 'GbR', 'e.K.'.");
     if (includeField("register_id")) hints.push("register_id: z.B. 'HRB 12345 Amtsgericht München'.");
-    if (includeField("address")) hints.push("street: inkl. Hausnummer. zip: 5-stellig. state: Bundesland (z.B. 'Bayern').");
+    if (includeField("address")) hints.push(
+      "Adresse: street inkl. Hausnummer, zip 5-stellig, state als Bundesland (z.B. 'Bayern'). " +
+      "address_confidence: 'high' NUR wenn die komplette Adresse (Strasse+Hausnr+PLZ+Ort) verbatim im Impressum oder auf einer Kontakt-Seite steht. " +
+      "'medium' wenn nur Teile aus Impressum und der Rest aus einer anderen Quelle stammen. " +
+      "'low' wenn irgendetwas aus Domain, Footer ohne PLZ, Bildern oder Branchen-Slogans abgeleitet wurde. " +
+      "Im Zweifel lieber 'low' und alle Adress-Felder auf null.",
+    );
     if (includeField("phone")) hints.push("company_phone: +49-Format.");
     if (allowlist && allowlist.length > 0) {
       hints.push(`FOKUS: Suche gezielt nur nach ${allowlist.join(", ")}. Ignoriere andere Firmendaten.`);

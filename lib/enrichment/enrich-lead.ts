@@ -9,6 +9,7 @@ import { getWebdevScoringConfig } from "./webdev-scoring";
 import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { guessSalutation } from "@/lib/contacts/salutation-from-name";
+import { buildFactorSnapshot, type FactorSnapshot } from "./quality-score";
 import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
@@ -105,10 +106,14 @@ export async function enrichLead(
 
   const enrichmentId = enrichment?.id;
 
-  // Lead-Status auf enrichment_pending setzen
+  // Lead-Status auf enrichment_pending setzen + Versuchs-Counter
   await db
     .from("leads")
-    .update({ status: "enrichment_pending", updated_at: new Date().toISOString() })
+    .update({
+      status: "enrichment_pending",
+      enrichment_attempt_count: (lead.enrichment_attempt_count ?? 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", leadId);
 
   try {
@@ -122,7 +127,7 @@ export async function enrichLead(
         ? { ...webdevScoring, screenshot_visual_analysis: true }
         : webdevScoring;
       websiteAnalysis = await analyzeWebsite(websiteOrDomain, effectiveScoring, leadId);
-      // Ergebnisse im Lead speichern
+      // Ergebnisse im Lead speichern — inkl. neuer Qualitaets-Felder
       await db.from("leads").update({
         has_ssl: websiteAnalysis.hasSsl,
         is_mobile_friendly: websiteAnalysis.isMobileFriendly,
@@ -132,6 +137,25 @@ export async function enrichLead(
         website_issues: websiteAnalysis.issues,
         website_screenshot_path: websiteAnalysis.screenshotPath,
         website_screenshot_taken_at: websiteAnalysis.screenshotTakenAt,
+        website_status_code: websiteAnalysis.statusCode,
+        website_final_url: websiteAnalysis.finalUrl,
+        website_html_size_bytes: websiteAnalysis.htmlSizeBytes,
+        website_page_title: websiteAnalysis.pageTitle,
+        website_meta_description: websiteAnalysis.metaDescription,
+        website_language: websiteAnalysis.language,
+        website_has_impressum: websiteAnalysis.hasImpressum,
+        website_has_privacy: websiteAnalysis.hasPrivacy,
+        website_has_contact_form: websiteAnalysis.hasContactForm,
+        website_image_count: websiteAnalysis.imageCount,
+        website_internal_link_count: websiteAnalysis.internalLinkCount,
+        website_external_link_count: websiteAnalysis.externalLinkCount,
+        website_design_score: websiteAnalysis.designScore,
+        website_visual_issues: websiteAnalysis.visualIssues,
+        social_linkedin_url: websiteAnalysis.socialLinks.linkedin,
+        social_xing_url: websiteAnalysis.socialLinks.xing,
+        social_facebook_url: websiteAnalysis.socialLinks.facebook,
+        social_instagram_url: websiteAnalysis.socialLinks.instagram,
+        social_youtube_url: websiteAnalysis.socialLinks.youtube,
       }).eq("id", leadId);
     }
 
@@ -151,9 +175,13 @@ export async function enrichLead(
     // 2. LLM-Extraktion (Kontakte + Firmendaten)
     const result = await extractFromPages(lead.company_name, pages, config);
 
-    // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur KI-Ergebnisse, keine Import-Daten
+    // 3. Alte Enrichment-Daten löschen (Re-Enrichment) — nur KI-Ergebnisse, keine Import-Daten.
+    // NUR Enrichment-Kontakte loeschen. Manuelle (via UI) und BA-Importierte bleiben.
     if (config.contacts_management || config.contacts_hr || config.contacts_all) {
-      await db.from("lead_contacts").delete().eq("lead_id", leadId);
+      await db.from("lead_contacts")
+        .delete()
+        .eq("lead_id", leadId)
+        .eq("source", "enrichment");
     }
     if (config.job_postings) {
       // NUR Enrichment-Jobs löschen. BA-Import- und manuelle Jobs bleiben erhalten!
@@ -175,6 +203,7 @@ export async function enrichLead(
           phone: c.phone,
           salutation: c.salutation ?? guessSalutation({ name: c.name, email: c.email }),
           source_url: c.source_url,
+          source: "enrichment" as const,
         })),
       );
     }
@@ -233,10 +262,19 @@ export async function enrichLead(
     if (isFieldAllowed("phone")) fillIfEmpty("phone", ai.company_phone);
     if (isFieldAllowed("email")) fillIfEmpty("email", ai.company_email);
     if (isFieldAllowed("address")) {
-      fillIfEmpty("street", ai.street);
-      fillIfEmpty("zip", ai.zip);
-      fillIfEmpty("city", ai.city);
-      fillIfEmpty("state", ai.state);
+      // Adresse nur uebernehmen, wenn die KI sich sicher ist. 'medium'/'low' verwerfen
+      // wir lieber als falsche Daten zu schreiben (s. Geocoding-Wache in lib/geo/geocode.ts).
+      const conf = ai.address_confidence ?? null;
+      if (conf === "high") {
+        fillIfEmpty("street", ai.street);
+        fillIfEmpty("zip", ai.zip);
+        fillIfEmpty("city", ai.city);
+        fillIfEmpty("state", ai.state);
+      } else if (ai.street || ai.zip || ai.city || ai.state) {
+        console.warn(
+          `[enrich-lead] Adresse fuer Lead ${leadId} ignoriert (confidence=${conf ?? "null"})`,
+        );
+      }
     }
     if (isFieldAllowed("legal_form")) fillIfEmpty("legal_form", ai.legal_form);
     if (isFieldAllowed("register_id")) fillIfEmpty("register_id", ai.register_id);
@@ -259,29 +297,51 @@ export async function enrichLead(
     // Auto-Qualifizierung nur für Leads, die noch nicht im CRM sind.
     // Bereits qualified/exported-Leads werden vom Re-Enrich nur datenseitig
     // aktualisiert, ihr Status bleibt unverändert.
+    //
+    // Wir tracken hier zusaetzlich die Kriterien, die in die Entscheidung
+    // eingeflossen sind — landet im Faktor-Snapshot und ist Grundlage fuers
+    // passive Lernen.
+    const criteriaMet: Record<string, boolean | null> = {};
+    let decisionReasonCode: string | null = null;
+    let decisionReasonText: string | null = null;
+    let scoringConfigSnapshot: Record<string, unknown> = {};
+
     if (keepCurrentStatus) {
-      // skip — Status bleibt wie er war
+      decisionReasonCode = "kept_current_status";
+      decisionReasonText = `Status ${lead.status} bleibt erhalten (Re-Enrich auf CRM-Lead)`;
     } else if (serviceMode === "webdev") {
-      // Webdev: Qualifiziert wenn Kontakt da + genügend Issues laut Scoring-Schwellwert
       const hasContact = result.contacts.some((c) => !!c.email || !!c.phone);
       const minIssues = webdevScoring?.min_issues_to_qualify ?? 1;
       const issueCount = websiteAnalysis?.issues.length ?? 0;
+      criteriaMet.has_contact = hasContact;
+      criteriaMet.enough_issues = issueCount >= minIssues;
+      scoringConfigSnapshot = { ...webdevScoring };
       if (hasContact && issueCount >= minIssues) {
         leadUpdates.status = "qualified";
+        decisionReasonCode = "passed_webdev";
+        decisionReasonText = `${issueCount} Website-Probleme >= ${minIssues} und Kontakt mit Email/Phone vorhanden`;
+      } else {
+        decisionReasonCode = !hasContact ? "no_reachable_contact" : "not_enough_issues";
+        decisionReasonText = !hasContact
+          ? "Kein Kontakt mit Email oder Telefon"
+          : `Nur ${issueCount} Website-Probleme (Schwelle ${minIssues})`;
       }
     } else {
-      // Recruiting: Qualifiziert wenn Scoring-Kriterien UND Pflichtfelder erfüllt
       const scoring = await getRecruitingScoringConfig();
+      scoringConfigSnapshot = { ...scoring };
 
       const hasContactWithEmail = result.contacts.some((c) => !!c.email);
       const hasAnyContact = result.contacts.length > 0;
       const hasHrContact = result.contacts.some((c) => isHrContact(c.role));
-      // BA-importierte Stellen mitzählen — LLM-Treffer allein wäre zu eng.
       const jobsCount = totalJobs;
 
       const contactOk = scoring.require_contact_email ? hasContactWithEmail : hasAnyContact;
       const hrOk = !scoring.require_hr_contact || hasHrContact;
       const jobsOk = jobsCount >= scoring.min_job_postings_to_qualify;
+
+      criteriaMet.contact = contactOk;
+      criteriaMet.hr_contact = scoring.require_hr_contact ? hasHrContact : null;
+      criteriaMet.jobs = jobsOk;
 
       if (contactOk && hrOk && jobsOk) {
         const { data: defaultProfile } = await db
@@ -293,14 +353,32 @@ export async function enrichLead(
 
         const updatedLead = { ...lead, ...leadUpdates };
         const requiredFields = (defaultProfile?.required_fields as string[]) ?? ["company_name"];
-
         const allFieldsFilled = requiredFields.every((field) => {
           const val = updatedLead[field];
           return val != null && String(val).trim() !== "";
         });
+        criteriaMet.required_fields = allFieldsFilled;
 
         if (allFieldsFilled) {
           leadUpdates.status = "qualified";
+          decisionReasonCode = "passed_recruiting";
+          decisionReasonText = "Alle Recruiting-Kriterien erfuellt";
+        } else {
+          decisionReasonCode = "required_fields_missing";
+          decisionReasonText = `Pflichtfelder fehlen: ${requiredFields.filter((f) => !updatedLead[f]).join(", ")}`;
+        }
+      } else {
+        if (!jobsOk) {
+          decisionReasonCode = "no_jobs";
+          decisionReasonText = `${jobsCount} Stellen (Schwelle ${scoring.min_job_postings_to_qualify})`;
+        } else if (!hrOk) {
+          decisionReasonCode = "no_hr_contact";
+          decisionReasonText = "Kein HR-Kontakt gefunden";
+        } else {
+          decisionReasonCode = scoring.require_contact_email ? "no_contact_email" : "no_contact";
+          decisionReasonText = scoring.require_contact_email
+            ? "Kein Kontakt mit Email-Adresse"
+            : "Keine Kontakte gefunden";
         }
       }
     }
@@ -327,6 +405,8 @@ export async function enrichLead(
     // 8. Post-Enrichment Cancel-Rules prüfen (nur im passenden Modus)
     let cancelled = false;
     let cancelReason: string | undefined;
+    let cancelReasonCode: string | null = null;
+    let cancelRuleId: string | null = null;
 
     // Leads die bereits qualified/exported sind, dürfen durch ein Re-Enrichment
     // NICHT mehr automatisch gecancelt werden — sie sind im CRM und werden dort
@@ -365,16 +445,19 @@ export async function enrichLead(
         "enrichment",
       );
 
-      if (cancelResult.cancelled) {
+      if (cancelResult.cancelled && cancelResult.reasons.length > 0) {
         cancelled = true;
         cancelReason = cancelResult.reasons.map((r) => r.reason).join("; ");
+        cancelReasonCode = cancelResult.reasons[0].reasonCode;
+        cancelRuleId = cancelResult.reasons[0].ruleId;
 
         await db
           .from("leads")
           .update({
             status: "cancelled",
             cancel_reason: cancelReason,
-            cancel_rule_id: cancelResult.reasons[0].ruleId,
+            cancel_reason_code: cancelReasonCode,
+            cancel_rule_id: cancelRuleId,
             updated_at: new Date().toISOString(),
           })
           .eq("id", leadId);
@@ -382,7 +465,80 @@ export async function enrichLead(
     }
     } // Ende: serviceMode === "recruiting" Cancel-Rules Block
 
-    // 9. Audit-Log
+    // 9. Faktor-Snapshot + Initial-Quality-Score berechnen.
+    // Das ist der zentrale Lernsignal-Container: alle bewertungsrelevanten
+    // Faktoren mit Punktwert + Begruendung, plus die getroffene Entscheidung.
+    const finalOutcome: FactorSnapshot["decision"]["outcome"] = cancelled
+      ? "cancelled"
+      : leadUpdates.status === "qualified"
+        ? "qualified"
+        : "enriched";
+
+    const factorSnapshot = buildFactorSnapshot(
+      {
+        serviceMode,
+        lead: {
+          company_name: lead.company_name,
+          industry: lead.industry,
+          company_size: (leadUpdates.company_size as string | undefined) ?? lead.company_size,
+          legal_form: (leadUpdates.legal_form as string | undefined) ?? lead.legal_form,
+          register_id: (leadUpdates.register_id as string | undefined) ?? lead.register_id,
+          city: (leadUpdates.city as string | undefined) ?? lead.city,
+          zip: (leadUpdates.zip as string | undefined) ?? lead.zip,
+          street: (leadUpdates.street as string | undefined) ?? lead.street,
+          phone: (leadUpdates.phone as string | undefined) ?? lead.phone,
+          email: (leadUpdates.email as string | undefined) ?? lead.email,
+        },
+        website: websiteAnalysis,
+        contacts: result.contacts.map((c) => ({
+          name: c.name,
+          role: c.role,
+          email: c.email,
+          phone: c.phone,
+        })),
+        contactsTotal: totalContacts,
+        jobs: result.job_postings.map((j) => ({
+          title: j.title,
+          url: j.url,
+          posted_date: j.posted_date,
+        })),
+        jobsTotal: totalJobs,
+        companyDetails: result.additional_info,
+        websiteVerified: true,
+      },
+      {
+        outcome: finalOutcome,
+        reason_code: cancelled ? cancelReasonCode : decisionReasonCode,
+        reason_text: cancelled ? (cancelReason ?? null) : decisionReasonText,
+        criteria_met: criteriaMet,
+        rule_id: cancelRuleId,
+        config_snapshot: scoringConfigSnapshot,
+      },
+    );
+
+    // Snapshot in lead_enrichments + Score auf Lead persistieren.
+    // Lead-Update separat, weil der Cancel-Rules-Pfad oben schon ein Update
+    // gemacht hat — wir koennen diesen Score nicht in leadUpdates packen, weil
+    // er erst NACH der Cancel-Pruefung berechenbar ist.
+    await db
+      .from("lead_enrichments")
+      .update({
+        factor_snapshot: factorSnapshot as unknown as Record<string, unknown>,
+      })
+      .eq("id", enrichmentId);
+
+    await db
+      .from("leads")
+      .update({
+        initial_quality_score: factorSnapshot.score,
+        quality_factors: factorSnapshot.factors as unknown as Record<string, unknown>,
+        email_domain_matches_website: factorSnapshot.company.email_domain_match,
+        successful_enrichment_count: (lead.successful_enrichment_count ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", leadId);
+
+    // 10. Audit-Log
     await logAudit({
       userId,
       action: cancelled ? "lead.enriched_and_cancelled" : "lead.enriched",
@@ -398,6 +554,9 @@ export async function enrichLead(
         config,
         cancelled,
         cancel_reason: cancelReason,
+        cancel_reason_code: cancelReasonCode,
+        initial_quality_score: factorSnapshot.score,
+        decision_reason_code: decisionReasonCode,
       },
     });
 

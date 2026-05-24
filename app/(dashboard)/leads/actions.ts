@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import type { Lead, ServiceMode } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
+import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 
 export async function updateLead(
   leadId: string,
@@ -53,6 +54,22 @@ export async function updateLead(
 
   if (error) return { error: error.message };
 
+  // Override-Tracking: wurde Status manuell aus cancelled/filtered geholt?
+  if (typeof updates.status === "string" && updates.status !== oldLead.status) {
+    await logCancelOverrides(
+      db,
+      [{
+        id: leadId,
+        status: oldLead.status,
+        cancel_reason: oldLead.cancel_reason ?? null,
+        cancel_reason_code: (oldLead as { cancel_reason_code?: string | null }).cancel_reason_code ?? null,
+        cancel_rule_id: oldLead.cancel_rule_id ?? null,
+      }],
+      updates.status,
+      user?.id ?? null,
+    );
+  }
+
   // Änderungen protokollieren
   const changes: { lead_id: string; user_id: string | null; field_name: string; old_value: string | null; new_value: string | null }[] = [];
   for (const [key, newValue] of Object.entries(updates)) {
@@ -81,6 +98,7 @@ export async function updateLead(
   });
 
   revalidatePath("/leads");
+  revalidatePath("/crm");
   revalidatePath(`/crm/${leadId}`);
   return { success: true };
 }
@@ -315,12 +333,25 @@ export async function bulkUpdateStatus(
     payload.crm_status_id = resolvedCrmStatusId;
   }
 
+  // Lead-Stand VOR dem Update einfrieren — wird gleich fuer Override-Logging
+  // benoetigt. Wenn das ueberspringen wir bei Performance-Druck (hier nicht
+  // relevant: Bulk-Updates sind selten und liefern uns wertvolles Lernsignal).
+  const previousStates = await captureLeadStates(db, leadIds);
+
   const { error } = await db
     .from("leads")
     .update(payload)
     .in("id", leadIds);
 
   if (error) return { error: error.message };
+
+  // Override-Log: cancelled/filtered -> aktiv = passives Signal "Cancel war falsch"
+  const overrideCount = await logCancelOverrides(
+    db,
+    previousStates,
+    status,
+    user?.id ?? null,
+  );
 
   await logAudit({
     userId: user?.id ?? null,
@@ -329,6 +360,7 @@ export async function bulkUpdateStatus(
     details: {
       lead_count: leadIds.length,
       new_status: status,
+      override_count: overrideCount,
       ...(resolvedCrmStatusId !== undefined ? { crm_status_id: resolvedCrmStatusId } : {}),
     },
   });

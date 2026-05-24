@@ -332,7 +332,7 @@ export function CrmManager({
       </div>
 
       {showNewLead && (
-        <NewLeadModal statuses={statuses} onClose={() => setShowNewLead(false)} />
+        <NewLeadModal statuses={verticalStatuses} onClose={() => setShowNewLead(false)} />
       )}
 
       {/* Aktive Spalten-Filter */}

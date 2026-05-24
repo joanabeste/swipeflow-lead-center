@@ -450,6 +450,7 @@ async function upsertContactsAndJobs(
         phone: c.phone,
         salutation: c.salutation,
         source_url: c.source_url,
+        source: "ba_import" as const,
       }));
 
     if (toInsert.length > 0) {
