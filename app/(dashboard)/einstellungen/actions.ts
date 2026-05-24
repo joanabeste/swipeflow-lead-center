@@ -431,7 +431,7 @@ export async function acceptScoringSuggestion(
     );
     if (error) return { error: error.message };
   } else {
-    return { error: `Unbekannte Vertikale: ${suggestion.vertical}` };
+    return { error: `Unbekannter Bereich: ${suggestion.vertical}` };
   }
 
   const { error: markError } = await db
