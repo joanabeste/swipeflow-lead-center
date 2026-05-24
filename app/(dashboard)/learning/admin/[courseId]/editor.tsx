@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Settings } from "lucide-react";
+import { Settings, Video, FileText, Paperclip, Layers } from "lucide-react";
 import type {
   LearningCourse,
   LearningLesson,
@@ -132,6 +132,13 @@ export function CourseEditor(props: Props) {
   );
 }
 
+const LESSON_TYPE_CARDS = [
+  { icon: Video, title: "Video", body: "YouTube oder Loom einbetten — perfekt für Walk-throughs." },
+  { icon: FileText, title: "Text", body: "Schreibe mit Slash-Commands wie in Notion." },
+  { icon: Paperclip, title: "Datei", body: "PDFs, Slides oder Worksheets als Download." },
+  { icon: Layers, title: "Gemischt", body: "Video + Text + Datei in einer Lektion kombinieren." },
+];
+
 function CourseEmptyState({
   courseId,
   courseTitle,
@@ -145,22 +152,36 @@ function CourseEmptyState({
 }) {
   return (
     <div className="flex h-full items-center justify-center p-8">
-      <div className="max-w-md space-y-4 text-center">
-        <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-300">{courseTitle}</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {hasModules
-            ? "Wähle links eine Lektion zum Bearbeiten."
-            : "Dieser Kurs hat noch keine Inhalte. Lege links das erste Modul an — oder lass dir von KI eine Outline vorschlagen."}
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {!hasModules && (
-            <button
-              onClick={onOpenAI}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark"
+      <div className="max-w-2xl space-y-6 text-center">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-semibold text-gray-700 dark:text-gray-300">{courseTitle}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {hasModules
+              ? "Wähle links eine Lektion zum Bearbeiten — oder lege eine neue an."
+              : "Dieser Kurs hat noch keine Inhalte. Lege links das erste Modul an — oder lass dir eine Outline vorschlagen."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {LESSON_TYPE_CARDS.map(({ icon: Icon, title, body }) => (
+            <div
+              key={title}
+              className="rounded-xl border border-gray-200 bg-gray-50/50 p-3 text-left dark:border-[#2c2c2e]/50 dark:bg-white/[0.02]"
             >
-              ✨ Outline mit KI generieren
-            </button>
-          )}
+              <Icon className="h-4 w-4 text-primary" />
+              <p className="mt-2 text-xs font-semibold text-gray-700 dark:text-gray-200">{title}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">{body}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <button
+            onClick={onOpenAI}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark"
+          >
+            ✨ {hasModules ? "Outline mit KI erweitern" : "Outline mit KI generieren"}
+          </button>
           <Link
             href={`/learning/admin/${courseId}/einstellungen`}
             className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-[#2c2c2e]/50 dark:text-gray-300 dark:hover:bg-white/5"
@@ -168,6 +189,13 @@ function CourseEmptyState({
             <Settings className="h-3.5 w-3.5" /> Kurs-Einstellungen
           </Link>
         </div>
+
+        {hasModules && (
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">
+            Tipp: Mit <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px] dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">↑</kbd> /
+            {" "}<kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 text-[10px] dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">↓</kbd> durch Lektionen springen.
+          </p>
+        )}
       </div>
     </div>
   );

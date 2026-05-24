@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   DndContext,
   type DragEndEvent,
@@ -29,13 +29,11 @@ import {
   Trash2,
   Copy,
   Pencil,
-  CheckCircle2,
-  Circle,
-  FileText,
 } from "lucide-react";
 import { useDialog } from "@/components/dialog";
 import { useToastContext } from "../../toast-provider";
 import type { LearningLesson, LearningModule } from "@/lib/types";
+import { LessonTypeIcon } from "./lesson-type-icon";
 import {
   createLesson,
   createModule,
@@ -90,6 +88,39 @@ export function CurriculumTree({
     });
   }
 
+  // ↑/↓ Tastatur-Navigation durch alle sichtbaren Lessons (Modul-Reihenfolge, sort_order).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const t = e.target as HTMLElement | null;
+      if (t) {
+        const tag = t.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (t.isContentEditable) return;
+      }
+      const ordered: string[] = [];
+      const sortedMods = [...modules].sort((a, b) => a.sort_order - b.sort_order);
+      for (const m of sortedMods) {
+        if (collapsed.has(m.id)) continue;
+        const mLessons = lessons
+          .filter((l) => l.module_id === m.id)
+          .sort((a, b) => a.sort_order - b.sort_order);
+        for (const l of mLessons) ordered.push(l.id);
+      }
+      if (ordered.length === 0) return;
+      e.preventDefault();
+      const idx = activeLessonId ? ordered.indexOf(activeLessonId) : -1;
+      const dir = e.key === "ArrowDown" ? 1 : -1;
+      const nextIdx = idx === -1
+        ? (dir === 1 ? 0 : ordered.length - 1)
+        : Math.min(ordered.length - 1, Math.max(0, idx + dir));
+      const nextId = ordered[nextIdx];
+      if (nextId && nextId !== activeLessonId) onSelectLesson(nextId);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [modules, lessons, collapsed, activeLessonId, onSelectLesson]);
+
   // ─── Module-Aktionen ──────────────────────────────────────────────
   async function handleAddModule(title: string) {
     if (!title.trim()) return;
@@ -99,16 +130,12 @@ export function CurriculumTree({
     addToast("Modul angelegt", "success");
   }
 
-  async function handleRenameModule(m: LearningModule) {
-    const next = await dialog.prompt({
-      title: "Modul umbenennen",
-      defaultValue: m.title,
-      placeholder: "Modul-Titel",
-    });
-    if (next === null || next.trim() === m.title) return;
-    const optimistic = modules.map((x) => (x.id === m.id ? { ...x, title: next.trim() } : x));
+  async function handleRenameModule(m: LearningModule, nextTitle: string) {
+    const trimmed = nextTitle.trim();
+    if (!trimmed || trimmed === m.title) return;
+    const optimistic = modules.map((x) => (x.id === m.id ? { ...x, title: trimmed } : x));
     onChange({ modules: optimistic, lessons });
-    const res = await updateModule({ id: m.id, title: next });
+    const res = await updateModule({ id: m.id, title: trimmed });
     if (res.error) addToast(res.error, "error");
   }
 
@@ -289,9 +316,10 @@ export function CurriculumTree({
                     lessons={moduleLessons}
                     collapsed={isCollapsed}
                     activeLessonId={activeLessonId}
+                    dragging={draggedId !== null}
                     onToggle={() => toggleCollapse(m.id)}
                     onSelectLesson={onSelectLesson}
-                    onRename={() => handleRenameModule(m)}
+                    onRenameInline={(title) => handleRenameModule(m, title)}
                     onDuplicate={() => handleDuplicateModule(m)}
                     onDelete={() => handleDeleteModule(m)}
                     onAddLessonClick={() => setAddingLessonIn(m.id)}
@@ -355,9 +383,10 @@ function ModuleRow({
   lessons,
   collapsed,
   activeLessonId,
+  dragging,
   onToggle,
   onSelectLesson,
-  onRename,
+  onRenameInline,
   onDuplicate,
   onDelete,
   onAddLessonClick,
@@ -371,9 +400,10 @@ function ModuleRow({
   lessons: LearningLesson[];
   collapsed: boolean;
   activeLessonId: string | null;
+  dragging: boolean;
   onToggle: () => void;
   onSelectLesson: (id: string) => void;
-  onRename: () => void;
+  onRenameInline: (title: string) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onAddLessonClick: () => void;
@@ -388,25 +418,71 @@ function ModuleRow({
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
   const lessonIds = lessons.map((l) => `lesson:${l.id}`);
+  const [editing, setEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(m.title);
+
+  function commitRename() {
+    setEditing(false);
+    const trimmed = titleDraft.trim();
+    if (trimmed && trimmed !== m.title) onRenameInline(trimmed);
+    else setTitleDraft(m.title);
+  }
 
   return (
     <div ref={setNodeRef} style={style} className={isDragging ? "opacity-30" : ""}>
       <div className="group flex items-center gap-1 rounded-lg px-1 py-1 hover:bg-gray-50 dark:hover:bg-white/5">
-        <button {...attributes} {...listeners} className="cursor-grab text-gray-300 active:cursor-grabbing">
+        <button {...attributes} {...listeners} className="cursor-grab text-gray-400 opacity-40 transition group-hover:opacity-100 active:cursor-grabbing">
           <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <button onClick={onToggle} className="text-gray-400">
+        <button onClick={onToggle} className="text-gray-400" aria-label={collapsed ? "Aufklappen" : "Zuklappen"}>
           {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </button>
-        <button
-          onDoubleClick={onRename}
-          className="flex-1 truncate text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300"
-        >
-          {m.title}
-        </button>
+        {editing ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitRename();
+              } else if (e.key === "Escape") {
+                setTitleDraft(m.title);
+                setEditing(false);
+              }
+            }}
+            className="flex-1 rounded-md border border-primary/40 bg-white px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wider text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary dark:bg-[#1c1c1e] dark:text-gray-200"
+          />
+        ) : (
+          <button
+            onDoubleClick={() => {
+              setTitleDraft(m.title);
+              setEditing(true);
+            }}
+            className="flex-1 truncate text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:text-gray-300"
+            title="Doppelklick zum Umbenennen"
+          >
+            {m.title}
+          </button>
+        )}
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => {
+              setTitleDraft(m.title);
+              setEditing(true);
+            }}
+            className="rounded p-0.5 text-gray-400 opacity-50 transition hover:bg-gray-100 hover:text-primary group-hover:opacity-100 dark:hover:bg-white/5"
+            aria-label="Modul umbenennen"
+            title="Umbenennen"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
         <ContextMenu
           items={[
-            { label: "Umbenennen", icon: Pencil, onClick: onRename },
+            { label: "Umbenennen", icon: Pencil, onClick: () => { setTitleDraft(m.title); setEditing(true); } },
             { label: "Duplizieren", icon: Copy, onClick: onDuplicate },
             { label: "Löschen", icon: Trash2, onClick: onDelete, danger: true },
           ]}
@@ -416,7 +492,7 @@ function ModuleRow({
       {!collapsed && (
         <SortableContext items={lessonIds} strategy={verticalListSortingStrategy}>
           <div className="ml-3 mt-0.5 space-y-0.5">
-            <ModuleDropzone moduleId={m.id} empty={lessons.length === 0} />
+            <ModuleDropzone moduleId={m.id} empty={lessons.length === 0} dragging={dragging} />
             {lessons.map((l) => (
               <LessonRow
                 key={l.id}
@@ -446,19 +522,26 @@ function ModuleRow({
   );
 }
 
-function ModuleDropzone({ moduleId, empty }: { moduleId: string; empty: boolean }) {
+function ModuleDropzone({ moduleId, empty, dragging }: { moduleId: string; empty: boolean; dragging: boolean }) {
   // Eigener droppable Marker als „leeres Modul aufnehmen". Bei Lesson-Liste werden
   // sonst die Lesson-Items selbst die Drop-Targets — fuer ein leeres Modul brauchen
-  // wir aber etwas. Wir nutzen useSortable mit id=`module-dropzone:<moduleId>`.
+  // wir aber etwas.
   const { setNodeRef, isOver } = useSortable({ id: `module-dropzone:${moduleId}` });
   if (!empty) {
     return <div ref={setNodeRef} className={isOver ? "h-1 rounded-full bg-primary/40" : "h-0"} />;
   }
+  // Leeres Modul: idle nur dezente Andeutung, prominenter Indikator erst beim
+  // aktiven Drag.
+  if (!dragging) {
+    return <div ref={setNodeRef} className="px-2 py-0.5 text-[10px] italic text-gray-300 dark:text-gray-600">leer</div>;
+  }
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-lg border border-dashed px-3 py-2 text-center text-xs text-gray-400 transition ${
-        isOver ? "border-primary bg-primary/5 text-primary" : "border-gray-200 dark:border-[#2c2c2e]/50"
+      className={`rounded-lg border border-dashed px-3 py-2 text-center text-xs transition ${
+        isOver
+          ? "border-primary bg-primary/5 text-primary"
+          : "border-gray-200 text-gray-400 dark:border-[#2c2c2e]/50"
       }`}
     >
       Lektion hierher ziehen
@@ -485,7 +568,6 @@ function LessonRow({
     id: `lesson:${lesson.id}`,
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
-  const completeness = computeCompleteness(lesson);
 
   return (
     <div
@@ -495,8 +577,8 @@ function LessonRow({
         active ? "bg-primary/10" : "hover:bg-gray-50 dark:hover:bg-white/5"
       }`}
     >
-      <button {...attributes} {...listeners} className="cursor-grab pl-1 text-gray-300 opacity-0 group-hover:opacity-100 active:cursor-grabbing">
-        <GripVertical className="h-3 w-3" />
+      <button {...attributes} {...listeners} className="cursor-grab pl-1 text-gray-400 opacity-30 transition group-hover:opacity-100 active:cursor-grabbing">
+        <GripVertical className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={onSelect}
@@ -504,9 +586,8 @@ function LessonRow({
           active ? "text-primary" : "text-gray-700 dark:text-gray-300"
         }`}
       >
-        <FileText className="h-3 w-3 shrink-0 text-gray-400" />
+        <LessonTypeIcon type={lesson.lesson_type} className={`h-3.5 w-3.5 shrink-0 ${active ? "text-primary" : "text-gray-400"}`} />
         <span className="line-clamp-1 flex-1">{lesson.title}</span>
-        <CompletenessDot kind={completeness} />
       </button>
       <ContextMenu
         items={[
@@ -516,21 +597,6 @@ function LessonRow({
       />
     </div>
   );
-}
-
-function computeCompleteness(l: LearningLesson): "empty" | "draft" | "ready" {
-  if (!l.title.trim()) return "empty";
-  const hasContent = (l.content_html ?? "").replace(/<[^>]*>/g, "").trim().length > 0
-    || (l.content_html ?? "").includes("data-loom-id")
-    || (l.content_html ?? "").includes("data-youtube-video")
-    || (l.content_html ?? "").includes("data-learning-file");
-  return hasContent ? "ready" : "draft";
-}
-
-function CompletenessDot({ kind }: { kind: "empty" | "draft" | "ready" }) {
-  if (kind === "ready") return <CheckCircle2 className="h-3 w-3 text-green-500" />;
-  if (kind === "draft") return <Circle className="h-3 w-3 text-yellow-500" />;
-  return <Circle className="h-3 w-3 text-gray-300 dark:text-gray-600" />;
 }
 
 // ─── Inline Add ───────────────────────────────────────────────────
