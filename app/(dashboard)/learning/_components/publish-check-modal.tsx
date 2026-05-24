@@ -54,18 +54,14 @@ export function evaluateCourse(
       items.push({ label: `Lektion ohne Titel (#${l.id.slice(0, 6)})`, status: "blocker" });
       continue;
     }
-    if (l.lesson_type === "video" && !l.video_url) {
-      items.push({ label: `„${l.title}": Video-URL fehlt`, status: "blocker" });
-    } else if (l.lesson_type === "text" && !(l.content_html ?? "").trim()) {
-      items.push({ label: `„${l.title}": Inhalt fehlt`, status: "blocker" });
-    } else if (l.lesson_type === "file" && attachmentCount(l.id) === 0) {
-      items.push({ label: `„${l.title}": keine Datei`, status: "blocker" });
-    } else if (
-      l.lesson_type === "mixed" &&
-      !l.video_url &&
-      !(l.content_html ?? "").trim() &&
-      attachmentCount(l.id) === 0
-    ) {
+    const hasText = (l.content_html ?? "").replace(/<[^>]*>/g, "").trim().length > 0;
+    const hasEmbed =
+      (l.content_html ?? "").includes("data-loom-id") ||
+      (l.content_html ?? "").includes("data-youtube-video") ||
+      (l.content_html ?? "").includes("data-learning-file");
+    const hasLegacyVideo = Boolean(l.video_url);
+    const hasLegacyFile = attachmentCount(l.id) > 0;
+    if (!hasText && !hasEmbed && !hasLegacyVideo && !hasLegacyFile) {
       items.push({ label: `„${l.title}": komplett leer`, status: "blocker" });
     }
   }

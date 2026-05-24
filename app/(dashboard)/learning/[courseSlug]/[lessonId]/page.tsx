@@ -87,11 +87,16 @@ export default async function LessonViewerPage({
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{lesson.title}</h1>
         </header>
 
-        {lesson.video_url && <VideoEmbed url={lesson.video_url} />}
+        {/* Legacy: alte Lessons mit separatem video_url-Feld (Pre-V3). */}
+        {lesson.video_url && !lesson.content_html?.includes("data-loom-id") && !lesson.content_html?.includes("data-youtube-video") && (
+          <VideoEmbed url={lesson.video_url} />
+        )}
 
-        {lesson.content_html && <LessonRenderer html={lesson.content_html} />}
+        {lesson.content_html && <LessonRenderer html={lesson.content_html} attachments={attachments} />}
 
-        {attachments.length > 0 && (
+        {/* Legacy-Materialien-Liste: nur zeigen wenn Anhänge NICHT inline im content_html
+            referenziert werden (alte V2-Lessons). */}
+        {attachments.length > 0 && !(lesson.content_html ?? "").includes("data-learning-file") && (
           <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
               <Paperclip className="h-4 w-4" /> Materialien

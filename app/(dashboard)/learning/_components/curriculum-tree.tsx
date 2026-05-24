@@ -31,10 +31,11 @@ import {
   Pencil,
   CheckCircle2,
   Circle,
+  FileText,
 } from "lucide-react";
 import { useDialog } from "@/components/dialog";
 import { useToastContext } from "../../toast-provider";
-import type { LearningLesson, LearningLessonType, LearningModule } from "@/lib/types";
+import type { LearningLesson, LearningModule } from "@/lib/types";
 import {
   createLesson,
   createModule,
@@ -47,7 +48,6 @@ import {
   updateLesson,
   updateModule,
 } from "../_actions/courses";
-import { LessonTypeIcon, LESSON_TYPE_LABELS } from "./lesson-type-icon";
 
 interface Props {
   courseId: string;
@@ -58,8 +58,6 @@ interface Props {
   onSelectCourse: () => void;
   onChange: (next: { modules: LearningModule[]; lessons: LearningLesson[] }) => void;
 }
-
-const LESSON_TYPES: LearningLessonType[] = ["video", "text", "file", "mixed"];
 
 export function CurriculumTree({
   courseId,
@@ -138,9 +136,9 @@ export function CurriculumTree({
   }
 
   // ─── Lesson-Aktionen ──────────────────────────────────────────────
-  async function handleAddLesson(moduleId: string, title: string, type: LearningLessonType) {
+  async function handleAddLesson(moduleId: string, title: string) {
     if (!title.trim()) return;
-    const res = await createLesson({ module_id: moduleId, title, lesson_type: type });
+    const res = await createLesson({ module_id: moduleId, title });
     if ("error" in res) return addToast(res.error, "error");
     onChange({ modules, lessons: [...lessons, res.lesson] });
     onSelectLesson(res.lesson.id);
@@ -299,7 +297,7 @@ export function CurriculumTree({
                     onAddLessonClick={() => setAddingLessonIn(m.id)}
                     addingLesson={addingLessonIn === m.id}
                     onAddLessonCancel={() => setAddingLessonIn(null)}
-                    onAddLesson={(title, type) => handleAddLesson(m.id, title, type)}
+                    onAddLesson={(title) => handleAddLesson(m.id, title)}
                     onDeleteLesson={handleDeleteLesson}
                     onDuplicateLesson={handleDuplicateLesson}
                   />
@@ -381,7 +379,7 @@ function ModuleRow({
   onAddLessonClick: () => void;
   addingLesson: boolean;
   onAddLessonCancel: () => void;
-  onAddLesson: (title: string, type: LearningLessonType) => void;
+  onAddLesson: (title: string) => void;
   onDeleteLesson: (l: LearningLesson) => void;
   onDuplicateLesson: (l: LearningLesson) => void;
 }) {
@@ -506,7 +504,7 @@ function LessonRow({
           active ? "text-primary" : "text-gray-700 dark:text-gray-300"
         }`}
       >
-        <LessonTypeIcon type={lesson.lesson_type} className="h-3 w-3 shrink-0 text-gray-400" />
+        <FileText className="h-3 w-3 shrink-0 text-gray-400" />
         <span className="line-clamp-1 flex-1">{lesson.title}</span>
         <CompletenessDot kind={completeness} />
       </button>
@@ -522,11 +520,11 @@ function LessonRow({
 
 function computeCompleteness(l: LearningLesson): "empty" | "draft" | "ready" {
   if (!l.title.trim()) return "empty";
-  if (l.lesson_type === "video" && !l.video_url) return "empty";
-  if (l.lesson_type === "text" && !l.content_html) return "empty";
-  if (l.lesson_type === "mixed" && !l.video_url && !l.content_html) return "draft";
-  // 'file' ist ready wenn Title ok — Anhang-Count laesst sich hier nicht pruefen
-  return "ready";
+  const hasContent = (l.content_html ?? "").replace(/<[^>]*>/g, "").trim().length > 0
+    || (l.content_html ?? "").includes("data-loom-id")
+    || (l.content_html ?? "").includes("data-youtube-video")
+    || (l.content_html ?? "").includes("data-learning-file");
+  return hasContent ? "ready" : "draft";
 }
 
 function CompletenessDot({ kind }: { kind: "empty" | "draft" | "ready" }) {
@@ -577,61 +575,30 @@ function AddLessonInline({
   onSubmit,
 }: {
   onCancel: () => void;
-  onSubmit: (title: string, type: LearningLessonType) => void;
+  onSubmit: (title: string) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<LearningLessonType>("mixed");
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        if (title.trim()) onSubmit(title.trim(), type);
+        if (title.trim()) onSubmit(title.trim());
       }}
-      className="my-1 space-y-1.5 rounded-lg border border-primary/40 bg-primary/5 p-2"
+      className="my-1"
     >
       <input
         autoFocus
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        onBlur={() => {
+          if (!title.trim()) onCancel();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Escape") onCancel();
         }}
-        placeholder="Lektions-Titel…"
-        className="w-full rounded border-0 bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary dark:bg-[#1c1c1e]"
+        placeholder="Lektions-Titel — Enter zum Anlegen"
+        className="w-full rounded-lg border border-primary/50 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary dark:bg-[#1c1c1e]"
       />
-      <div className="flex items-center gap-1">
-        {LESSON_TYPES.map((t) => (
-          <button
-            type="button"
-            key={t}
-            onClick={() => setType(t)}
-            className={`flex flex-1 items-center justify-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium transition ${
-              type === t
-                ? "bg-primary text-gray-900"
-                : "bg-white text-gray-500 hover:bg-gray-100 dark:bg-[#1c1c1e] dark:text-gray-400 dark:hover:bg-white/5"
-            }`}
-            title={LESSON_TYPE_LABELS[t]}
-          >
-            <LessonTypeIcon type={t} className="h-3 w-3" />
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center justify-end gap-1">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded px-2 py-1 text-[10px] text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
-        >
-          Abbrechen
-        </button>
-        <button
-          type="submit"
-          disabled={!title.trim()}
-          className="rounded bg-primary px-2 py-1 text-[10px] font-medium text-gray-900 disabled:opacity-50"
-        >
-          Anlegen
-        </button>
-      </div>
     </form>
   );
 }

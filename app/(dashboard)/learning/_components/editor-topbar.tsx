@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Eye, ChevronDown, Sliders, Sparkles } from "lucide-react";
+import { ChevronLeft, Eye, ChevronDown, Settings, Sparkles } from "lucide-react";
 import { useToastContext } from "../../toast-provider";
 import type { LearningCourse, LearningCourseStatus } from "@/lib/types";
 import { updateCourse } from "../_actions/courses";
@@ -14,7 +14,6 @@ interface Props {
   saveState: AutosaveResult | null;
   onTitleChange: (title: string) => void;
   onAttemptPublish: () => void;
-  onToggleSettings: () => void;
   onToggleAI: () => void;
 }
 
@@ -23,7 +22,6 @@ export function EditorTopBar({
   saveState,
   onTitleChange,
   onAttemptPublish,
-  onToggleSettings,
   onToggleAI,
 }: Props) {
   const { addToast } = useToastContext();
@@ -121,13 +119,13 @@ export function EditorTopBar({
         <Sparkles className="h-4 w-4" />
       </button>
 
-      <button
-        onClick={onToggleSettings}
-        className="rounded-lg border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e]/50 dark:text-gray-400 dark:hover:bg-white/5"
-        title="Settings-Panel"
+      <Link
+        href={`/learning/admin/${course.id}/einstellungen`}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e]/50 dark:text-gray-400 dark:hover:bg-white/5"
+        title="Kurs-Einstellungen"
       >
-        <Sliders className="h-4 w-4" />
-      </button>
+        <Settings className="h-3.5 w-3.5" /> Einstellungen
+      </Link>
     </header>
   );
 }
