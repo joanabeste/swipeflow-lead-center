@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AccountForm } from "./account-form";
 import { AvatarUpload } from "./avatar-upload";
-import { SalutationBackfillButton } from "./salutation-backfill-button";
 import { ResetDashboardButton } from "./reset-dashboard-button";
 import { ThemeToggle } from "../theme-toggle";
 
@@ -90,14 +89,6 @@ export default async function MeinKontoPage() {
         <h2 className="font-semibold">Wartung</h2>
 
         <div className="mt-4">
-          <p className="text-sm font-medium">Anrede aus Vornamen nachtragen</p>
-          <p className="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            Leitet fehlende Anreden (Herr/Frau) aus den Vornamen deiner Kontakte ab. Mehrdeutige Namen bleiben unverändert.
-          </p>
-          <SalutationBackfillButton />
-        </div>
-
-        <div className="mt-5 border-t border-gray-100 pt-5 dark:border-[#2c2c2e]">
           <p className="text-sm font-medium">Dashboard zurücksetzen</p>
           <p className="mb-2 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             Setzt dein Übersicht-Layout auf den aktuellen Default zurück (Widgets, Reihenfolge, Breiten). Sinnvoll, wenn wir das Default-Layout verbessert haben und du es übernehmen willst.
