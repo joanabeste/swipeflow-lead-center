@@ -54,15 +54,19 @@ export default async function KundenDetailPage({
                   <Globe className="h-3.5 w-3.5" />{customer.website.replace(/^https?:\/\//, "")}
                 </a>
               )}
-              {customer.email && (
-                <a href={`mailto:${customer.email}`} className="inline-flex items-center gap-1 hover:text-primary">
-                  <Mail className="h-3.5 w-3.5" />{customer.email}
-                </a>
-              )}
-              {customer.phone && (
-                <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1 hover:text-primary">
-                  <Phone className="h-3.5 w-3.5" />{customer.phone}
-                </a>
+              {(customer.email || customer.phone) && (
+                <span className="inline-flex items-center gap-2" title="Primärer Kontakt — pflegen im Tab Kontakte">
+                  {customer.email && (
+                    <a href={`mailto:${customer.email}`} className="inline-flex items-center gap-1 hover:text-primary">
+                      <Mail className="h-3.5 w-3.5" />{customer.email}
+                    </a>
+                  )}
+                  {customer.phone && (
+                    <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1 hover:text-primary">
+                      <Phone className="h-3.5 w-3.5" />{customer.phone}
+                    </a>
+                  )}
+                </span>
               )}
             </div>
           </div>
@@ -72,12 +76,9 @@ export default async function KundenDetailPage({
                 id: customer.id,
                 company_name: customer.company_name,
                 website: customer.website,
-                email: customer.email,
-                phone: customer.phone,
                 street: customer.street,
                 zip: customer.zip,
                 city: customer.city,
-                vertical: customer.vertical as "webdesign" | "recruiting" | "sonstiges" | null,
               }}
             />
             {customer.became_customer_at && (

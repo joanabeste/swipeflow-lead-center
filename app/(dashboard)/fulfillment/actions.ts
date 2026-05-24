@@ -41,6 +41,32 @@ export async function setLifecycleStage(leadId: string, stage: LifecycleStage): 
 
 // ─── Customer Contacts ──────────────────────────────────────────
 
+/**
+ * Spiegelt email/phone des primaeren Kontakts auf den Lead-Datensatz.
+ * Fallback: erster Kontakt mit Email/Phone, sonst null.
+ * Wird nach jedem Contact-Create/Update/Delete aufgerufen.
+ */
+async function syncLeadFromPrimaryContact(leadId: string): Promise<void> {
+  const db = createServiceClient();
+  const { data: contacts } = await db
+    .from("customer_contacts")
+    .select("email, phone, is_primary, created_at")
+    .eq("lead_id", leadId)
+    .order("is_primary", { ascending: false })
+    .order("created_at", { ascending: true });
+  const list = (contacts ?? []) as Array<{ email: string | null; phone: string | null; is_primary: boolean }>;
+  const primary = list.find((c) => c.is_primary);
+  const emailSource = primary?.email ? primary : list.find((c) => c.email);
+  const phoneSource = primary?.phone ? primary : list.find((c) => c.phone);
+  await db
+    .from("leads")
+    .update({
+      email: emailSource?.email ?? null,
+      phone: phoneSource?.phone ?? null,
+    })
+    .eq("id", leadId);
+}
+
 export async function createContact(input: {
   lead_id: string;
   first_name: string;
@@ -79,6 +105,7 @@ export async function createContact(input: {
     .select("id")
     .single();
   if (error) return { error: dbError("createContact", error) };
+  await syncLeadFromPrimaryContact(input.lead_id);
   await logAudit({ userId: uid, action: "customer.contact.create", entityType: "customer_contact", entityId: data.id });
   revalidatePath(`/fulfillment/kunden/${input.lead_id}`);
   return { success: true, data: { id: data.id } };
@@ -105,9 +132,11 @@ export async function updateContact(id: string, patch: Partial<{
   }
   const { error } = await db.from("customer_contacts").update(update).eq("id", id);
   if (error) return { error: dbError("updateContact", error) };
+  const { data: row } = await db.from("customer_contacts").select("lead_id").eq("id", id).maybeSingle();
+  if (row?.lead_id) await syncLeadFromPrimaryContact(row.lead_id as string);
   await logAudit({ userId: uid, action: "customer.contact.update", entityType: "customer_contact", entityId: id });
-  // Fallback: kein leadId bekannt → /fulfillment komplett revalidieren.
-  revalidatePath("/fulfillment");
+  if (row?.lead_id) revalidatePath(`/fulfillment/kunden/${row.lead_id}`);
+  else revalidatePath("/fulfillment");
   return { success: true };
 }
 
@@ -118,6 +147,7 @@ export async function deleteContact(id: string): Promise<Result> {
   const { data: existing } = await db.from("customer_contacts").select("lead_id").eq("id", id).single();
   const { error } = await db.from("customer_contacts").delete().eq("id", id);
   if (error) return { error: dbError("deleteContact", error) };
+  if (existing?.lead_id) await syncLeadFromPrimaryContact(existing.lead_id as string);
   await logAudit({ userId: uid, action: "customer.contact.delete", entityType: "customer_contact", entityId: id });
   if (existing?.lead_id) revalidatePath(`/fulfillment/kunden/${existing.lead_id}`);
   return { success: true };

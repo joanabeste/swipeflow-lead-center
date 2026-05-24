@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { Inbox, RefreshCw, Send, ChevronLeft, Paperclip } from "lucide-react";
 import type { ThreadRow, MessageRow } from "@/lib/email/data";
 import { syncMyMailbox, loadThreadMessages, markRead, sendReply, attachThreadToLead, sendNewMail, assignThreadToProject } from "../../../mail-actions";
@@ -20,9 +21,11 @@ export function MailsTab({
   defaultTo: string | null;
 }) {
   const { addToast } = useToastContext();
+  const searchParams = useSearchParams();
+  const initialSelectedId = searchParams.get("thread") ?? initialThreads[0]?.id ?? null;
   const [threads, setThreads] = useState<ThreadRow[]>(initialThreads);
   const [suggestions, setSuggestions] = useState<ThreadRow[]>(suggestedThreads);
-  const [selected, setSelected] = useState<string | null>(initialThreads[0]?.id ?? null);
+  const [selected, setSelected] = useState<string | null>(initialSelectedId);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [syncing, startSync] = useTransition();

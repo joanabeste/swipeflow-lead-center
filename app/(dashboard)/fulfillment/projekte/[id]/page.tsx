@@ -1,37 +1,52 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { loadProject, loadCustomer, loadCachedTasks, loadProjectNotes } from "@/lib/fulfillment/data";
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/fulfillment/types";
 import { formatDateDe } from "@/lib/zeit/format";
 import { ProjectStatusEditor } from "./_components/status-editor";
 import { TaskList } from "./_components/task-list";
 import { ProjectNotes } from "./_components/project-notes";
-import { ProjectMails } from "./_components/project-mails";
+import { ProjectMailsTab } from "./_components/project-mails-tab";
+import { ProjectTabSwitcher, type ProjectTab } from "./_components/project-tab-switcher";
 import { loadThreadsForProject } from "@/lib/email/data";
+
+function isTab(s: string | undefined): s is ProjectTab {
+  return s === "uebersicht" || s === "tasks" || s === "mails" || s === "notizen";
+}
 
 export default async function ProjektDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ closed?: string }>;
+  searchParams: Promise<{ tab?: string; closed?: string }>;
 }) {
   const { id } = await params;
   const sp = await searchParams;
+  const tab: ProjectTab = isTab(sp.tab) ? sp.tab : "uebersicht";
   const showClosed = sp.closed === "1";
 
   const project = await loadProject(id);
   if (!project) notFound();
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
-  const [customer, tasks, notes, threads] = await Promise.all([
-    loadCustomer(project.lead_id),
-    loadCachedTasks(id, showClosed),
-    loadProjectNotes(id),
-    loadThreadsForProject(id).catch(() => []),
-  ]);
+  const customer = await loadCustomer(project.lead_id);
+
+  // Default-To fuer Compose im Mails-Tab: primaerer Kontakt → erster Kontakt → Lead-Email.
+  let defaultTo: string | null = null;
+  if (tab === "mails") {
+    const db = createServiceClient();
+    const { data: contacts } = await db
+      .from("customer_contacts")
+      .select("email, is_primary")
+      .eq("lead_id", project.lead_id)
+      .order("is_primary", { ascending: false });
+    const primary = (contacts ?? []).find((c) => c.is_primary && c.email);
+    const any = (contacts ?? []).find((c) => c.email);
+    defaultTo = (primary?.email as string | null) ?? (any?.email as string | null) ?? (customer?.email as string | null) ?? null;
+  }
 
   return (
     <div className="space-y-6">
@@ -67,20 +82,59 @@ export default async function ProjektDetailPage({
         )}
       </header>
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Notizen</h2>
-        <ProjectNotes projectId={project.id} notes={notes} currentUserId={user?.id ?? null} />
-      </section>
+      <ProjectTabSwitcher current={tab} basePath={`/fulfillment/projekte/${id}`} />
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">E-Mails</h2>
-        <ProjectMails projectId={project.id} leadId={project.lead_id} threads={threads} />
-      </section>
+      {tab === "uebersicht" && await (async () => {
+        const [tasks, threadCount] = await Promise.all([
+          loadCachedTasks(id, false),
+          loadThreadsForProject(id).then((t) => t.length).catch(() => 0),
+        ]);
+        const openTasks = tasks.filter((t) => !t.closed).length;
+        return (
+          <section className="grid gap-3 sm:grid-cols-3">
+            <Stat label="Offene Tasks" value={String(openTasks)} href={`/fulfillment/projekte/${id}?tab=tasks`} />
+            <Stat label="E-Mail-Threads" value={String(threadCount)} href={`/fulfillment/projekte/${id}?tab=mails`} />
+            <Stat label="Status" value={PROJECT_STATUS_LABELS[project.status]} href={null} />
+          </section>
+        );
+      })()}
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">ClickUp-Tasks</h2>
-        <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} showClosed={showClosed} />
-      </section>
+      {tab === "tasks" && await (async () => {
+        const tasks = await loadCachedTasks(id, showClosed);
+        return (
+          <section>
+            <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} showClosed={showClosed} />
+          </section>
+        );
+      })()}
+
+      {tab === "mails" && await (async () => {
+        const threads = await loadThreadsForProject(id).catch(() => []);
+        return (
+          <section>
+            <ProjectMailsTab projectId={project.id} leadId={project.lead_id} initialThreads={threads} defaultTo={defaultTo} />
+          </section>
+        );
+      })()}
+
+      {tab === "notizen" && await (async () => {
+        const notes = await loadProjectNotes(id);
+        return (
+          <section>
+            <ProjectNotes projectId={project.id} notes={notes} currentUserId={user?.id ?? null} />
+          </section>
+        );
+      })()}
     </div>
   );
+}
+
+function Stat({ label, value, href }: { label: string; value: string; href: string | null }) {
+  const content = (
+    <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="mt-0.5 text-2xl font-semibold text-gray-900 dark:text-white">{value}</p>
+    </div>
+  );
+  return href ? <Link href={href}>{content}</Link> : content;
 }

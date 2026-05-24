@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Inbox } from "lucide-react";
 import { loadAllThreads } from "@/lib/email/data";
 import { createServiceClient } from "@/lib/supabase/server";
+import { InboxThreadRow } from "./_components/inbox-thread-row";
 
 type Filter = "all" | "unread" | "unassigned";
 
@@ -10,14 +11,15 @@ function isFilter(s: string | undefined): s is Filter {
 }
 
 const TABS: Array<{ id: Filter; label: string }> = [
-  { id: "all", label: "Alle" },
-  { id: "unread", label: "Ungelesen" },
   { id: "unassigned", label: "Nicht zugeordnet" },
+  { id: "unread", label: "Ungelesen" },
+  { id: "all", label: "Alle" },
 ];
 
 export default async function InboxPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const sp = await searchParams;
-  const filter: Filter = isFilter(sp.filter) ? sp.filter : "all";
+  // Default: "unassigned" — Triage-Workflow zuerst.
+  const filter: Filter = isFilter(sp.filter) ? sp.filter : "unassigned";
   let threads: Awaited<ReturnType<typeof loadAllThreads>> = [];
   let loadError: string | null = null;
   try {
@@ -26,14 +28,22 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     loadError = e instanceof Error ? e.message : "Threads konnten nicht geladen werden.";
   }
 
-  // Lead-Namen für zugeordnete Threads laden.
+  // Lead-Namen für zugeordnete Threads + komplette Kunden-Liste fuer Inline-Assign.
+  const db = createServiceClient();
   const leadIds = [...new Set(threads.map((t) => t.lead_id).filter(Boolean) as string[])];
   const leadMap = new Map<string, string>();
   if (leadIds.length > 0) {
-    const db = createServiceClient();
     const { data } = await db.from("leads").select("id, company_name").in("id", leadIds);
     for (const l of data ?? []) leadMap.set(l.id as string, (l.company_name as string) ?? "");
   }
+  const { data: customerRows } = await db
+    .from("leads")
+    .select("id, company_name")
+    .eq("lifecycle_stage", "customer")
+    .order("company_name", { ascending: true });
+  const customers = ((customerRows ?? []) as Array<{ id: string; company_name: string | null }>)
+    .filter((c) => c.company_name)
+    .map((c) => ({ id: c.id, company_name: c.company_name as string }));
 
   return (
     <div className="space-y-4">
@@ -42,7 +52,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         <h1 className="text-2xl font-semibold">Mail-Inbox</h1>
       </div>
       <p className="text-sm text-gray-500">
-        Alle E-Mail-Konversationen über alle Kunden. Threads ohne Zuordnung kannst du in der Kunden-Detailseite manuell zuweisen.
+        Triage-Ansicht: ordne neue Threads einem Kunden zu. Lesen/Antworten passiert dann im Kunden-Mails-Tab.
       </p>
 
       <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#161618]">
@@ -67,47 +77,32 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         </div>
       ) : threads.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-gray-200 p-12 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">
-          Keine Threads gefunden. Richte dein IMAP-Konto unter{" "}
-          <Link href="/einstellungen/email" className="text-primary hover:underline">Einstellungen → E-Mail</Link>{" "}
-          ein und starte den Sync.
+          {filter === "unassigned"
+            ? "Keine nicht-zugeordneten Threads. Alles im Griff."
+            : (
+              <>
+                Keine Threads gefunden. Richte dein IMAP-Konto unter{" "}
+                <Link href="/einstellungen/email" className="text-primary hover:underline">Einstellungen → E-Mail</Link>{" "}
+                ein und starte den Sync.
+              </>
+            )}
         </p>
       ) : (
         <ul className="space-y-1">
-          {threads.map((t) => {
-            const subject = t.subject_normalized || "(ohne Betreff)";
-            const leadName = t.lead_id ? leadMap.get(t.lead_id) : null;
-            return (
-              <li key={t.id}>
-                <Link
-                  href={t.lead_id ? `/fulfillment/kunden/${t.lead_id}?tab=mails` : `/fulfillment/inbox/${t.id}`}
-                  className="block rounded-xl border border-gray-200 bg-white p-3 hover:bg-gray-50 dark:border-[#2c2c2e]/50 dark:bg-[#161618] dark:hover:bg-white/5"
-                >
-                  <div className="flex items-baseline justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline gap-2">
-                        <p className="line-clamp-1 text-sm font-medium">{subject}</p>
-                        {t.unread_count > 0 && (
-                          <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold text-gray-900">{t.unread_count}</span>
-                        )}
-                        {!t.lead_id && (
-                          <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                            nicht zugeordnet
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 line-clamp-1 text-[11px] text-gray-500">
-                        {leadName && <span className="text-primary">{leadName} · </span>}
-                        {(t.participants ?? []).slice(0, 3).join(", ")}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[11px] text-gray-400">
-                      {t.last_message_at && new Date(t.last_message_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" })}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
+          {threads.map((t) => (
+            <li key={t.id}>
+              <InboxThreadRow
+                threadId={t.id}
+                leadId={t.lead_id}
+                subject={t.subject_normalized || "(ohne Betreff)"}
+                unreadCount={t.unread_count}
+                leadName={t.lead_id ? leadMap.get(t.lead_id) ?? null : null}
+                participants={t.participants ?? []}
+                lastMessageAt={t.last_message_at}
+                customers={customers}
+              />
+            </li>
+          ))}
         </ul>
       )}
     </div>

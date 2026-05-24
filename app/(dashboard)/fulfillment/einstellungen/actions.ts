@@ -271,6 +271,13 @@ export async function syncClickupFulfillmentSpace(
         .eq("clickup_folder_id", folder.id);
       if (existingProjects && existingProjects.length > 0) {
         report.projectsExisting += existingProjects.length;
+        // Bei genau 1 Folder-Liste und 1 Projekt: clickup_list_id sicherheitshalber auffuellen,
+        // falls es vorher fehlte. Bei mehrdeutigen Folders dies dem User ueberlassen.
+        const lists = folder.lists ?? [];
+        if (existingProjects.length === 1 && lists.length === 1 && !existingProjects[0].clickup_list_id) {
+          await db.from("projects").update({ clickup_list_id: lists[0].id }).eq("id", existingProjects[0].id as string);
+          (existingProjects[0] as { clickup_list_id: string | null }).clickup_list_id = lists[0].id;
+        }
         for (const p of existingProjects) {
           const listId = p.clickup_list_id as string | null;
           if (listId) {
@@ -316,26 +323,47 @@ export async function syncClickupFulfillmentSpace(
         report.customersCreated++;
       }
 
-      // 4) Pro Liste: Projekt anlegen + folder/list-ID setzen + Tasks pullen.
+      // 4) Pro Liste: Projekt finden (per Name) oder anlegen, dann folder/list-ID setzen + Tasks pullen.
       for (const list of lists) {
         const projectName = lists.length === 1 ? folderName : list.name;
-        const pr = await createProject({ lead_id: leadId, name: projectName });
-        if ("error" in pr) {
-          report.errors.push({ folder: folder.name, error: pr.error });
-          continue;
+
+        // Existierendes Projekt mit gleichem Namen unter diesem Kunden suchen — verhindert Duplikate
+        // und linkt bestehende manuelle Projekte mit ihrer ClickUp-Liste.
+        const { data: existingByName } = await db
+          .from("projects")
+          .select("id, clickup_list_id")
+          .eq("lead_id", leadId)
+          .ilike("name", projectName)
+          .limit(1)
+          .maybeSingle();
+
+        let projectId: string;
+        if (existingByName) {
+          projectId = existingByName.id as string;
+          report.projectsExisting++;
+        } else {
+          const pr = await createProject({ lead_id: leadId, name: projectName });
+          if ("error" in pr) {
+            report.errors.push({ folder: folder.name, error: pr.error });
+            continue;
+          }
+          projectId = pr.data!.id;
+          report.projectsCreated++;
         }
-        const projectId = pr.data!.id;
 
         const { error: updErr } = await db
           .from("projects")
           .update({ clickup_folder_id: folder.id, clickup_list_id: list.id })
           .eq("id", projectId);
         if (updErr) {
-          // 23505 = unique violation: parallel-Race auf gleiche folder-id.
+          // 23505 = unique violation auf folder_id (gleicher Folder schon auf anderem Projekt).
           if (updErr.code === "23505") {
-            report.projectsExisting++;
-            // Bereits angelegtes Projekt loeschen, weil unsere Insert-Konkurrenz schon eins hat.
-            await db.from("projects").delete().eq("id", projectId);
+            // Nur loeschen, wenn wir das Projekt soeben angelegt haben — bestehende nicht anfassen.
+            if (!existingByName) {
+              await db.from("projects").delete().eq("id", projectId);
+              report.projectsCreated--;
+              report.projectsExisting++;
+            }
             continue;
           }
           if (/column.*clickup_folder_id.*does not exist/i.test(updErr.message)) {
@@ -344,7 +372,6 @@ export async function syncClickupFulfillmentSpace(
           report.errors.push({ folder: folder.name, error: `Folder-ID-Update: ${updErr.message}` });
           continue;
         }
-        report.projectsCreated++;
 
         try {
           const sr = await syncListIntoCache(projectId, list.id);

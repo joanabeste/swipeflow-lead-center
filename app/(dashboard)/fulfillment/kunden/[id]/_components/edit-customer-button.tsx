@@ -10,12 +10,9 @@ interface CustomerInitial {
   id: string;
   company_name: string;
   website: string | null;
-  email: string | null;
-  phone: string | null;
   street: string | null;
   zip: string | null;
   city: string | null;
-  vertical: "webdesign" | "recruiting" | "sonstiges" | null;
 }
 
 export function EditCustomerButton({ customer }: { customer: CustomerInitial }) {
@@ -41,12 +38,9 @@ function EditCustomerDialog({ customer, onClose }: { customer: CustomerInitial; 
   const [form, setForm] = useState<UpdateCustomerInput>({
     company_name: customer.company_name,
     website: customer.website,
-    email: customer.email,
-    phone: customer.phone,
     street: customer.street,
     zip: customer.zip,
     city: customer.city,
-    vertical: customer.vertical,
   });
 
   function set<K extends keyof UpdateCustomerInput>(key: K, value: UpdateCustomerInput[K]) {
@@ -86,22 +80,8 @@ function EditCustomerDialog({ customer, onClose }: { customer: CustomerInitial; 
           <Field label="Firmenname *" className="sm:col-span-2">
             <input value={form.company_name ?? ""} onChange={(e) => set("company_name", e.target.value)} required className={input} />
           </Field>
-          <Field label="Website">
+          <Field label="Website" className="sm:col-span-2">
             <input value={form.website ?? ""} onChange={(e) => set("website", e.target.value)} placeholder="https://…" className={input} />
-          </Field>
-          <Field label="Bereich">
-            <select value={form.vertical ?? ""} onChange={(e) => set("vertical", (e.target.value || null) as UpdateCustomerInput["vertical"])} className={input}>
-              <option value="">—</option>
-              <option value="webdesign">Webdesign</option>
-              <option value="recruiting">Recruiting</option>
-              <option value="sonstiges">Sonstiges</option>
-            </select>
-          </Field>
-          <Field label="E-Mail">
-            <input type="email" value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} className={input} />
-          </Field>
-          <Field label="Telefon">
-            <input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} className={input} />
           </Field>
           <Field label="Straße" className="sm:col-span-2">
             <input value={form.street ?? ""} onChange={(e) => set("street", e.target.value)} className={input} />
