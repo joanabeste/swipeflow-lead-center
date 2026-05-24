@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { listAllProjects } from "@/lib/fulfillment/data";
 import { ClickupTokenForm } from "./_components/clickup-token-form";
 import { ClickupListMapper } from "./_components/clickup-list-mapper";
+import { ClickupReverseSync } from "./_components/clickup-reverse-sync";
 
 export default async function FulfillmentEinstellungenPage() {
   await requireAdmin();
@@ -37,7 +38,14 @@ export default async function FulfillmentEinstellungenPage() {
 
       {isConfigured && (
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Projekte ⇄ ClickUp-Listen</h2>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Folders aus ClickUp importieren</h2>
+          <ClickupReverseSync />
+        </section>
+      )}
+
+      {isConfigured && (
+        <section>
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Projekte ⇄ ClickUp-Listen (manuell)</h2>
           <ClickupListMapper projects={projects} />
         </section>
       )}

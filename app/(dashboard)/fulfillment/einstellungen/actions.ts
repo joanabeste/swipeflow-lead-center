@@ -7,6 +7,8 @@ import { clickupFetch, invalidateClickupConfigCache, ClickupError } from "@/lib/
 import { syncListIntoCache, listSpaces, listFolders, listFolderlessLists } from "@/lib/clickup/tasks";
 import { logAudit } from "@/lib/audit-log";
 import { checkAdmin } from "@/lib/auth";
+import { createCustomer } from "../kunden/actions";
+import { createProject } from "../actions";
 
 type Result<T = unknown> = { success: true; data?: T } | { error: string };
 
@@ -166,6 +168,216 @@ export async function mapListToProject(projectId: string, listId: string | null)
   revalidatePath(`/fulfillment/projekte/${projectId}`);
   revalidatePath("/fulfillment/einstellungen");
   return { success: true };
+}
+
+// ─── ClickUp → Lead-Center Reverse-Sync ─────────────────────────────────
+
+export interface ClickupSyncReport {
+  spaceName: string;
+  foldersScanned: number;
+  customersCreated: number;
+  customersReused: number;
+  projectsCreated: number;
+  projectsExisting: number;
+  tasksSynced: number;
+  skipped: Array<{ folder: string; reason: string }>;
+  errors: Array<{ folder: string; error: string }>;
+}
+
+/**
+ * Importiert/aktualisiert alle Folders aus einem ClickUp-Space als
+ * (Kunde + Projekt + Task-Cache). Idempotent ueber projects.clickup_folder_id.
+ *
+ * Pro Folder:
+ * - Bereits gesynct (folder-id matcht ein Projekt) → nur Task-Cache refresh
+ * - Neu: Customer per company_name-Lookup wiederverwenden ODER anlegen,
+ *   dann pro Liste im Folder ein Projekt anlegen + List-ID setzen + Tasks pullen
+ */
+export async function syncClickupFulfillmentSpace(
+  spaceName = "Fulfillment",
+): Promise<{ data: ClickupSyncReport } | { error: string }> {
+  const u = await requireAdminId();
+  if (typeof u !== "string") return u;
+
+  const db = createServiceClient();
+
+  // Workspace-ID besorgen (Self-Heal falls null — analog loadClickupLists).
+  const { data: integration } = await db
+    .from("app_integrations")
+    .select("workspace_id")
+    .eq("provider", "clickup")
+    .maybeSingle();
+  if (!integration) return { error: "ClickUp ist nicht verbunden." };
+  let workspaceId = (integration.workspace_id as string | null) ?? null;
+  if (!workspaceId) {
+    try {
+      const res = await clickupFetch<{ teams: Array<{ id: string; name: string }> }>("/team");
+      const first = res.teams?.[0];
+      if (!first) return { error: "Token funktioniert, aber kein ClickUp-Workspace gefunden." };
+      workspaceId = first.id;
+      await db
+        .from("app_integrations")
+        .update({ workspace_id: first.id, workspace_name: first.name, updated_at: new Date().toISOString() })
+        .eq("provider", "clickup");
+      invalidateClickupConfigCache();
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "Workspace-Lookup fehlgeschlagen." };
+    }
+  }
+
+  // Space per case-insensitive Name finden.
+  let spaceId: string;
+  let resolvedSpaceName: string;
+  try {
+    const spaces = (await listSpaces(workspaceId)).spaces ?? [];
+    const wanted = spaceName.trim().toLowerCase();
+    const space = spaces.find((s) => s.name.trim().toLowerCase() === wanted);
+    if (!space) {
+      return { error: `Space "${spaceName}" nicht gefunden. Verfuegbar: ${spaces.map((s) => s.name).join(", ")}` };
+    }
+    spaceId = space.id;
+    resolvedSpaceName = space.name;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Spaces konnten nicht geladen werden." };
+  }
+
+  const report: ClickupSyncReport = {
+    spaceName: resolvedSpaceName,
+    foldersScanned: 0,
+    customersCreated: 0,
+    customersReused: 0,
+    projectsCreated: 0,
+    projectsExisting: 0,
+    tasksSynced: 0,
+    skipped: [],
+    errors: [],
+  };
+
+  let folders: Array<{ id: string; name: string; lists: Array<{ id: string; name: string }> }>;
+  try {
+    const res = await listFolders(spaceId);
+    folders = res.folders ?? [];
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Folders konnten nicht geladen werden." };
+  }
+
+  for (const folder of folders) {
+    report.foldersScanned++;
+    try {
+      // 1) Folder schon bekannt? → nur Tasks refreshen.
+      const { data: existingProjects } = await db
+        .from("projects")
+        .select("id, clickup_list_id")
+        .eq("clickup_folder_id", folder.id);
+      if (existingProjects && existingProjects.length > 0) {
+        report.projectsExisting += existingProjects.length;
+        for (const p of existingProjects) {
+          const listId = p.clickup_list_id as string | null;
+          if (listId) {
+            try {
+              const res = await syncListIntoCache(p.id as string, listId);
+              report.tasksSynced += res.count;
+            } catch (e) {
+              report.errors.push({ folder: folder.name, error: e instanceof Error ? e.message : "Task-Sync fehlgeschlagen." });
+            }
+          }
+        }
+        continue;
+      }
+
+      // 2) Folder ohne Listen → skip.
+      const lists = folder.lists ?? [];
+      if (lists.length === 0) {
+        report.skipped.push({ folder: folder.name, reason: "Keine Listen im Folder." });
+        continue;
+      }
+
+      // 3) Customer-Lookup (case-insensitive auf company_name + lifecycle='customer').
+      const folderName = folder.name.trim();
+      const { data: existingCustomer } = await db
+        .from("leads")
+        .select("id")
+        .ilike("company_name", folderName)
+        .eq("lifecycle_stage", "customer")
+        .limit(1)
+        .maybeSingle();
+
+      let leadId: string;
+      if (existingCustomer) {
+        leadId = existingCustomer.id as string;
+        report.customersReused++;
+      } else {
+        const cr = await createCustomer({ company_name: folderName });
+        if ("error" in cr) {
+          report.errors.push({ folder: folder.name, error: cr.error });
+          continue;
+        }
+        leadId = cr.id;
+        report.customersCreated++;
+      }
+
+      // 4) Pro Liste: Projekt anlegen + folder/list-ID setzen + Tasks pullen.
+      for (const list of lists) {
+        const projectName = lists.length === 1 ? folderName : list.name;
+        const pr = await createProject({ lead_id: leadId, name: projectName });
+        if ("error" in pr) {
+          report.errors.push({ folder: folder.name, error: pr.error });
+          continue;
+        }
+        const projectId = pr.data!.id;
+
+        const { error: updErr } = await db
+          .from("projects")
+          .update({ clickup_folder_id: folder.id, clickup_list_id: list.id })
+          .eq("id", projectId);
+        if (updErr) {
+          // 23505 = unique violation: parallel-Race auf gleiche folder-id.
+          if (updErr.code === "23505") {
+            report.projectsExisting++;
+            // Bereits angelegtes Projekt loeschen, weil unsere Insert-Konkurrenz schon eins hat.
+            await db.from("projects").delete().eq("id", projectId);
+            continue;
+          }
+          if (/column.*clickup_folder_id.*does not exist/i.test(updErr.message)) {
+            return { error: "Spalte projects.clickup_folder_id fehlt — Migration 086 muss ausgefuehrt werden." };
+          }
+          report.errors.push({ folder: folder.name, error: `Folder-ID-Update: ${updErr.message}` });
+          continue;
+        }
+        report.projectsCreated++;
+
+        try {
+          const sr = await syncListIntoCache(projectId, list.id);
+          report.tasksSynced += sr.count;
+        } catch (e) {
+          report.errors.push({ folder: folder.name, error: e instanceof Error ? e.message : "Task-Sync fehlgeschlagen." });
+        }
+      }
+    } catch (e) {
+      report.errors.push({ folder: folder.name, error: e instanceof Error ? e.message : "Unbekannter Fehler." });
+    }
+  }
+
+  await logAudit({
+    userId: u,
+    action: "clickup.fulfillment.reverse_sync",
+    details: {
+      space: resolvedSpaceName,
+      scanned: report.foldersScanned,
+      customers_created: report.customersCreated,
+      customers_reused: report.customersReused,
+      projects_created: report.projectsCreated,
+      projects_existing: report.projectsExisting,
+      tasks_synced: report.tasksSynced,
+      skipped: report.skipped.length,
+      errors: report.errors.length,
+    },
+  });
+
+  revalidatePath("/fulfillment/einstellungen");
+  revalidatePath("/fulfillment/kunden");
+  revalidatePath("/fulfillment/projekte");
+  return { data: report };
 }
 
 export async function disconnectClickup(): Promise<Result> {

@@ -11,15 +11,24 @@ import { ProjectNotes } from "./_components/project-notes";
 import { ProjectMails } from "./_components/project-mails";
 import { loadThreadsForProject } from "@/lib/email/data";
 
-export default async function ProjektDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProjektDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ closed?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
+  const showClosed = sp.closed === "1";
+
   const project = await loadProject(id);
   if (!project) notFound();
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   const [customer, tasks, notes, threads] = await Promise.all([
     loadCustomer(project.lead_id),
-    loadCachedTasks(id),
+    loadCachedTasks(id, showClosed),
     loadProjectNotes(id),
     loadThreadsForProject(id).catch(() => []),
   ]);
@@ -70,7 +79,7 @@ export default async function ProjektDetailPage({ params }: { params: Promise<{ 
 
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">ClickUp-Tasks</h2>
-        <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} />
+        <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} showClosed={showClosed} />
       </section>
     </div>
   );

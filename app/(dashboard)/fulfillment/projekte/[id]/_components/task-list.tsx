@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RefreshCw, Plus, ExternalLink, Check } from "lucide-react";
 import type { ClickupTaskCached } from "@/lib/fulfillment/types";
 import { useToastContext } from "../../../../toast-provider";
@@ -12,15 +13,20 @@ export function TaskList({
   projectId,
   clickupListId,
   initialTasks,
+  showClosed,
 }: {
   projectId: string;
   clickupListId: string | null;
   initialTasks: ClickupTaskCached[];
+  showClosed: boolean;
 }) {
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
   const [showAdd, setShowAdd] = useState(false);
   const [draft, setDraft] = useState({ name: "", description: "" });
+  const router = useRouter();
+  const pathname = usePathname();
+  const sp = useSearchParams();
 
   if (!clickupListId) {
     return (
@@ -61,10 +67,34 @@ export function TaskList({
     });
   }
 
+  function toggleShowClosed(next: boolean) {
+    const params = new URLSearchParams(sp.toString());
+    if (next) params.set("closed", "1");
+    else params.delete("closed");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  const openCount = initialTasks.filter((t) => !t.closed).length;
+  const closedCount = initialTasks.filter((t) => t.closed).length;
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">{initialTasks.length} offene Tasks</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          <span>
+            {openCount} offen{showClosed && closedCount > 0 ? `, ${closedCount} erledigt` : ""}
+          </span>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={showClosed}
+              onChange={(e) => toggleShowClosed(e.target.checked)}
+              className="h-3 w-3"
+            />
+            Auch erledigte anzeigen
+          </label>
+        </div>
         <div className="flex items-center gap-2">
           <button onClick={refresh} disabled={pending} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-100 disabled:opacity-50 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
             <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} /> Sync
@@ -88,17 +118,28 @@ export function TaskList({
 
       {initialTasks.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">
-          Keine offenen Tasks. Mit „Sync" aus ClickUp ziehen oder neue Aufgabe anlegen.
+          {showClosed
+            ? "Keine Tasks. Mit Sync aus ClickUp ziehen oder neue Aufgabe anlegen."
+            : "Keine offenen Tasks. Erledigte sind ggf. ueber den Toggle sichtbar."}
         </p>
       ) : (
         <ul className="space-y-2">
           {initialTasks.map((t) => (
-            <li key={t.clickup_task_id} className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
-              <button onClick={() => close(t.clickup_task_id)} disabled={pending} className="rounded-full border-2 border-gray-300 p-0.5 hover:border-green-500 hover:bg-green-50" title="Als erledigt markieren">
-                <Check className="h-3 w-3 text-transparent hover:text-green-500" />
-              </button>
+            <li
+              key={t.clickup_task_id}
+              className={`flex items-center gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-[#2c2c2e]/50 dark:bg-[#161618] ${t.closed ? "opacity-60" : ""}`}
+            >
+              {t.closed ? (
+                <span className="rounded-full border-2 border-green-500 bg-green-50 p-0.5 dark:bg-green-900/30" title="Erledigt">
+                  <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                </span>
+              ) : (
+                <button onClick={() => close(t.clickup_task_id)} disabled={pending} className="rounded-full border-2 border-gray-300 p-0.5 hover:border-green-500 hover:bg-green-50" title="Als erledigt markieren">
+                  <Check className="h-3 w-3 text-transparent hover:text-green-500" />
+                </button>
+              )}
               <div className="flex-1 min-w-0">
-                <p className="truncate font-medium text-gray-900 dark:text-white">{t.name}</p>
+                <p className={`truncate font-medium text-gray-900 dark:text-white ${t.closed ? "line-through" : ""}`}>{t.name}</p>
                 <div className="mt-0.5 flex items-center gap-3 text-xs text-gray-500">
                   {t.status && <span style={{ color: t.status_color ?? undefined }} className="font-semibold uppercase tracking-wider">{t.status}</span>}
                   {t.due_date && <span>Faellig: {formatDateDe(t.due_date)}</span>}
