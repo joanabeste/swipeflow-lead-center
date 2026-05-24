@@ -17,6 +17,7 @@ import { ResizableColumns } from "@/components/resizable-columns";
 import { CrmLeftColumn } from "./crm-left-column";
 import { CrmActivityFeed } from "./crm-activity-feed";
 import { LeadTodosCard } from "./_components/lead-todos-card";
+import { PromoteToCustomerButton } from "./_components/promote-to-customer-button";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
 import { deleteLead, bulkArchiveLeads, bulkRestoreCrmStatus } from "../../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
@@ -148,6 +149,10 @@ export function CrmLeadDetail({
           </Link>
         )}
         <div className="flex items-center gap-2">
+          <PromoteToCustomerButton
+            leadId={lead.id}
+            alreadyCustomer={lead.lifecycle_stage === "customer"}
+          />
           <button
             onClick={handleEnrich}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 dark:border-[#2c2c2e] dark:hover:bg-white/5"

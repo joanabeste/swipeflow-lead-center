@@ -14,9 +14,11 @@ import {
   NOTE_ATTACHMENT_MAX_BYTES,
   formatBytes,
   isImageMime,
+  type UploadedAttachmentRef,
 } from "@/lib/notes/format";
+import { uploadFileToTicket } from "@/lib/notes/client-upload";
 import { CrmStatusBadge } from "../../status-badge";
-import { deleteNote, updateNote } from "../../actions";
+import { createNoteAttachmentUploads, deleteNote, updateNote } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import type { NoteRow, CallRow, AuditRow, EmailRow } from "./types";
 import { formatDur } from "./activity-helpers";
@@ -24,17 +26,7 @@ import { formatDur } from "./activity-helpers";
 interface PendingFile {
   id: string;
   file: File;
-  dataUrl: string;
   previewUrl: string | null;
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onerror = () => reject(r.error ?? new Error("Lesefehler"));
-    r.onload = () => resolve(r.result as string);
-    r.readAsDataURL(file);
-  });
 }
 
 export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
@@ -63,7 +55,7 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
     setEditing(false);
   }
 
-  async function addFiles(files: FileList | File[]) {
+  function addFiles(files: FileList | File[]) {
     const list = Array.from(files);
     const accepted: PendingFile[] = [];
     for (const file of list) {
@@ -75,17 +67,11 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
         addToast(`${file.name} zu groß`, "error");
         continue;
       }
-      try {
-        const dataUrl = await readAsDataUrl(file);
-        accepted.push({
-          id: crypto.randomUUID(),
-          file,
-          dataUrl,
-          previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
-        });
-      } catch {
-        addToast(`Lesefehler: ${file.name}`, "error");
-      }
+      accepted.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
+      });
     }
     if (accepted.length > 0) setPendingFiles((prev) => [...prev, ...accepted]);
   }
@@ -109,17 +95,40 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
   function handleSave() {
     if (noteWillBeEmpty || !dirty) return;
     startTransition(async () => {
-      const payload = pendingFiles.map((p) => ({
-        dataUrl: p.dataUrl,
-        fileName: p.file.name,
-        mimeType: p.file.type,
-        sizeBytes: p.file.size,
-      }));
+      const refs: UploadedAttachmentRef[] = [];
+      if (pendingFiles.length > 0) {
+        const ticketRes = await createNoteAttachmentUploads(
+          leadId,
+          pendingFiles.map((p) => ({
+            clientId: p.id,
+            fileName: p.file.name,
+            mimeType: p.file.type,
+            sizeBytes: p.file.size,
+          })),
+        );
+        if ("error" in ticketRes) {
+          addToast(ticketRes.error, "error");
+          return;
+        }
+        if (ticketRes.errors.length > 0) {
+          for (const e of ticketRes.errors) addToast(e.error, "error");
+        }
+        for (const ticket of ticketRes.tickets) {
+          const pending = pendingFiles.find((p) => p.id === ticket.clientId);
+          if (!pending) continue;
+          const up = await uploadFileToTicket(ticket, pending.file);
+          if ("error" in up) {
+            addToast(`Upload ${pending.file.name}: ${up.error}`, "error");
+            continue;
+          }
+          refs.push(up.ref);
+        }
+      }
       const res = await updateNote(
         note.id,
         leadId,
         content,
-        payload,
+        refs,
         Array.from(removedIds),
       );
       if (res.error) {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import { FileText, Paperclip, StickyNote, X } from "lucide-react";
-import { addNote } from "../../actions";
+import { addNote, createNoteAttachmentUploads } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import {
   NOTE_ATTACHMENT_ACCEPT,
@@ -11,22 +11,14 @@ import {
   NOTE_ATTACHMENT_MAX_BYTES,
   formatBytes,
   isImageMime,
+  type UploadedAttachmentRef,
 } from "@/lib/notes/format";
+import { uploadFileToTicket } from "@/lib/notes/client-upload";
 
 interface PendingAttachment {
   id: string;
   file: File;
-  dataUrl: string;
   previewUrl: string | null;
-}
-
-function readAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("Lesefehler"));
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsDataURL(file);
-  });
 }
 
 export function ComposeNote({
@@ -49,7 +41,7 @@ export function ComposeNote({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function addFiles(files: FileList | File[]) {
+  function addFiles(files: FileList | File[]) {
     const list = Array.from(files);
     if (list.length === 0) return;
     const accepted: PendingAttachment[] = [];
@@ -62,17 +54,11 @@ export function ComposeNote({
         addToast(`${file.name} zu groß (max. ${NOTE_ATTACHMENT_MAX_BYTES / (1024 * 1024)} MB)`, "error");
         continue;
       }
-      try {
-        const dataUrl = await readAsDataUrl(file);
-        accepted.push({
-          id: crypto.randomUUID(),
-          file,
-          dataUrl,
-          previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
-        });
-      } catch {
-        addToast(`Lesefehler: ${file.name}`, "error");
-      }
+      accepted.push({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
+      });
     }
     if (accepted.length > 0) setAttachments((prev) => [...prev, ...accepted]);
   }
@@ -89,7 +75,7 @@ export function ComposeNote({
     const files = e.clipboardData?.files;
     if (files && files.length > 0) {
       e.preventDefault();
-      void addFiles(files);
+      addFiles(files);
     }
   }
 
@@ -114,7 +100,7 @@ export function ComposeNote({
     dragCounter.current = 0;
     setIsDragging(false);
     if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-      void addFiles(e.dataTransfer.files);
+      addFiles(e.dataTransfer.files);
     }
   }
 
@@ -122,13 +108,44 @@ export function ComposeNote({
     if (!content.trim() && attachments.length === 0) return;
     setError(null);
     startTransition(async () => {
-      const payload = attachments.map((a) => ({
-        dataUrl: a.dataUrl,
-        fileName: a.file.name,
-        mimeType: a.file.type,
-        sizeBytes: a.file.size,
-      }));
-      const res = await addNote(leadId, content, payload);
+      const refs: UploadedAttachmentRef[] = [];
+      if (attachments.length > 0) {
+        // 1) Upload-Tickets vom Server holen.
+        const ticketRes = await createNoteAttachmentUploads(
+          leadId,
+          attachments.map((a) => ({
+            clientId: a.id,
+            fileName: a.file.name,
+            mimeType: a.file.type,
+            sizeBytes: a.file.size,
+          })),
+        );
+        if ("error" in ticketRes) {
+          setError(ticketRes.error);
+          addToast(ticketRes.error, "error");
+          return;
+        }
+        if (ticketRes.errors.length > 0) {
+          for (const e of ticketRes.errors) addToast(e.error, "error");
+        }
+        // 2) Dateien direkt zu Supabase hochladen (umgeht Vercel-Function-Limit).
+        for (const ticket of ticketRes.tickets) {
+          const pending = attachments.find((a) => a.id === ticket.clientId);
+          if (!pending) continue;
+          const up = await uploadFileToTicket(ticket, pending.file);
+          if ("error" in up) {
+            addToast(`Upload ${pending.file.name}: ${up.error}`, "error");
+            continue;
+          }
+          refs.push(up.ref);
+        }
+        if (refs.length === 0 && attachments.length > 0) {
+          setError("Keine Datei konnte hochgeladen werden.");
+          return;
+        }
+      }
+      // 3) Notiz mit Anhang-Metadaten anlegen — Payload bleibt klein.
+      const res = await addNote(leadId, content, refs);
       if (res.error) {
         setError(res.error);
         addToast(res.error, "error");
