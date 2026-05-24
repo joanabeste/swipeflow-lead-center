@@ -12,7 +12,7 @@ import type {
 import { updateCourse } from "../../_actions/courses";
 import { useAutosave, type AutosaveResult } from "../../_hooks/use-autosave";
 import { CurriculumTree } from "../../_components/curriculum-tree";
-import { NotionLessonEditor } from "../../_components/notion-editor";
+import { BlockEditor } from "../../_components/block-editor";
 import { EditorTopBar } from "../../_components/editor-topbar";
 import { AIDrawer } from "../../_components/ai-drawer";
 import { evaluateCourse, PublishCheckModal } from "../../_components/publish-check-modal";
@@ -101,7 +101,7 @@ export function CourseEditor(props: Props) {
         {/* Editor (Mitte) */}
         <main className="flex-1 overflow-y-auto bg-white dark:bg-[#0f0f10]">
           {activeLesson ? (
-            <NotionLessonEditor
+            <BlockEditor
               key={activeLesson.id}
               lesson={activeLesson}
               initialAttachments={activeAttachments}

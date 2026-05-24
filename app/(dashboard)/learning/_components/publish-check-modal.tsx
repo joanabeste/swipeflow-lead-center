@@ -54,6 +54,7 @@ export function evaluateCourse(
       items.push({ label: `Lektion ohne Titel (#${l.id.slice(0, 6)})`, status: "blocker" });
       continue;
     }
+    const hasBlocks = (l.blocks?.length ?? 0) > 0;
     const hasText = (l.content_html ?? "").replace(/<[^>]*>/g, "").trim().length > 0;
     const hasEmbed =
       (l.content_html ?? "").includes("data-loom-id") ||
@@ -61,7 +62,7 @@ export function evaluateCourse(
       (l.content_html ?? "").includes("data-learning-file");
     const hasLegacyVideo = Boolean(l.video_url);
     const hasLegacyFile = attachmentCount(l.id) > 0;
-    if (!hasText && !hasEmbed && !hasLegacyVideo && !hasLegacyFile) {
+    if (!hasBlocks && !hasText && !hasEmbed && !hasLegacyVideo && !hasLegacyFile) {
       items.push({ label: `„${l.title}": komplett leer`, status: "blocker" });
     }
   }

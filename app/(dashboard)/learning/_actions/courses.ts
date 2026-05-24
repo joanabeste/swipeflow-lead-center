@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { checkLearningEditor } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import type {
+  LearningBlock,
   LearningCategory,
   LearningCourse,
   LearningCourseStatus,
@@ -272,6 +273,8 @@ export async function updateLesson(input: {
   summary?: string | null;
   editor_notes?: string | null;
   module_id?: string;
+  /** V4 Block-Stack (Migration 092). */
+  blocks?: LearningBlock[];
 }): Promise<{ error?: string }> {
   const ctx = await checkLearningEditor();
   if (!ctx) return { error: "Keine Berechtigung." };
@@ -285,6 +288,7 @@ export async function updateLesson(input: {
   if (input.summary !== undefined) patch.summary = input.summary?.trim() || null;
   if (input.editor_notes !== undefined) patch.editor_notes = input.editor_notes?.trim() || null;
   if (input.module_id !== undefined) patch.module_id = input.module_id;
+  if (input.blocks !== undefined) patch.blocks = input.blocks;
   if (input.video_url !== undefined) {
     const url = input.video_url?.trim() || null;
     let provider: LearningVideoProvider | null = null;
@@ -481,4 +485,155 @@ export async function reorderLessonsAcrossModules(input: {
     }
   }
   return {};
+}
+
+// ─── V4 Legacy-Konversion ──────────────────────────────────────────
+//
+// Parsed alte content_html (TipTap-HTML mit data-Attrs fuer YouTube/Loom/FileBlock)
+// in die neue Block-Stack-Struktur. Lesson.content_html bleibt als Backup erhalten.
+
+/** Konvertiert content_html einer Lesson in Block-Array. */
+export async function convertLegacyToBlocks(
+  lessonId: string,
+): Promise<{ blocks: LearningBlock[] } | { error: string }> {
+  const ctx = await checkLearningEditor();
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const db = createServiceClient();
+  const { data: lesson, error: getErr } = await db
+    .from("learning_lessons")
+    .select("id, content_html")
+    .eq("id", lessonId)
+    .maybeSingle();
+  if (getErr || !lesson) return { error: getErr?.message ?? "Lektion nicht gefunden." };
+  const html = (lesson.content_html as string | null) ?? "";
+
+  // Anhänge der Lesson holen — File/Image-Bloecke brauchen storage_path
+  const { data: atts } = await db
+    .from("learning_lesson_attachments")
+    .select("id, storage_path, file_name, mime_type, size_bytes")
+    .eq("lesson_id", lessonId);
+  type AttRow = {
+    id: string;
+    storage_path: string;
+    file_name: string;
+    mime_type: string;
+    size_bytes: number;
+  };
+  const attMap = new Map<string, AttRow>(
+    ((atts ?? []) as unknown as AttRow[]).map((a) => [a.id, a]),
+  );
+
+  const blocks = parseHtmlToBlocks(html, attMap);
+  const { error: updErr } = await db
+    .from("learning_lessons")
+    .update({ blocks })
+    .eq("id", lessonId);
+  if (updErr) return { error: updErr.message };
+  return { blocks };
+}
+
+/** Best-effort HTML → Block[] Parser. Server-side; nutzt simple Regex/RegExp da
+ *  unser content_html deterministisch von TipTap kommt. Bei unbekanntem Markup
+ *  wird der ganze Rest in einen Text-Block gepackt. */
+function parseHtmlToBlocks(
+  html: string,
+  attMap: Map<string, { id: string; storage_path: string; file_name: string; mime_type: string; size_bytes: number }>,
+): LearningBlock[] {
+  if (!html.trim()) return [];
+
+  const blocks: LearningBlock[] = [];
+  let textBuffer = "";
+  const newId = () => crypto.randomUUID();
+
+  function flushText() {
+    const stripped = textBuffer.replace(/<[^>]*>/g, "").trim();
+    if (stripped.length > 0) {
+      blocks.push({ id: newId(), type: "text", html: textBuffer });
+    }
+    textBuffer = "";
+  }
+
+  // Splittet das HTML in Top-Level-Knoten via regex die unsere bekannten
+  // Custom-Node-Container findet. Alles dazwischen ist Text/normales HTML.
+  const pattern =
+    /<div\s+[^>]*?(data-youtube-video|data-loom-id|data-learning-file)[^>]*?>(?:[\s\S]*?)<\/div>/gi;
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(html)) !== null) {
+    const before = html.slice(lastIndex, m.index);
+    if (before.trim()) textBuffer += before;
+    flushText();
+
+    const matched = m[0];
+    const which = m[1].toLowerCase();
+    if (which === "data-youtube-video") {
+      const src = (matched.match(/<iframe[^>]+src=["']([^"']+)["']/i) ?? [])[1] ?? "";
+      const idMatch = src.match(/\/embed\/([A-Za-z0-9_-]{6,})/);
+      const videoId = idMatch?.[1] ?? "";
+      if (videoId) {
+        blocks.push({
+          id: newId(),
+          type: "video",
+          provider: "youtube",
+          videoId,
+          url: `https://www.youtube.com/watch?v=${videoId}`,
+        });
+      } else {
+        textBuffer += matched; // unparseable -> als Text behalten
+        flushText();
+      }
+    } else if (which === "data-loom-id") {
+      const idMatch = matched.match(/data-loom-id\s*=\s*["']([A-Za-z0-9]+)["']/i);
+      const videoId = idMatch?.[1] ?? "";
+      if (videoId) {
+        blocks.push({
+          id: newId(),
+          type: "video",
+          provider: "loom",
+          videoId,
+          url: `https://www.loom.com/share/${videoId}`,
+        });
+      } else {
+        textBuffer += matched;
+        flushText();
+      }
+    } else if (which === "data-learning-file") {
+      const attId = (matched.match(/data-attachment-id\s*=\s*["']([^"']+)["']/) ?? [])[1];
+      const att = attId ? attMap.get(attId) : undefined;
+      const fileName = (matched.match(/data-file-name\s*=\s*["']([^"']+)["']/) ?? [])[1] ?? att?.file_name ?? "Datei";
+      const mimeType =
+        (matched.match(/data-mime-type\s*=\s*["']([^"']+)["']/) ?? [])[1] ?? att?.mime_type ?? "application/octet-stream";
+      const sizeBytes =
+        Number((matched.match(/data-size-bytes\s*=\s*["']([^"']+)["']/) ?? [])[1] ?? att?.size_bytes ?? 0);
+      const storagePath = att?.storage_path ?? "";
+      if (attId && storagePath) {
+        if (mimeType.startsWith("image/")) {
+          blocks.push({
+            id: newId(),
+            type: "image",
+            attachmentId: attId,
+            storagePath,
+            fileName,
+            caption: null,
+          });
+        } else {
+          blocks.push({
+            id: newId(),
+            type: "file",
+            attachmentId: attId,
+            storagePath,
+            fileName,
+            mimeType,
+            sizeBytes,
+          });
+        }
+      }
+    }
+    lastIndex = m.index + matched.length;
+  }
+  const tail = html.slice(lastIndex);
+  if (tail.trim()) textBuffer += tail;
+  flushText();
+
+  return blocks;
 }

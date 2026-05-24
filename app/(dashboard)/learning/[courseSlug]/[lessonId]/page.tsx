@@ -7,6 +7,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { LearningCourse, LearningLesson, LearningModule } from "@/lib/types";
 import { VideoEmbed } from "../../_components/video-embed";
 import { LessonRenderer } from "../../_components/lesson-renderer";
+import { BlockRenderer } from "../../_components/block-renderer";
 import { CompleteLessonButton } from "../../_components/complete-lesson-button";
 import { CourseTree } from "../../_components/course-tree";
 import { getAttachmentsForLessons } from "../../_lib/attachments";
@@ -87,16 +88,24 @@ export default async function LessonViewerPage({
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">{lesson.title}</h1>
         </header>
 
-        {/* Legacy: alte Lessons mit separatem video_url-Feld (Pre-V3). */}
-        {lesson.video_url && !lesson.content_html?.includes("data-loom-id") && !lesson.content_html?.includes("data-youtube-video") && (
-          <VideoEmbed url={lesson.video_url} />
+        {/* V4: wenn Blocks vorhanden → Block-Renderer */}
+        {lesson.blocks && lesson.blocks.length > 0 ? (
+          (() => {
+            const signedUrls = new Map(attachments.map((a) => [a.id, a.signed_url]));
+            return <BlockRenderer blocks={lesson.blocks} signedUrls={signedUrls} />;
+          })()
+        ) : (
+          <>
+            {/* Legacy: alte Lessons mit separatem video_url-Feld (Pre-V3). */}
+            {lesson.video_url && !lesson.content_html?.includes("data-loom-id") && !lesson.content_html?.includes("data-youtube-video") && (
+              <VideoEmbed url={lesson.video_url} />
+            )}
+            {lesson.content_html && <LessonRenderer html={lesson.content_html} attachments={attachments} />}
+          </>
         )}
 
-        {lesson.content_html && <LessonRenderer html={lesson.content_html} attachments={attachments} />}
-
-        {/* Legacy-Materialien-Liste: nur zeigen wenn Anhänge NICHT inline im content_html
-            referenziert werden (alte V2-Lessons). */}
-        {attachments.length > 0 && !(lesson.content_html ?? "").includes("data-learning-file") && (
+        {/* Legacy-Materialien-Liste: nur fuer Pre-V4-Lessons ohne Blocks. */}
+        {(!lesson.blocks || lesson.blocks.length === 0) && attachments.length > 0 && !(lesson.content_html ?? "").includes("data-learning-file") && (
           <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
               <Paperclip className="h-4 w-4" /> Materialien

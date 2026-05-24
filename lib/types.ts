@@ -625,6 +625,34 @@ export type LearningCourseStatus = "draft" | "published";
 export type LearningVideoProvider = "youtube" | "loom";
 export type LearningLessonType = "video" | "text" | "file" | "mixed";
 
+// ─── V4 Block-Stack (Migration 092) ──────────────────────────────
+//
+// Jede Lektion ist eine vertikale Liste typisierter Bloecke. Block-IDs sind
+// client-generierte UUIDs, stabil ueber die Lebenszeit eines Blocks.
+export type LearningBlock =
+  | { id: string; type: "text"; html: string }
+  | { id: string; type: "video"; provider: "youtube" | "loom"; videoId: string; url: string }
+  | {
+      id: string;
+      type: "image";
+      attachmentId: string;
+      storagePath: string;
+      fileName: string;
+      caption: string | null;
+    }
+  | {
+      id: string;
+      type: "file";
+      attachmentId: string;
+      storagePath: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+    }
+  | { id: string; type: "button"; label: string; url: string };
+
+export type LearningBlockType = LearningBlock["type"];
+
 export interface LearningCategory {
   id: string;
   name: string;
@@ -678,6 +706,9 @@ export interface LearningLesson {
   video_url: string | null;
   video_provider: LearningVideoProvider | null;
   estimated_minutes: number | null;
+  /** V4 Block-Stack (Migration 092). Wenn nicht leer -> Bloecke werden gerendert,
+   *  content_html dient nur noch als Legacy-Fallback. */
+  blocks: LearningBlock[];
   created_by: string | null;
   created_at: string;
   updated_at: string;
