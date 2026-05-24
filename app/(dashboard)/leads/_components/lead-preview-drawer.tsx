@@ -98,6 +98,9 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
       setError(null);
+      // closing wird erst hier zurueckgesetzt — sonst flackert der Drawer in
+      // dem Frame zwischen setTimeout-Ende und URL-Update kurz wieder auf.
+      setClosing(false);
       return;
     }
     // Sobald ein neuer Lead reinkommt, ist ein gerade laufender Close abgebrochen.
@@ -122,12 +125,13 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
 
   // Snappy Close: Slide-Animation startet sofort durch local-state Flip.
   // Erst nach Animationsende rufen wir onClose() — das aktualisiert die URL.
+  // closing bleibt true bis der useEffect oben (previewId === null) es resetet,
+  // damit der Drawer in der Zwischenzeit nicht kurz aufflackert.
   const handleClose = useCallback(() => {
     if (closing) return;
     abortRef.current?.abort();
     setClosing(true);
     setTimeout(() => {
-      setClosing(false);
       onClose();
     }, SLIDE_OUT_MS);
   }, [closing, onClose]);

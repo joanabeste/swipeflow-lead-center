@@ -66,6 +66,9 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
       setError(null);
+      // closing erst hier zuruecksetzen — sonst flackert der Drawer kurz wieder
+      // auf, weil das setTimeout vor dem URL-Update feuert.
+      setClosing(false);
       return;
     }
     setClosing(false);
@@ -86,12 +89,13 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
     router.refresh();
   }, [previewId, loadBundle, router]);
 
+  // closing bleibt true bis previewId durch onClose null wird (useEffect oben
+  // resetet) — sonst flackert der Drawer 1 Frame lang auf.
   const handleClose = useCallback(() => {
     if (closing) return;
     abortRef.current?.abort();
     setClosing(true);
     setTimeout(() => {
-      setClosing(false);
       onClose();
     }, SLIDE_OUT_MS);
   }, [closing, onClose]);
