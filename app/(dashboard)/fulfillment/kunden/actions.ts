@@ -79,6 +79,57 @@ export async function createCustomer(input: {
   return { success: true, id: leadId };
 }
 
+export interface UpdateCustomerInput {
+  company_name?: string;
+  website?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  street?: string | null;
+  zip?: string | null;
+  city?: string | null;
+  vertical?: "webdesign" | "recruiting" | "sonstiges" | null;
+}
+
+function clean(v: string | null | undefined): string | null {
+  if (v === null || v === undefined) return null;
+  const t = v.trim();
+  return t === "" ? null : t;
+}
+
+export async function updateCustomer(id: string, input: UpdateCustomerInput): Promise<{ success: true } | { error: string }> {
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (input.company_name !== undefined && !input.company_name.trim()) {
+    return { error: "Firmenname darf nicht leer sein." };
+  }
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (input.company_name !== undefined) patch.company_name = input.company_name.trim();
+  if (input.website !== undefined) patch.website = clean(input.website);
+  if (input.email !== undefined) patch.email = clean(input.email);
+  if (input.phone !== undefined) patch.phone = clean(input.phone);
+  if (input.street !== undefined) patch.street = clean(input.street);
+  if (input.zip !== undefined) patch.zip = clean(input.zip);
+  if (input.city !== undefined) patch.city = clean(input.city);
+  if (input.vertical !== undefined) patch.vertical = input.vertical;
+
+  const db = createServiceClient();
+  const { error } = await db.from("leads").update(patch).eq("id", id);
+  if (error) {
+    console.error("[updateCustomer]", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: user.id, action: "customer.update", entityType: "lead", entityId: id,
+    details: { fields: Object.keys(patch).filter((k) => k !== "updated_at") },
+  });
+  revalidatePath(`/fulfillment/kunden/${id}`);
+  revalidatePath("/fulfillment/kunden");
+  return { success: true };
+}
+
 export async function createCustomerAndRedirect(formData: FormData) {
   const res = await createCustomer({
     company_name: String(formData.get("company_name") ?? ""),

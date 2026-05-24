@@ -7,6 +7,7 @@ import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
 import { MailsTab } from "./_components/mails-tab";
+import { EditCustomerButton } from "./_components/edit-customer-button";
 import { enrichThreadsWithProjects, loadThreadsForLead } from "@/lib/email/data";
 
 type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
@@ -65,7 +66,20 @@ export default async function KundenDetailPage({
               )}
             </div>
           </div>
-          <div className="text-right text-xs text-gray-500">
+          <div className="flex flex-col items-end gap-3 text-right text-xs text-gray-500">
+            <EditCustomerButton
+              customer={{
+                id: customer.id,
+                company_name: customer.company_name,
+                website: customer.website,
+                email: customer.email,
+                phone: customer.phone,
+                street: customer.street,
+                zip: customer.zip,
+                city: customer.city,
+                vertical: customer.vertical as "webdesign" | "recruiting" | "sonstiges" | null,
+              }}
+            />
             {customer.became_customer_at && (
               <p>Kunde seit<br />
                 <strong className="text-gray-700 dark:text-gray-200">{formatDateDe(customer.became_customer_at)}</strong>
