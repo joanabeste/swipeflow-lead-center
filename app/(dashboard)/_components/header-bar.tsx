@@ -5,6 +5,7 @@ import { ServiceModeSwitch } from "../service-mode-switch";
 import { ActiveEnrichmentBadge } from "../active-enrichment-badge";
 import { GlobalSearch } from "../global-search";
 import { TimerBar } from "../zeit/_components/timer-bar";
+import { NotificationsBell } from "./notifications-bell";
 
 type Section = "vertrieb" | "fulfillment" | "zeit" | "admin" | "other";
 
@@ -42,6 +43,7 @@ export function HeaderBar({ running }: Props) {
         {showTimer && <TimerBar running={running} />}
         {showEnrichment && <ActiveEnrichmentBadge />}
         {showSearch && <GlobalSearch />}
+        <NotificationsBell />
       </div>
     </header>
   );

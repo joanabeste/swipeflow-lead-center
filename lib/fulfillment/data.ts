@@ -98,11 +98,23 @@ export async function loadProjectNotes(projectId: string): Promise<ProjectNote[]
     return [];
   }
   const notes = (data ?? []) as ProjectNote[];
+  if (notes.length === 0) return notes;
+
   const authorIds = Array.from(new Set(notes.map((n) => n.created_by).filter((x): x is string => !!x)));
-  if (authorIds.length === 0) return notes;
-  const { data: profiles } = await db.from("profiles").select("id, name").in("id", authorIds);
-  const nameById = new Map((profiles ?? []).map((p) => [p.id as string, (p.name as string | null) ?? null]));
-  return notes.map((n) => ({ ...n, author_name: n.created_by ? nameById.get(n.created_by) ?? null : null }));
+  const { getProjectNoteAttachmentsForNotes } = await import("@/lib/project-notes/attachments");
+  const [profilesRes, attachmentsMap] = await Promise.all([
+    authorIds.length > 0
+      ? db.from("profiles").select("id, name").in("id", authorIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
+    getProjectNoteAttachmentsForNotes(notes.map((n) => n.id)),
+  ]);
+  const nameById = new Map((profilesRes.data ?? []).map((p) => [p.id as string, (p.name as string | null) ?? null]));
+
+  return notes.map((n) => ({
+    ...n,
+    author_name: n.created_by ? nameById.get(n.created_by) ?? null : null,
+    attachments: attachmentsMap.get(n.id) ?? [],
+  }));
 }
 
 export async function loadCachedTasks(projectId: string, includeClosed = false): Promise<ClickupTaskCached[]> {

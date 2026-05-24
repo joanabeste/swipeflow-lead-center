@@ -61,6 +61,30 @@ export interface ProjectNote {
   updated_at: string;
   /** Optionaler join: Anzeigename des Autors aus profiles (server fuegt das ein). */
   author_name?: string | null;
+  /** Geladene Anhaenge mit signed URLs (Server haengt das pro Notiz an). */
+  attachments?: LoadedProjectNoteAttachment[];
+}
+
+export interface ProjectNoteAttachment {
+  id: string;
+  note_id: string;
+  project_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** An den Client gereichte Sicht eines Anhangs: ohne storage_path, mit signed URL. */
+export interface LoadedProjectNoteAttachment {
+  id: string;
+  note_id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  signed_url: string | null;
 }
 
 export interface ClickupTaskCached {
