@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { Save } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { updateLead } from "../../../leads/actions";
@@ -26,7 +26,7 @@ const FIELD_LABELS: Record<string, string> = {
 const EDIT_FIELDS = Object.keys(FIELD_LABELS);
 
 export function CrmMasterdataForm({ lead }: { lead: Lead }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   async function handleSubmit(
     _prev: { error?: string; success?: boolean } | undefined,
     formData: FormData,
@@ -49,9 +49,9 @@ export function CrmMasterdataForm({ lead }: { lead: Lead }) {
   // React-Tree auf dieser Page nicht neu mounted.
   useEffect(() => {
     if (state && "success" in state && state.success) {
-      router.refresh();
+      notify();
     }
-  }, [state, router]);
+  }, [state, notify]);
 
   return (
     <Card>

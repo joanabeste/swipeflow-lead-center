@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { Briefcase, ExternalLink, Globe, Plus, X, Pencil, Trash2, Save, Mail } from "lucide-react";
 import type { ContactSalutation, LeadContact, LeadJobPosting } from "@/lib/types";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
@@ -121,7 +121,7 @@ function ContactRow({
   onEdit: () => void;
   onSendEmail: () => void;
 }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
   const isHr = isHrContact(contact.role);
@@ -133,7 +133,7 @@ function ContactRow({
       if (res.error) addToast(res.error, "error");
       else {
         addToast("Kontakt gelöscht", "success");
-        router.refresh();
+        notify();
       }
     });
   }
@@ -251,7 +251,7 @@ function ContactRow({
 function ContactForm({
   leadId, contact, onClose,
 }: { leadId: string; contact?: LeadContact; onClose: () => void }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [name, setName] = useState(contact?.name ?? "");
   const [role, setRole] = useState(contact?.role ?? "");
@@ -271,7 +271,7 @@ function ContactForm({
       } else {
         addToast(contact ? "Kontakt aktualisiert" : "Kontakt angelegt", "success");
         onClose();
-        router.refresh();
+        notify();
       }
     });
   }

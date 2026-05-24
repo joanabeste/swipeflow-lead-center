@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
@@ -42,7 +42,7 @@ interface UnifiedItem {
 export function CrmActivityFeed({
   leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders,
 }: Props) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const [filter, setFilter] = useState<ActivityKind>("all");
   // Standardmäßig ist der Anruf-Bereich aufgeklappt, weil das die häufigste
   // Aktion im CRM-Detail ist.
@@ -53,7 +53,7 @@ export function CrmActivityFeed({
   function handleStatusChange(statusId: string) {
     startTransition(async () => {
       await updateCrmStatus(leadId, statusId || null);
-      router.refresh();
+      notify();
     });
   }
 
@@ -192,7 +192,7 @@ export function CrmActivityFeed({
         <ComposeNote
           leadId={leadId}
           onClose={() => setComposeMode("idle")}
-          onSaved={() => { setComposeMode("idle"); router.refresh(); }}
+          onSaved={() => { setComposeMode("idle"); notify(); }}
         />
       )}
       {composeMode === "call" && (
@@ -202,7 +202,7 @@ export function CrmActivityFeed({
           contacts={contacts}
           callProviders={callProviders}
           onClose={() => setComposeMode("idle")}
-          onSaved={() => { setComposeMode("idle"); router.refresh(); }}
+          onSaved={() => { setComposeMode("idle"); notify(); }}
         />
       )}
       {composeMode === "email" && (
@@ -212,7 +212,7 @@ export function CrmActivityFeed({
           companyName={companyName}
           senderName={senderName}
           onClose={() => setComposeMode("idle")}
-          onSaved={() => { setComposeMode("idle"); router.refresh(); }}
+          onSaved={() => { setComposeMode("idle"); notify(); }}
         />
       )}
 

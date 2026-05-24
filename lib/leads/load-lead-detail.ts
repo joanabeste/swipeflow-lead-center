@@ -1,9 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus } from "@/lib/types";
-import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation, type HqLocation } from "@/lib/app-settings";
-import { getScreenshotSignedUrl } from "@/lib/enrichment/screenshot";
 
 export interface LeadDetailBundle {
   lead: Lead;
@@ -13,8 +11,6 @@ export interface LeadDetailBundle {
   latestEnrichment: LeadEnrichment | null;
   customStatuses: CustomLeadStatus[];
   hq: HqLocation;
-  /** Signed URL fuer das Screenshot-Bild (server-seitig aufgeloest). */
-  screenshotSignedUrl: string | null;
 }
 
 /**
@@ -23,6 +19,11 @@ export interface LeadDetailBundle {
  * Preview-Drawer-Endpoint (`/api/leads/[id]/preview`) genutzt.
  *
  * Liefert null, wenn der Lead nicht existiert oder soft-deleted ist.
+ *
+ * Hot-path-Optimierung: Geocoding (Nominatim, bis zu 4 s) und das Signieren
+ * der Screenshot-URL (Supabase-Storage-Roundtrip) sind **nicht** mehr Teil
+ * dieser Funktion — beides wird vom Client lazy nachgezogen ueber
+ * `/api/leads/[id]/geocode` bzw. `/api/leads/[id]/screenshot-url`.
  */
 export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | null> {
   const db = createServiceClient();
@@ -37,7 +38,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     hq,
   ] = await Promise.all([
     db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
-    db.from("lead_changes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
+    db.from("lead_changes").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(50),
     db.from("lead_contacts").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_enrichments").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1),
@@ -46,37 +47,14 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
   ]);
 
   if (!lead) return null;
-  const typedLead = lead as Lead;
-
-  if (typedLead.latitude == null || typedLead.longitude == null) {
-    const coords = await ensureLeadCoords({
-      id: typedLead.id,
-      latitude: typedLead.latitude,
-      longitude: typedLead.longitude,
-      street: typedLead.street,
-      zip: typedLead.zip,
-      city: typedLead.city,
-      country: typedLead.country,
-      company_name: typedLead.company_name,
-    });
-    if (coords) {
-      typedLead.latitude = coords.lat;
-      typedLead.longitude = coords.lng;
-    }
-  }
-
-  const screenshotSignedUrl = typedLead.website_screenshot_path
-    ? await getScreenshotSignedUrl(typedLead.website_screenshot_path)
-    : null;
 
   return {
-    lead: typedLead,
+    lead: lead as Lead,
     changes: (changes as LeadChange[]) ?? [],
     contacts: (contacts as LeadContact[]) ?? [],
     jobPostings: (jobPostings as LeadJobPosting[]) ?? [],
     latestEnrichment: (enrichments?.[0] as LeadEnrichment) ?? null,
     customStatuses: (customStatuses as CustomLeadStatus[]) ?? [],
     hq,
-    screenshotSignedUrl,
   };
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2, Archive } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
@@ -21,7 +22,10 @@ import { deleteLead, bulkArchiveLeads, bulkRestoreCrmStatus } from "../../leads/
 import { useServiceMode } from "@/lib/service-mode";
 
 type AuthorProfile = { name: string; avatar_url: string | null };
-type NoteRow = LeadNote & { profiles: AuthorProfile | null };
+type NoteRow = LeadNote & {
+  profiles: AuthorProfile | null;
+  attachments: import("@/lib/types").LoadedNoteAttachment[];
+};
 type CallRow = LeadCall & { profiles: AuthorProfile | null };
 type EmailRow = EmailMessage & {
   profiles: AuthorProfile | null;
@@ -73,6 +77,7 @@ export function CrmLeadDetail({
   screenshotCard,
 }: Props) {
   const router = useRouter();
+  const notify = usePreviewRefresh();
   const { mode: serviceMode } = useServiceMode();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
   const [enrichError] = useState<string | null>(null);
@@ -99,14 +104,14 @@ export function CrmLeadDetail({
         alert(res.error);
         return;
       }
-      router.refresh();
+      notify();
     });
   }
 
   function handleUnarchive() {
     startUnarchiveTransition(async () => {
       const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
-      if (!("error" in res) || !res.error) router.refresh();
+      if (!("error" in res) || !res.error) notify();
     });
   }
 

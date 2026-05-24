@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { X, Sparkles, Target, Loader2, Camera } from "lucide-react";
 import type { EnrichmentConfig, CompanyDetailField, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
@@ -47,7 +47,7 @@ interface Props {
 }
 
 export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, serviceMode, onClose }: Props) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +85,7 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
       } else {
         addToast("Anreicherung abgeschlossen", "success");
         onClose();
-        router.refresh();
+        notify();
       }
     });
   }

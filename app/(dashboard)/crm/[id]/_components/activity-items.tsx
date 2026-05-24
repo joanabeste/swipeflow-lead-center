@@ -1,36 +1,135 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, useTransition } from "react";
+import Image from "next/image";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
-  Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail,
+  Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail, Paperclip, X,
 } from "lucide-react";
-import type { CustomLeadStatus, LeadEnrichment, LeadChange } from "@/lib/types";
+import type { CustomLeadStatus, LeadEnrichment, LeadChange, LoadedNoteAttachment } from "@/lib/types";
+import {
+  NOTE_ATTACHMENT_ACCEPT,
+  NOTE_ATTACHMENT_ALLOWED_MIMES,
+  NOTE_ATTACHMENT_MAX_BYTES,
+  formatBytes,
+  isImageMime,
+} from "@/lib/notes/format";
 import { CrmStatusBadge } from "../../status-badge";
 import { deleteNote, updateNote } from "../../actions";
 import { useToastContext } from "../../../toast-provider";
 import type { NoteRow, CallRow, AuditRow, EmailRow } from "./types";
 import { formatDur } from "./activity-helpers";
 
+interface PendingFile {
+  id: string;
+  file: File;
+  dataUrl: string;
+  previewUrl: string | null;
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = () => reject(r.error ?? new Error("Lesefehler"));
+    r.onload = () => resolve(r.result as string);
+    r.readAsDataURL(file);
+  });
+}
+
 export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [editing, setEditing] = useState(false);
   const [content, setContent] = useState(note.content);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [pending, startTransition] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Live-Vorschau-URLs revoken, wenn der Edit-Modus verlassen / die Komponente unmounted wird.
+  useEffect(() => {
+    return () => {
+      for (const f of pendingFiles) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function resetEdit() {
+    for (const f of pendingFiles) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    setPendingFiles([]);
+    setRemovedIds(new Set());
+    setContent(note.content);
+    setEditing(false);
+  }
+
+  async function addFiles(files: FileList | File[]) {
+    const list = Array.from(files);
+    const accepted: PendingFile[] = [];
+    for (const file of list) {
+      if (!NOTE_ATTACHMENT_ALLOWED_MIMES.has(file.type)) {
+        addToast(`Dateityp nicht erlaubt: ${file.name}`, "error");
+        continue;
+      }
+      if (file.size > NOTE_ATTACHMENT_MAX_BYTES) {
+        addToast(`${file.name} zu groß`, "error");
+        continue;
+      }
+      try {
+        const dataUrl = await readAsDataUrl(file);
+        accepted.push({
+          id: crypto.randomUUID(),
+          file,
+          dataUrl,
+          previewUrl: isImageMime(file.type) ? URL.createObjectURL(file) : null,
+        });
+      } catch {
+        addToast(`Lesefehler: ${file.name}`, "error");
+      }
+    }
+    if (accepted.length > 0) setPendingFiles((prev) => [...prev, ...accepted]);
+  }
+
+  function removePending(id: string) {
+    setPendingFiles((prev) => {
+      const t = prev.find((p) => p.id === id);
+      if (t?.previewUrl) URL.revokeObjectURL(t.previewUrl);
+      return prev.filter((p) => p.id !== id);
+    });
+  }
+
+  const visibleExisting = note.attachments.filter((a) => !removedIds.has(a.id));
+  const noteWillBeEmpty =
+    !content.trim() && visibleExisting.length === 0 && pendingFiles.length === 0;
+  const dirty =
+    content !== note.content ||
+    pendingFiles.length > 0 ||
+    removedIds.size > 0;
 
   function handleSave() {
-    if (!content.trim()) return;
+    if (noteWillBeEmpty || !dirty) return;
     startTransition(async () => {
-      const res = await updateNote(note.id, leadId, content);
+      const payload = pendingFiles.map((p) => ({
+        dataUrl: p.dataUrl,
+        fileName: p.file.name,
+        mimeType: p.file.type,
+        sizeBytes: p.file.size,
+      }));
+      const res = await updateNote(
+        note.id,
+        leadId,
+        content,
+        payload,
+        Array.from(removedIds),
+      );
       if (res.error) {
         addToast(res.error, "error");
-      } else {
-        addToast("Notiz aktualisiert", "success");
-        setEditing(false);
-        router.refresh();
+        return;
       }
+      if (res.warning) addToast(res.warning, "error");
+      else addToast("Notiz aktualisiert", "success");
+      resetEdit();
+      notify();
     });
   }
 
@@ -41,7 +140,7 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
       if (res.error) addToast(res.error, "error");
       else {
         addToast("Notiz gelöscht", "success");
-        router.refresh();
+        notify();
       }
     });
   }
@@ -52,33 +151,85 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          onPaste={(e) => {
+            const files = e.clipboardData?.files;
+            if (files && files.length > 0) {
+              e.preventDefault();
+              void addFiles(files);
+            }
+          }}
           rows={3}
           autoFocus
           className="w-full resize-none rounded-md border border-amber-200 bg-amber-50/30 p-2 text-sm dark:border-amber-900/40 dark:bg-amber-900/5"
         />
-        <div className="mt-1.5 flex justify-end gap-1">
+
+        {(visibleExisting.length > 0 || pendingFiles.length > 0) && (
+          <ul className="mt-2 flex flex-wrap gap-2">
+            {visibleExisting.map((a) => (
+              <EditableExistingChip
+                key={a.id}
+                attachment={a}
+                onRemove={() => setRemovedIds((prev) => new Set(prev).add(a.id))}
+              />
+            ))}
+            {pendingFiles.map((p) => (
+              <EditablePendingChip key={p.id} pending={p} onRemove={() => removePending(p.id)} />
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-1.5 flex items-center justify-between gap-1">
           <button
-            onClick={() => { setEditing(false); setContent(note.content); }}
-            className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-white/5"
           >
-            Abbrechen
+            <Paperclip className="h-3 w-3" />
+            Datei anhängen
           </button>
-          <button
-            onClick={handleSave}
-            disabled={pending || !content.trim() || content === note.content}
-            className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
-          >
-            <Save className="h-3 w-3" />
-            {pending ? "Speichern…" : "Speichern"}
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={resetEdit}
+              className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5"
+            >
+              Abbrechen
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={pending || !dirty || noteWillBeEmpty}
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-50"
+            >
+              <Save className="h-3 w-3" />
+              {pending ? "Speichern…" : "Speichern"}
+            </button>
+          </div>
         </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={NOTE_ATTACHMENT_ACCEPT}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) void addFiles(e.target.files);
+            e.target.value = "";
+          }}
+        />
       </div>
     );
   }
 
   return (
     <div className="group relative">
-      <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">{note.content}</p>
+      {note.content && (
+        <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
+          {note.content}
+        </p>
+      )}
+      {note.attachments.length > 0 && (
+        <AttachmentGrid attachments={note.attachments} />
+      )}
       {note.updated_at && note.updated_at !== note.created_at && (
         <p className="mt-0.5 text-[10px] text-gray-400">
           bearbeitet {new Date(note.updated_at).toLocaleString("de-DE")}
@@ -104,6 +255,128 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function AttachmentGrid({ attachments }: { attachments: LoadedNoteAttachment[] }) {
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {attachments.map((a) => {
+        const isImage = isImageMime(a.mime_type);
+        if (isImage && a.signed_url) {
+          return (
+            <a
+              key={a.id}
+              href={a.signed_url}
+              target="_blank"
+              rel="noreferrer"
+              title={a.file_name}
+              className="relative block h-20 w-20 overflow-hidden rounded-md border border-gray-200 hover:border-primary dark:border-[#2c2c2e]"
+            >
+              <Image
+                src={a.signed_url}
+                alt={a.file_name}
+                fill
+                sizes="80px"
+                className="object-cover"
+                unoptimized
+              />
+            </a>
+          );
+        }
+        return (
+          <a
+            key={a.id}
+            href={a.signed_url ?? "#"}
+            target="_blank"
+            rel="noreferrer"
+            download={a.file_name}
+            title={a.file_name}
+            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 hover:border-primary hover:bg-primary/5 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+            <span className="truncate">{a.file_name}</span>
+            <span className="shrink-0 text-gray-400">· {formatBytes(a.size_bytes)}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function EditableExistingChip({
+  attachment, onRemove,
+}: { attachment: LoadedNoteAttachment; onRemove: () => void }) {
+  const isImage = isImageMime(attachment.mime_type);
+  return (
+    <li className="group/chip relative">
+      {isImage && attachment.signed_url ? (
+        <div className="relative h-16 w-16 overflow-hidden rounded-md border border-gray-200 dark:border-[#2c2c2e]">
+          <Image
+            src={attachment.signed_url}
+            alt={attachment.file_name}
+            fill
+            sizes="64px"
+            className="object-cover"
+            unoptimized
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300">
+          <FileText className="h-3.5 w-3.5 text-gray-400" />
+          <span className="max-w-[180px] truncate" title={attachment.file_name}>
+            {attachment.file_name}
+          </span>
+          <span className="text-gray-400">· {formatBytes(attachment.size_bytes)}</span>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Anhang entfernen"
+        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-red-600 text-white shadow-md group-hover/chip:flex hover:bg-red-700"
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
+    </li>
+  );
+}
+
+function EditablePendingChip({
+  pending, onRemove,
+}: { pending: PendingFile; onRemove: () => void }) {
+  const isImage = isImageMime(pending.file.type);
+  return (
+    <li className="group/chip relative">
+      {isImage && pending.previewUrl ? (
+        <div className="relative h-16 w-16 overflow-hidden rounded-md border-2 border-amber-300 dark:border-amber-700">
+          <Image
+            src={pending.previewUrl}
+            alt={pending.file.name}
+            fill
+            sizes="64px"
+            className="object-cover"
+            unoptimized
+          />
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 rounded-md border-2 border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+          <FileText className="h-3.5 w-3.5" />
+          <span className="max-w-[160px] truncate" title={pending.file.name}>
+            {pending.file.name}
+          </span>
+          <span>· {formatBytes(pending.file.size)}</span>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={onRemove}
+        title="Entfernen"
+        className="absolute -right-1.5 -top-1.5 hidden h-4 w-4 items-center justify-center rounded-full bg-gray-700 text-white shadow-md group-hover/chip:flex hover:bg-gray-900"
+      >
+        <X className="h-2.5 w-2.5" />
+      </button>
+    </li>
   );
 }
 

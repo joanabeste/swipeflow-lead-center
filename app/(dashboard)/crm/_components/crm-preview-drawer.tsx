@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { CrmLeadDetail } from "../[id]/crm-lead-detail";
 import { LeadScreenshotCardClient } from "../../leads/_components/lead-screenshot-card-client";
 import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
+import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
 
 interface Props {
   previewId: string | null;
@@ -15,9 +17,38 @@ interface Props {
 }
 
 export function CrmPreviewDrawer({ previewId, onClose }: Props) {
+  const router = useRouter();
   const [data, setData] = useState<CrmDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadBundle = useCallback(
+    (id: string, opts?: { silent?: boolean }) => {
+      let cancelled = false;
+      if (!opts?.silent) setLoading(true);
+      setError(null);
+      fetch(`/api/crm/${id}/preview`, { cache: "no-store" })
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`Status ${r.status}`);
+          return r.json() as Promise<CrmDetailBundle>;
+        })
+        .then((bundle) => {
+          if (cancelled) return;
+          setData(bundle);
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : "Unbekannter Fehler");
+        })
+        .finally(() => {
+          if (!cancelled && !opts?.silent) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    },
+    [],
+  );
 
   // Fetch on previewId-change; setState im Effect ist hier bewusst (externer
   // Datenladevorgang). Disables analog zum projektweiten Pattern.
@@ -25,35 +56,18 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
     if (!previewId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
-       
+
       setError(null);
       return;
     }
-    let cancelled = false;
-     
-    setLoading(true);
-     
-    setError(null);
-    fetch(`/api/crm/${previewId}/preview`, { cache: "no-store" })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Status ${r.status}`);
-        return r.json() as Promise<CrmDetailBundle>;
-      })
-      .then((bundle) => {
-        if (cancelled) return;
-        setData(bundle);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Unbekannter Fehler");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [previewId]);
+    const cancel = loadBundle(previewId);
+    return cancel;
+  }, [previewId, loadBundle]);
+
+  const handleRefresh = useCallback(() => {
+    if (previewId) loadBundle(previewId, { silent: true });
+    router.refresh();
+  }, [previewId, loadBundle, router]);
 
   const open = previewId !== null;
   const title = data?.lead.company_name ?? (loading ? "Lade…" : "Vorschau");
@@ -85,6 +99,7 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
           </div>
         )}
         {data && (
+          <PreviewRefreshProvider onRefresh={handleRefresh}>
           <CrmLeadDetail
             lead={data.lead}
             contacts={data.contacts}
@@ -116,6 +131,7 @@ export function CrmPreviewDrawer({ previewId, onClose }: Props) {
               />
             }
           />
+          </PreviewRefreshProvider>
         )}
       </div>
     </Drawer>

@@ -1,10 +1,13 @@
-import type { LeadNote, LeadCall, EmailMessage } from "@/lib/types";
+import type { LeadNote, LeadCall, EmailMessage, LoadedNoteAttachment } from "@/lib/types";
 
 export type ActivityKind = "all" | "note" | "call" | "email" | "status" | "enrichment" | "change";
 
 export interface AuthorProfile { name: string; avatar_url: string | null }
 
-export type NoteRow = LeadNote & { profiles: AuthorProfile | null };
+export type NoteRow = LeadNote & {
+  profiles: AuthorProfile | null;
+  attachments: LoadedNoteAttachment[];
+};
 export type CallRow = LeadCall & { profiles: AuthorProfile | null };
 export type EmailRow = EmailMessage & {
   profiles: AuthorProfile | null;

@@ -12,6 +12,12 @@ import { sendEmail } from "@/lib/email/smtp";
 import { listTemplates } from "@/lib/email/templates-server";
 import type { EmailTemplate } from "@/lib/email/templates";
 import type { CallDirection, CallStatus } from "@/lib/types";
+import {
+  deleteAttachmentsForNote,
+  deleteNoteAttachment,
+  uploadNoteAttachment,
+  type NewAttachmentInput,
+} from "@/lib/notes/attachments";
 
 export type CallProvider = "phonemondo" | "webex";
 
@@ -59,10 +65,18 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
   return { success: true };
 }
 
-export async function addNote(leadId: string, content: string) {
+export async function addNote(
+  leadId: string,
+  content: string,
+  attachments: NewAttachmentInput[] = [],
+) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
-  if (!content.trim()) return { error: "Notiz darf nicht leer sein." };
+  // Erlaube reine Datei-Notizen (z.B. nur Screenshot pasten): wenn Anhaenge da sind,
+  // ist auch leerer Text ok.
+  if (!content.trim() && attachments.length === 0) {
+    return { error: "Notiz darf nicht leer sein." };
+  }
 
   const db = createServiceClient();
   const { data, error } = await db
@@ -78,31 +92,83 @@ export async function addNote(leadId: string, content: string) {
     return { error: `DB-Fehler: ${error.message}` };
   }
 
+  const uploadErrors: string[] = [];
+  for (const att of attachments) {
+    const res = await uploadNoteAttachment({
+      leadId,
+      noteId: data.id as string,
+      userId: user.id,
+      input: att,
+    });
+    if ("error" in res) uploadErrors.push(`${att.fileName}: ${res.error}`);
+  }
+
   await logAudit({
     userId: user.id,
     action: "lead.note_added",
     entityType: "lead",
     entityId: leadId,
-    details: { note_id: data.id },
+    details: { note_id: data.id, attachment_count: attachments.length },
   });
 
   revalidatePath(`/crm/${leadId}`);
+  if (uploadErrors.length > 0) {
+    return { success: true, note: data, warning: uploadErrors.join("; ") };
+  }
   return { success: true, note: data };
 }
 
-export async function updateNote(noteId: string, leadId: string, content: string) {
+export async function updateNote(
+  noteId: string,
+  leadId: string,
+  content: string,
+  addAttachments: NewAttachmentInput[] = [],
+  removeAttachmentIds: string[] = [],
+) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
-  if (!content.trim()) return { error: "Notiz darf nicht leer sein." };
+  if (!content.trim() && addAttachments.length === 0) {
+    // Pruefen, ob nach dem Remove noch was uebrig bleibt — sonst ist die Notiz inhaltsleer.
+    const db = createServiceClient();
+    const { count } = await db
+      .from("lead_note_attachments")
+      .select("id", { count: "exact", head: true })
+      .eq("note_id", noteId);
+    const remaining = (count ?? 0) - removeAttachmentIds.length;
+    if (remaining <= 0) return { error: "Notiz darf nicht leer sein." };
+  }
 
   const db = createServiceClient();
-  const { error } = await db
-    .from("lead_notes")
-    .update({ content: content.trim(), updated_at: new Date().toISOString() })
-    .eq("id", noteId);
-  if (error) {
-    console.error("[updateNote] failed:", error);
-    return { error: `DB-Fehler: ${error.message}` };
+  if (content.trim()) {
+    const { error } = await db
+      .from("lead_notes")
+      .update({ content: content.trim(), updated_at: new Date().toISOString() })
+      .eq("id", noteId);
+    if (error) {
+      console.error("[updateNote] failed:", error);
+      return { error: `DB-Fehler: ${error.message}` };
+    }
+  } else {
+    // Nur Anhaenge geaendert → updated_at trotzdem bumpen.
+    await db
+      .from("lead_notes")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", noteId);
+  }
+
+  const errors: string[] = [];
+  for (const id of removeAttachmentIds) {
+    const res = await deleteNoteAttachment(id);
+    if (res.error) errors.push(`Loeschen fehlgeschlagen (${id}): ${res.error}`);
+  }
+  for (const att of addAttachments) {
+    const res = await uploadNoteAttachment({
+      leadId,
+      noteId,
+      userId: user.id,
+      input: att,
+    });
+    if ("error" in res) errors.push(`${att.fileName}: ${res.error}`);
   }
 
   await logAudit({
@@ -110,10 +176,15 @@ export async function updateNote(noteId: string, leadId: string, content: string
     action: "lead.note_updated",
     entityType: "lead",
     entityId: leadId,
-    details: { note_id: noteId },
+    details: {
+      note_id: noteId,
+      attachments_added: addAttachments.length,
+      attachments_removed: removeAttachmentIds.length,
+    },
   });
 
   revalidatePath(`/crm/${leadId}`);
+  if (errors.length > 0) return { success: true, warning: errors.join("; ") };
   return { success: true };
 }
 
@@ -121,6 +192,9 @@ export async function deleteNote(noteId: string, leadId: string) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   const db = createServiceClient();
+
+  // Storage-Objects vor DB-Delete entfernen (DB-CASCADE saeubert nur Tabellen-Rows).
+  await deleteAttachmentsForNote(noteId);
 
   const { error } = await db.from("lead_notes").delete().eq("id", noteId);
   if (error) return { error: error.message };

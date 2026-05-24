@@ -9,6 +9,7 @@ import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, Lea
 import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead } from "./actions";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
 import { EnrichmentDiagnosisModal } from "./enrichment-diagnosis-modal";
@@ -66,6 +67,7 @@ export function LeadProfilePanel({
   resizeStorageKey = "lead-panel-right-width",
 }: Props) {
   const router = useRouter();
+  const notify = usePreviewRefresh();
   const { mode: serviceMode } = useServiceMode();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
@@ -87,7 +89,7 @@ export function LeadProfilePanel({
   function handleUnarchive() {
     startUnarchive(async () => {
       const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
-      if (!("error" in res) || !res.error) router.refresh();
+      if (!("error" in res) || !res.error) notify();
     });
   }
 
@@ -102,7 +104,7 @@ export function LeadProfilePanel({
         alert(res.error);
         return;
       }
-      router.refresh();
+      notify();
     });
   }
 
@@ -110,6 +112,7 @@ export function LeadProfilePanel({
     setCurrentStatus(newStatus);
     startStatusTransition(async () => {
       await updateLead(lead.id, { status: newStatus });
+      notify();
     });
   }
 

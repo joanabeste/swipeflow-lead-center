@@ -23,9 +23,55 @@ interface Props {
  * das vorhandene LeadProfilePanel im Drawer.
  */
 export function LeadPreviewDrawer({ previewId, onClose }: Props) {
+  const router = useRouter();
   const [data, setData] = useState<LeadDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadBundle = useCallback(
+    (id: string, opts?: { silent?: boolean }) => {
+      let cancelled = false;
+      if (!opts?.silent) setLoading(true);
+      setError(null);
+      fetch(`/api/leads/${id}/preview`, { cache: "no-store" })
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`Status ${r.status}`);
+          return r.json() as Promise<LeadDetailBundle>;
+        })
+        .then((bundle) => {
+          if (cancelled) return;
+          setData(bundle);
+          // Geocoding asynchron nachholen, falls Koordinaten fehlen und eine
+          // Adresse vorhanden ist. Blockiert nicht den initialen Render.
+          const lead = bundle.lead;
+          const hasAddr = Boolean(lead.street || lead.zip || lead.city);
+          if (hasAddr && (lead.latitude == null || lead.longitude == null)) {
+            fetch(`/api/leads/${id}/geocode`, { method: "POST", cache: "no-store" })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((j: { lat: number | null; lng: number | null } | null) => {
+                if (cancelled || !j || j.lat == null || j.lng == null) return;
+                setData((prev) =>
+                  prev && prev.lead.id === id
+                    ? { ...prev, lead: { ...prev.lead, latitude: j.lat, longitude: j.lng } }
+                    : prev,
+                );
+              })
+              .catch(() => {});
+          }
+        })
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : "Unbekannter Fehler");
+        })
+        .finally(() => {
+          if (!cancelled && !opts?.silent) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    },
+    [],
+  );
 
   // Fetch on previewId-change; setState im Effect ist hier bewusst (externer
   // Datenladevorgang). Disables analog zum projektweiten Pattern.
@@ -33,35 +79,18 @@ export function LeadPreviewDrawer({ previewId, onClose }: Props) {
     if (!previewId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setData(null);
-       
+
       setError(null);
       return;
     }
-    let cancelled = false;
-     
-    setLoading(true);
-     
-    setError(null);
-    fetch(`/api/leads/${previewId}/preview`, { cache: "no-store" })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Status ${r.status}`);
-        return r.json() as Promise<LeadDetailBundle>;
-      })
-      .then((bundle) => {
-        if (cancelled) return;
-        setData(bundle);
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Unbekannter Fehler");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [previewId]);
+    const cancel = loadBundle(previewId);
+    return cancel;
+  }, [previewId, loadBundle]);
+
+  const handleRefresh = useCallback(() => {
+    if (previewId) loadBundle(previewId, { silent: true });
+    router.refresh();
+  }, [previewId, loadBundle, router]);
 
   const open = previewId !== null;
   const title = data?.lead.company_name ?? (loading ? "Lade…" : "Vorschau");
@@ -93,24 +122,27 @@ export function LeadPreviewDrawer({ previewId, onClose }: Props) {
           </div>
         )}
         {data && (
-          <LeadProfilePanel
-            lead={data.lead}
-            changes={data.changes}
-            contacts={data.contacts}
-            jobPostings={data.jobPostings}
-            latestEnrichment={data.latestEnrichment}
-            customStatuses={data.customStatuses}
-            hq={data.hq}
-            onBack={onClose}
-            backLabel="Schließen"
-            extraRightColumn={
-              <LeadScreenshotCardClient
-                signedUrl={data.screenshotSignedUrl}
-                takenAt={data.lead.website_screenshot_taken_at}
-                websiteUrl={normalizeWebsiteUrl(data.lead.website)}
-              />
-            }
-          />
+          <PreviewRefreshProvider onRefresh={handleRefresh}>
+            <LeadProfilePanel
+              lead={data.lead}
+              changes={data.changes}
+              contacts={data.contacts}
+              jobPostings={data.jobPostings}
+              latestEnrichment={data.latestEnrichment}
+              customStatuses={data.customStatuses}
+              hq={data.hq}
+              onBack={onClose}
+              backLabel="Schließen"
+              extraRightColumn={
+                <LeadScreenshotCardClient
+                  leadId={data.lead.id}
+                  hasScreenshot={Boolean(data.lead.website_screenshot_path)}
+                  takenAt={data.lead.website_screenshot_taken_at}
+                  websiteUrl={normalizeWebsiteUrl(data.lead.website)}
+                />
+              }
+            />
+          </PreviewRefreshProvider>
         )}
       </div>
     </Drawer>

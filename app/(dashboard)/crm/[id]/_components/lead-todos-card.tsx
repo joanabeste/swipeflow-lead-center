@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { CalendarClock, Check, ChevronDown, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
 import type { LeadTodo } from "@/lib/types";
 import { addLeadTodo, deleteLeadTodo, toggleLeadTodo, updateLeadTodo } from "../../actions";
@@ -42,7 +42,7 @@ function toneClasses(tone: "overdue" | "today" | "soon" | "later"): string {
 }
 
 export function LeadTodosCard({ leadId, todos }: Props) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
   const [composing, setComposing] = useState(false);
@@ -58,7 +58,7 @@ export function LeadTodosCard({ leadId, todos }: Props) {
     return { open: o, done: d };
   }, [todos]);
 
-  function refresh() { router.refresh(); }
+  function refresh() { notify(); }
 
   function handleToggle(todoId: string, nextDone: boolean) {
     startTransition(async () => {

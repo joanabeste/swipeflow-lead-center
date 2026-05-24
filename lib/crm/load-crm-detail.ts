@@ -2,8 +2,9 @@ import "server-only";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage, LeadTodo,
+  EmailMessage, LeadTodo, LoadedNoteAttachment,
 } from "@/lib/types";
+import { getNoteAttachmentsForNotes } from "@/lib/notes/attachments";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
 import { getHqLocation, type HqLocation } from "@/lib/app-settings";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
@@ -21,7 +22,7 @@ export interface CrmDetailBundle {
   lead: Lead;
   contacts: LeadContact[];
   jobs: LeadJobPosting[];
-  notes: (LeadNote & { profiles: AuthorProfile | null })[];
+  notes: (LeadNote & { profiles: AuthorProfile | null; attachments: LoadedNoteAttachment[] })[];
   calls: (LeadCall & { profiles: AuthorProfile | null })[];
   emails: (EmailMessage & { profiles: AuthorProfile | null; contact_name: string | null })[];
   enrichments: LeadEnrichment[];
@@ -212,6 +213,13 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     };
   });
 
+  const notesTyped = ((notes ?? []) as LeadNote[]).map(withAuthor);
+  const attachmentsByNote = await getNoteAttachmentsForNotes(notesTyped.map((n) => n.id));
+  const notesWithAttachments = notesTyped.map((n) => ({
+    ...n,
+    attachments: attachmentsByNote.get(n.id) ?? [],
+  }));
+
   const supabaseAuth = await createClient();
   const { data: { user: authedUser } } = await supabaseAuth.auth.getUser();
   let senderName: string | null = null;
@@ -228,7 +236,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     lead: typedLead,
     contacts: (contacts ?? []) as LeadContact[],
     jobs: (jobs ?? []) as LeadJobPosting[],
-    notes: ((notes ?? []) as LeadNote[]).map(withAuthor),
+    notes: notesWithAttachments,
     calls: ((calls ?? []) as LeadCall[]).map(withAuthor),
     emails: ((emails ?? []) as EmailMessage[]).map((m) => {
       const p = m.sent_by ? profileById.get(m.sent_by) ?? null : null;

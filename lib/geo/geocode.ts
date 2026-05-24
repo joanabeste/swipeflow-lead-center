@@ -63,6 +63,17 @@ export async function ensureLeadCoords(lead: MinimalLeadAddress): Promise<LatLng
     return { lat: lead.latitude, lng: lead.longitude };
   }
 
+  // Ohne Ort oder PLZ ist Street-only-Geocoding unzuverlaessig (mehrere
+  // "Markenweg 6" in DE → Nominatim wuerfelt einen). Lieber leer lassen.
+  if (!lead.city && !lead.zip) {
+    const db = createServiceClient();
+    await db
+      .from("leads")
+      .update({ geocoded_at: new Date().toISOString() })
+      .eq("id", lead.id);
+    return null;
+  }
+
   // Adresse aufbauen — Präferenz: Straße + PLZ + Stadt
   const parts: string[] = [];
   if (lead.street) parts.push(lead.street);
@@ -72,8 +83,6 @@ export async function ensureLeadCoords(lead: MinimalLeadAddress): Promise<LatLng
     parts.push(lead.country);
   }
 
-  // Fallback: nur Stadt + Firmenname
-  if (parts.length === 0 && lead.city) parts.push(lead.city);
   if (parts.length === 0) return null;
 
   const query = parts.join(", ");

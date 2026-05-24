@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { Plus, X, Trash2, Save, ExternalLink } from "lucide-react";
 import type { LeadJobPosting } from "@/lib/types";
 import { addJobPosting, deleteJobPosting } from "../../actions";
@@ -55,7 +55,7 @@ export function CrmJobsCard({
 }
 
 function JobRow({ job, leadId }: { job: LeadJobPosting; leadId: string }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
 
@@ -66,7 +66,7 @@ function JobRow({ job, leadId }: { job: LeadJobPosting; leadId: string }) {
       if (res.error) addToast(res.error, "error");
       else {
         addToast("Stelle gelöscht", "success");
-        router.refresh();
+        notify();
       }
     });
   }
@@ -97,7 +97,7 @@ function JobRow({ job, leadId }: { job: LeadJobPosting; leadId: string }) {
 }
 
 function JobForm({ leadId, onClose }: { leadId: string; onClose: () => void }) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
@@ -112,7 +112,7 @@ function JobForm({ leadId, onClose }: { leadId: string; onClose: () => void }) {
       else {
         addToast("Stelle angelegt", "success");
         onClose();
-        router.refresh();
+        notify();
       }
     });
   }

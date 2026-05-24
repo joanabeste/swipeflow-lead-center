@@ -74,12 +74,18 @@ export function ArchiveManager({ leads }: Props) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col />
+              <col className="w-[200px]" />
+              <col className="w-[140px]" />
+              <col className="w-[170px]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-gray-100 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:border-[#2c2c2e] dark:text-gray-400">
                 <th className="px-4 py-2.5">Firma</th>
                 <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5">Aussortiert am</th>
+                <th className="px-4 py-2.5">Aussortiert</th>
                 <th className="px-4 py-2.5 text-right">Aktion</th>
               </tr>
             </thead>
@@ -91,7 +97,7 @@ export function ArchiveManager({ leads }: Props) {
                       href={`/leads/${l.id}?from=${encodeURIComponent("from=einstellungen/aussortierte-leads")}`}
                       className="flex items-center gap-2 hover:text-primary"
                     >
-                      <Building2 className="h-3.5 w-3.5 text-gray-400" />
+                      <Building2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                       <div className="min-w-0">
                         <p className="truncate font-medium">{l.company_name}</p>
                         <p className="truncate text-xs text-gray-500 dark:text-gray-400">
@@ -102,14 +108,15 @@ export function ArchiveManager({ leads }: Props) {
                   </td>
                   <td className="px-4 py-2">
                     <span
-                      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                      className="inline-flex max-w-full items-center truncate whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
+                      title={l.crm_status_label}
                       style={{ backgroundColor: `${l.crm_status_color}20`, color: l.crm_status_color }}
                     >
                       {l.crm_status_label}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(l.updated_at).toLocaleString("de-DE")}
+                  <td className="whitespace-nowrap px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+                    {formatArchivedAt(l.updated_at)}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center justify-end">
@@ -117,7 +124,7 @@ export function ArchiveManager({ leads }: Props) {
                         type="button"
                         onClick={() => handleRestore(l.id, l.company_name)}
                         disabled={pendingId === l.id}
-                        className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:hover:bg-white/5"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2 py-1 text-xs hover:bg-gray-50 disabled:opacity-50 dark:border-[#2c2c2e] dark:bg-[#232325] dark:hover:bg-white/5"
                       >
                         <RotateCcw className="h-3 w-3" />
                         Wiederherstellen
@@ -132,6 +139,13 @@ export function ArchiveManager({ leads }: Props) {
       )}
     </div>
   );
+}
+
+function formatArchivedAt(iso: string): string {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return `${date}, ${time}`;
 }
 
 function TabButton({

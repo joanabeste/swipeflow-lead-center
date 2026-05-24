@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { X, Loader2, AlertTriangle, Clock, Globe, RefreshCw, Ban } from "lucide-react";
 import type { LeadEnrichment } from "@/lib/types";
 import { abortEnrichment } from "./enrichment-actions";
@@ -21,7 +21,7 @@ function formatElapsed(startedAt: string, until: number): string {
 }
 
 export function EnrichmentDiagnosisModal({ enrichment, leadId, onClose }: Props) {
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const [now, setNow] = useState(() => Date.now());
   const [aborting, startAbort] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -43,14 +43,14 @@ export function EnrichmentDiagnosisModal({ enrichment, leadId, onClose }: Props)
       if (res.error) {
         setError(res.error);
       } else {
-        router.refresh();
+        notify();
         onClose();
       }
     });
   }
 
   function handleRefresh() {
-    router.refresh();
+    notify();
     setNow(Date.now());
   }
 

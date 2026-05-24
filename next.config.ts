@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
     // package-lock.json in /Users/joana/ als Workspace-Root.
     root: import.meta.dirname,
   },
+  experimental: {
+    // Default ist 1 MB. Notiz-Anhaenge (bis 25 MB) werden als base64-DataURL
+    // in der Server Action uebertragen → Limit grosszuegig anheben.
+    serverActions: { bodySizeLimit: "35mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

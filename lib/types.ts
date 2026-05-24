@@ -208,6 +208,28 @@ export interface LeadNote {
   updated_at: string;
 }
 
+export interface LeadNoteAttachment {
+  id: string;
+  note_id: string;
+  lead_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** An den Client gereichte Sicht eines Anhangs: ohne storage_path, mit signed URL. */
+export interface LoadedNoteAttachment {
+  id: string;
+  note_id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  signed_url: string | null;
+}
+
 /** Aufgabe / Wiedervorlage zu einem Lead. due_date ist Pflicht (Sales-Rhythmus
  *  setzt immer ein Datum voraus). done_at IS NULL = offen. */
 export interface LeadTodo {

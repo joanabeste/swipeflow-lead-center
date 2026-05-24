@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2, UserPlus } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
@@ -46,7 +46,7 @@ export function CrmLandingPagesCard({
 }: Props) {
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const { addToast } = useToastContext();
-  const router = useRouter();
+  const notify = usePreviewRefresh();
   const [pending, startTransition] = useTransition();
 
   function buildPublicUrl(slug: string): string {
@@ -75,7 +75,7 @@ export function CrmLandingPagesCard({
       if ("error" in res) addToast(res.error, "error");
       else {
         addToast("Landing-Page gelöscht.", "success");
-        router.refresh();
+        notify();
       }
     });
   }
@@ -182,12 +182,12 @@ export function CrmLandingPagesCard({
           onCreated={(slug) => {
             setDialogState(null);
             void copyLink(slug);
-            router.refresh();
+            notify();
           }}
           onUpdated={() => {
             setDialogState(null);
             addToast("Landing-Page gespeichert.", "success");
-            router.refresh();
+            notify();
           }}
         />
       )}
