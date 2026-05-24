@@ -51,7 +51,7 @@ export function CategoriesManager({ initial }: { initial: LearningCategory[] }) 
         <button
           type="submit"
           disabled={pending || !name.trim()}
-          className="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
         >
           <Plus className="h-4 w-4" /> Anlegen
         </button>

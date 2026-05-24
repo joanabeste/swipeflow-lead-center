@@ -46,7 +46,7 @@ export function CompleteLessonButton({
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
+      className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
     >
       <Check className="h-4 w-4" /> Lektion abschließen
     </button>

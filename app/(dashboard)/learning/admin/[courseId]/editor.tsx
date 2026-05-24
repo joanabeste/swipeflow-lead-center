@@ -412,7 +412,7 @@ function LessonEditPanel({
         <div className="flex justify-end">
           <button
             onClick={() => onPersist({content_html: contentHtml })}
-            className="rounded-xl bg-primary px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-primary-dark"
+            className="rounded-xl bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark"
           >
             Inhalt speichern
           </button>
