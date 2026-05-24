@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 
-type Tab = "verlauf" | "kontakte" | "projekte" | "zeit";
+type Tab = "verlauf" | "kontakte" | "projekte" | "zeit" | "mails";
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: "kontakte", label: "Kontakte" },
   { id: "projekte", label: "Projekte" },
+  { id: "mails", label: "E-Mails" },
   { id: "zeit", label: "Zeit & Lohn" },
   { id: "verlauf", label: "Verlauf" },
 ];
