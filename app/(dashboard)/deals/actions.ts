@@ -182,6 +182,166 @@ export async function deleteDealAction(dealId: string): Promise<{ success: true 
   return { success: true };
 }
 
+// ─── Won → Fulfillment-Projekt anlegen ────────────────────────
+
+/**
+ * Legt nach einem gewonnenen Deal ein Fulfillment-Projekt an.
+ * - Verknüpft per `projects.deal_id` zurück → idempotent (zweiter Aufruf
+ *   liefert die bestehende projectId).
+ * - Wenn der Deal keinen Lead hat, wird einer aus `company_name` angelegt
+ *   (lifecycle_stage='customer') und `deals.lead_id` nachgezogen.
+ * - Setzt den Lead in jedem Fall auf `lifecycle_stage='customer'`.
+ * - Optional: legt einen primären Ansprechpartner gleich mit an.
+ */
+export async function createProjectFromDeal(
+  dealId: string,
+  input: {
+    projectName: string;
+    vertical?: "webdesign" | "recruiting" | "sonstiges" | "";
+    startedAt?: string | null;
+    notes?: string | null;
+    primaryContact?: {
+      first_name: string;
+      last_name?: string;
+      salutation?: "du" | "sie";
+      role?: string;
+      email?: string;
+      phone?: string;
+    } | null;
+  },
+): Promise<
+  | { success: true; data: { projectId: string; leadId: string; alreadyExisted: boolean } }
+  | { error: string }
+> {
+  const user = await requireUser();
+  if (!user) return { error: "Nicht angemeldet." };
+
+  const projectName = input.projectName.trim();
+  if (!projectName) return { error: "Projekt-Name fehlt." };
+
+  const db = createServiceClient();
+
+  const { data: deal, error: dealError } = await db
+    .from("deals")
+    .select("id, lead_id, company_name, title, stage_id")
+    .eq("id", dealId)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (dealError) return { error: `DB-Fehler: ${dealError.message}` };
+  if (!deal) return { error: "Deal nicht gefunden." };
+
+  // Idempotenz: existiert bereits ein Projekt für diesen Deal?
+  const { data: existing } = await db
+    .from("projects")
+    .select("id, lead_id")
+    .eq("deal_id", dealId)
+    .maybeSingle();
+  if (existing) {
+    return {
+      success: true,
+      data: {
+        projectId: existing.id as string,
+        leadId: existing.lead_id as string,
+        alreadyExisted: true,
+      },
+    };
+  }
+
+  // Lead-Resolution
+  let leadId = (deal.lead_id as string | null) ?? null;
+  if (!leadId) {
+    const companyName = ((deal.company_name as string | null) ?? "").trim();
+    if (!companyName) return { error: "Deal hat weder Lead noch Firmenname." };
+    const { data: newLead, error: leadErr } = await db
+      .from("leads")
+      .insert({
+        company_name: companyName,
+        source_type: "manual",
+        status: "imported",
+        lifecycle_stage: "customer",
+        became_customer_at: new Date().toISOString(),
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+    if (leadErr || !newLead) return { error: `Lead-Anlage fehlgeschlagen: ${leadErr?.message ?? "unbekannt"}` };
+    leadId = newLead.id as string;
+    await db.from("deals").update({ lead_id: leadId }).eq("id", dealId);
+  } else {
+    // Bestehenden Lead auf Kunde heben (idempotent: nur wenn noch nicht).
+    const { data: leadRow } = await db
+      .from("leads")
+      .select("lifecycle_stage")
+      .eq("id", leadId)
+      .maybeSingle();
+    if (leadRow && leadRow.lifecycle_stage !== "customer") {
+      await db
+        .from("leads")
+        .update({ lifecycle_stage: "customer", became_customer_at: new Date().toISOString() })
+        .eq("id", leadId);
+    }
+  }
+
+  // Projekt anlegen
+  const vertical = input.vertical && input.vertical.length > 0 ? input.vertical : null;
+  const { data: project, error: projectErr } = await db
+    .from("projects")
+    .insert({
+      lead_id: leadId,
+      deal_id: dealId,
+      name: projectName,
+      status: "onboarding",
+      vertical,
+      started_at: input.startedAt || null,
+      notes: input.notes?.trim() || null,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+  if (projectErr || !project) {
+    if (projectErr?.message && /column .*deal_id/i.test(projectErr.message)) {
+      return { error: "Migration 080 fehlt — `projects.deal_id` ist noch nicht vorhanden." };
+    }
+    return { error: `Projekt-Anlage fehlgeschlagen: ${projectErr?.message ?? "unbekannt"}` };
+  }
+  const projectId = project.id as string;
+
+  // Optional: primären Ansprechpartner anlegen.
+  const pc = input.primaryContact;
+  if (pc && pc.first_name.trim()) {
+    // Falls bereits ein primary Contact existiert, diesen entprimären.
+    await db.from("customer_contacts").update({ is_primary: false }).eq("lead_id", leadId);
+    await db.from("customer_contacts").insert({
+      lead_id: leadId,
+      first_name: pc.first_name.trim(),
+      last_name: pc.last_name?.trim() || null,
+      salutation: pc.salutation ?? "sie",
+      role: pc.role?.trim() || null,
+      email: pc.email?.trim() || null,
+      phone: pc.phone?.trim() || null,
+      is_primary: true,
+      created_by: user.id,
+    });
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "project.create_from_deal",
+    entityType: "project",
+    entityId: projectId,
+    details: { deal_id: dealId, lead_id: leadId },
+  });
+
+  revalidatePath("/deals");
+  revalidatePath(`/deals/${dealId}`);
+  revalidatePath("/fulfillment/projekte");
+  revalidatePath("/fulfillment/kunden");
+  revalidatePath(`/fulfillment/kunden/${leadId}`);
+  revalidatePath("/crm");
+
+  return { success: true, data: { projectId, leadId, alreadyExisted: false } };
+}
+
 // ─── Deal-Notes / Activities ──────────────────────────────────
 
 export async function addDealNoteAction(input: {

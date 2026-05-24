@@ -5,15 +5,14 @@ import { loadCustomer, loadContacts, loadProjectsForLead } from "@/lib/fulfillme
 import { formatDateDe } from "@/lib/zeit/format";
 import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
-import { ZeitTab } from "./_components/zeit-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
 import { MailsTab } from "./_components/mails-tab";
 import { loadThreadsForLead } from "@/lib/email/data";
 
-type Tab = "verlauf" | "kontakte" | "projekte" | "zeit" | "mails";
+type Tab = "verlauf" | "kontakte" | "projekte" | "mails";
 
 function isTab(s: string | undefined): s is Tab {
-  return s === "verlauf" || s === "kontakte" || s === "projekte" || s === "zeit" || s === "mails";
+  return s === "verlauf" || s === "kontakte" || s === "projekte" || s === "mails";
 }
 
 export default async function KundenDetailPage({
@@ -25,7 +24,7 @@ export default async function KundenDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const tab: Tab = isTab(sp.tab) ? sp.tab : "kontakte";
+  const tab: Tab = isTab(sp.tab) ? sp.tab : "projekte";
 
   const customer = await loadCustomer(id);
   if (!customer) notFound();
@@ -87,7 +86,6 @@ export default async function KundenDetailPage({
       {tab === "verlauf" && <VerlaufTab leadId={id} />}
       {tab === "kontakte" && <ContactsTab leadId={id} contacts={contacts} />}
       {tab === "projekte" && <ProjectsTab leadId={id} projects={projects} />}
-      {tab === "zeit" && <ZeitTab leadId={id} />}
       {tab === "mails" && (
         <MailsTab
           leadId={id}

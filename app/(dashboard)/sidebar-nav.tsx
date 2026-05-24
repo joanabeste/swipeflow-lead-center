@@ -314,7 +314,7 @@ function SectionSwitcher({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5 dark:border-[#3a3a3c] dark:bg-[#232325] dark:ring-white/10">
           {sections.map((s) => {
             const isCurrent = s.id === current.id;
             return (

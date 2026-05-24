@@ -15,6 +15,7 @@ import { updateDealAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
 import { useConfetti } from "@/components/confetti";
 import { AvatarChip } from "./avatar-chip";
+import { WonDealDialog } from "./won-deal-dialog";
 
 export function KanbanView({
   deals, stages,
@@ -29,6 +30,7 @@ export function KanbanView({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [wonDeal, setWonDeal] = useState<DealWithRelations | null>(null);
   const effectiveStage = (d: DealWithRelations) => overrides[d.id] ?? d.stageId;
   const byStage = new Map<string, DealWithRelations[]>();
   for (const s of stages) byStage.set(s.id, []);
@@ -59,30 +61,36 @@ export function KanbanView({
           return next;
         });
       } else {
-        if (newKind === "won" && previousKind !== "won") fireConfetti();
+        if (newKind === "won" && previousKind !== "won") {
+          fireConfetti();
+          setWonDeal(deal);
+        }
         router.refresh();
       }
     });
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className="grid auto-cols-[280px] grid-flow-col gap-3 overflow-x-auto pb-2">
-        {stages.map((stage) => {
-          const stageDeals = byStage.get(stage.id) ?? [];
-          const volume = stageDeals.reduce((s, d) => s + d.amountCents, 0);
-          return (
-            <StageColumn
-              key={stage.id}
-              stage={stage}
-              deals={stageDeals}
-              volume={volume}
-              stages={stages}
-            />
-          );
-        })}
-      </div>
-    </DndContext>
+    <>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div className="grid auto-cols-[280px] grid-flow-col gap-3 overflow-x-auto pb-2">
+          {stages.map((stage) => {
+            const stageDeals = byStage.get(stage.id) ?? [];
+            const volume = stageDeals.reduce((s, d) => s + d.amountCents, 0);
+            return (
+              <StageColumn
+                key={stage.id}
+                stage={stage}
+                deals={stageDeals}
+                volume={volume}
+                stages={stages}
+              />
+            );
+          })}
+        </div>
+      </DndContext>
+      <WonDealDialog deal={wonDeal} onClose={() => setWonDeal(null)} />
+    </>
   );
 }
 
