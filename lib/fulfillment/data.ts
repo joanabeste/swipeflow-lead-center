@@ -1,7 +1,7 @@
 // Defensive Read-Helper fuer Fulfillment. Geht mit fehlenden Migrationen (071-074) um.
 
 import { createServiceClient } from "@/lib/supabase/server";
-import type { CustomerContact, Project, ClickupTaskCached, LifecycleStage } from "./types";
+import type { CustomerContact, Project, ProjectNote, ClickupTaskCached, LifecycleStage } from "./types";
 import type { Lead } from "@/lib/types";
 
 function isMissingTable(error: { code?: string; message?: string } | null): boolean {
@@ -84,6 +84,25 @@ export async function loadProject(id: string): Promise<Project | null> {
     return null;
   }
   return data;
+}
+
+export async function loadProjectNotes(projectId: string): Promise<ProjectNote[]> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("project_notes")
+    .select("id, project_id, content, created_by, created_at, updated_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (!isMissingTable(error)) console.error("[loadProjectNotes]", error);
+    return [];
+  }
+  const notes = (data ?? []) as ProjectNote[];
+  const authorIds = Array.from(new Set(notes.map((n) => n.created_by).filter((x): x is string => !!x)));
+  if (authorIds.length === 0) return notes;
+  const { data: profiles } = await db.from("profiles").select("id, name").in("id", authorIds);
+  const nameById = new Map((profiles ?? []).map((p) => [p.id as string, (p.name as string | null) ?? null]));
+  return notes.map((n) => ({ ...n, author_name: n.created_by ? nameById.get(n.created_by) ?? null : null }));
 }
 
 export async function loadCachedTasks(projectId: string, includeClosed = false): Promise<ClickupTaskCached[]> {

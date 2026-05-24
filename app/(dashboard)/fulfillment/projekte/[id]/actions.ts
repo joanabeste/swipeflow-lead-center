@@ -83,3 +83,56 @@ export async function closeClickupTask(clickupTaskId: string): Promise<Result> {
     return { error: translateError(e) };
   }
 }
+
+// ─── Projekt-Notizen ─────────────────────────────────────────────
+
+export async function addProjectNote(projectId: string, content: string): Promise<Result> {
+  const u = await uid();
+  if (!u) return { error: "Nicht angemeldet." };
+  const trimmed = content.trim();
+  if (!trimmed) return { error: "Notiz darf nicht leer sein." };
+
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("project_notes")
+    .insert({ project_id: projectId, content: trimmed, created_by: u })
+    .select("id")
+    .single();
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) {
+      return { error: "Tabelle project_notes fehlt — Migration 080 muss in Supabase ausgefuehrt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+  await logAudit({ userId: u, action: "project.note_added", entityType: "project", entityId: projectId, details: { note_id: data.id } });
+  revalidatePath(`/fulfillment/projekte/${projectId}`);
+  return { success: true };
+}
+
+export async function updateProjectNote(noteId: string, projectId: string, content: string): Promise<Result> {
+  const u = await uid();
+  if (!u) return { error: "Nicht angemeldet." };
+  const trimmed = content.trim();
+  if (!trimmed) return { error: "Notiz darf nicht leer sein." };
+
+  const db = createServiceClient();
+  const { error } = await db
+    .from("project_notes")
+    .update({ content: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", noteId);
+  if (error) return { error: `DB-Fehler: ${error.message}` };
+  await logAudit({ userId: u, action: "project.note_updated", entityType: "project", entityId: projectId, details: { note_id: noteId } });
+  revalidatePath(`/fulfillment/projekte/${projectId}`);
+  return { success: true };
+}
+
+export async function deleteProjectNote(noteId: string, projectId: string): Promise<Result> {
+  const u = await uid();
+  if (!u) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { error } = await db.from("project_notes").delete().eq("id", noteId);
+  if (error) return { error: `DB-Fehler: ${error.message}` };
+  await logAudit({ userId: u, action: "project.note_deleted", entityType: "project", entityId: projectId, details: { note_id: noteId } });
+  revalidatePath(`/fulfillment/projekte/${projectId}`);
+  return { success: true };
+}

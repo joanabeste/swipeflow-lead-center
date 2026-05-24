@@ -1,17 +1,25 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { loadProject, loadCustomer, loadCachedTasks } from "@/lib/fulfillment/data";
+import { createClient } from "@/lib/supabase/server";
+import { loadProject, loadCustomer, loadCachedTasks, loadProjectNotes } from "@/lib/fulfillment/data";
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/fulfillment/types";
 import { formatDateDe } from "@/lib/zeit/format";
 import { ProjectStatusEditor } from "./_components/status-editor";
 import { TaskList } from "./_components/task-list";
+import { ProjectNotes } from "./_components/project-notes";
 
 export default async function ProjektDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await loadProject(id);
   if (!project) notFound();
-  const [customer, tasks] = await Promise.all([loadCustomer(project.lead_id), loadCachedTasks(id)]);
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  const [customer, tasks, notes] = await Promise.all([
+    loadCustomer(project.lead_id),
+    loadCachedTasks(id),
+    loadProjectNotes(id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -46,6 +54,11 @@ export default async function ProjektDetailPage({ params }: { params: Promise<{ 
           </p>
         )}
       </header>
+
+      <section>
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Notizen</h2>
+        <ProjectNotes projectId={project.id} notes={notes} currentUserId={user?.id ?? null} />
+      </section>
 
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">ClickUp-Tasks</h2>

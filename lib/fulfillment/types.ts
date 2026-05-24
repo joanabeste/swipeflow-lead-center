@@ -52,6 +52,17 @@ export interface Project {
   updated_at: string;
 }
 
+export interface ProjectNote {
+  id: string;
+  project_id: string;
+  content: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Optionaler join: Anzeigename des Autors aus profiles (server fuegt das ein). */
+  author_name?: string | null;
+}
+
 export interface ClickupTaskCached {
   clickup_task_id: string;
   project_id: string;

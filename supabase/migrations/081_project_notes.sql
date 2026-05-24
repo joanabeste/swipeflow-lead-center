@@ -1,20 +1,4 @@
--- BUNDLED PENDING MIGRATIONS — ausfuehren im Supabase SQL-Editor
--- Aktuell: 080 (projects.deal_id) + 081 (project_notes)
-
-
--- ===========================================
--- 080_projects_deal_link.sql
--- ===========================================
--- 080: projects.deal_id — Rueckverlinkung Projekt <-> Deal.
-ALTER TABLE public.projects
-  ADD COLUMN IF NOT EXISTS deal_id uuid REFERENCES public.deals(id) ON DELETE SET NULL;
-CREATE INDEX IF NOT EXISTS projects_deal_idx ON public.projects(deal_id);
-
-
--- ===========================================
--- 081_project_notes.sql
--- ===========================================
--- 081: project_notes — freitext Notizen pro Projekt, mehrere pro Projekt erlaubt.
+-- 080: project_notes — freitext Notizen pro Projekt, mehrere pro Projekt erlaubt.
 -- Parallel zu lead_notes. Anhaenge spaeter (eigene Migration), falls noetig.
 
 CREATE TABLE IF NOT EXISTS public.project_notes (
@@ -41,10 +25,12 @@ CREATE TRIGGER project_notes_set_updated_at
 
 ALTER TABLE public.project_notes ENABLE ROW LEVEL SECURITY;
 
+-- Authenticated Lesen — Team-weit sichtbar (analog email_threads).
 DROP POLICY IF EXISTS project_notes_select_auth ON public.project_notes;
 CREATE POLICY project_notes_select_auth ON public.project_notes
   FOR SELECT TO authenticated USING (true);
 
+-- Insert/Update/Delete nur fuer den Ersteller oder Admin.
 DROP POLICY IF EXISTS project_notes_insert_auth ON public.project_notes;
 CREATE POLICY project_notes_insert_auth ON public.project_notes
   FOR INSERT TO authenticated WITH CHECK (auth.uid() = created_by);
