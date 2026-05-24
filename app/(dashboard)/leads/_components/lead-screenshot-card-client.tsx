@@ -19,6 +19,7 @@ interface Props {
  *  gezogen wird (sonst landet playwright im Browser-Bundle). */
 export function LeadScreenshotCardClient({ signedUrl, leadId, hasScreenshot, takenAt, websiteUrl }: Props) {
   const [lazyUrl, setLazyUrl] = useState<string | null>(null);
+  const [lazyError, setLazyError] = useState(false);
 
   // Lazy-Modus: leadId + hasScreenshot gesetzt, kein signedUrl vorab.
   useEffect(() => {
@@ -27,14 +28,21 @@ export function LeadScreenshotCardClient({ signedUrl, leadId, hasScreenshot, tak
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLazyUrl(null);
+    setLazyError(false);
     fetch(`/api/leads/${leadId}/screenshot-url`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: { url: string | null } | null) => {
-        if (cancelled || !j) return;
+        if (cancelled) return;
+        if (!j) {
+          setLazyError(true);
+          return;
+        }
         setLazyUrl(j.url);
       })
       .catch((err) => {
-        if (!cancelled) console.warn("[lead-screenshot] signed-url fetch failed:", err);
+        if (cancelled) return;
+        console.warn("[lead-screenshot] signed-url fetch failed:", err);
+        setLazyError(true);
       });
     return () => {
       cancelled = true;
@@ -42,7 +50,22 @@ export function LeadScreenshotCardClient({ signedUrl, leadId, hasScreenshot, tak
   }, [signedUrl, leadId, hasScreenshot]);
 
   const effectiveUrl = signedUrl ?? lazyUrl;
-  if (!effectiveUrl) return null;
+  if (!effectiveUrl) {
+    if (lazyError && hasScreenshot) {
+      return (
+        <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+          <h2 className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400">
+            <Camera className="h-3.5 w-3.5" />
+            Website-Screenshot
+          </h2>
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+            Screenshot konnte nicht geladen werden. Bitte später erneut versuchen.
+          </p>
+        </div>
+      );
+    }
+    return null;
+  }
 
   const captionDate = takenAt
     ? new Date(takenAt).toLocaleDateString("de-DE", {

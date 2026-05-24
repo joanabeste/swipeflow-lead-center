@@ -137,9 +137,13 @@ function LabeledRow({
       </code>
       {copy && (
         <button
-          onClick={() => {
-            navigator.clipboard.writeText(value);
-            addToast("Kopiert", "success");
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(value);
+              addToast("Kopiert", "success");
+            } catch {
+              addToast(`Kopieren nicht möglich — manuell: ${value}`, "error", { durationMs: 10000 });
+            }
           }}
           className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
           title="Kopieren"

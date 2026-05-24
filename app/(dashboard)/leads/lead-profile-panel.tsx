@@ -21,6 +21,7 @@ import { CrmJobsCard } from "../crm/[id]/_components/crm-jobs-card";
 import { LeadLocationCard } from "./_components/lead-location-card";
 import { LeadDuplicatesCard } from "./_components/lead-duplicates-card";
 import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
+import { useToastContext } from "../toast-provider";
 
 export type { ActivityItem };
 
@@ -59,6 +60,7 @@ export function LeadProfilePanel({
   const router = useRouter();
   const notify = usePreviewRefresh();
   const { mode: serviceMode } = useServiceMode();
+  const { addToast } = useToastContext();
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -91,9 +93,10 @@ export function LeadProfilePanel({
       const mode = serviceMode === "webdev" ? "webdev" : "recruiting";
       const res = await bulkArchiveLeads([lead.id], mode);
       if ("error" in res && res.error) {
-        alert(res.error);
+        addToast(res.error, "error");
         return;
       }
+      addToast("Lead aussortiert.", "success");
       notify();
     });
   }
@@ -110,10 +113,13 @@ export function LeadProfilePanel({
     if (!confirm("Lead in den Papierkorb verschieben? Du kannst ihn 30 Tage lang unter Einstellungen → Papierkorb wiederherstellen.")) return;
     startDeleteTransition(async () => {
       const res = await deleteLead(lead.id);
-      if (!res.error) {
-        if (onBack) onBack();
-        else router.push(backHref);
+      if (res.error) {
+        addToast(res.error, "error");
+        return;
       }
+      addToast("Lead in den Papierkorb verschoben.", "success");
+      if (onBack) onBack();
+      else router.push(backHref);
     });
   }
 

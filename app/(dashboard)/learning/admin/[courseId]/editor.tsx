@@ -30,6 +30,7 @@ import {
 import { uploadFileToLearningTicket } from "../../_lib/client-upload";
 import { LEARNING_ATTACHMENT_ACCEPT, formatBytes, parseVideoUrl } from "../../_lib/format";
 import { LessonEditor } from "../../_components/lesson-editor";
+import { useToastContext } from "../../../toast-provider";
 
 interface Props {
   course: LearningCourse;
@@ -48,6 +49,7 @@ export function CourseEditor({ course, categories, modules: initialModules, less
   const [activeLessonId, setActiveLessonId] = useState<string | null>(initialLessons[0]?.id ?? null);
   const [, start] = useTransition();
   const [saving, setSaving] = useState<string | null>(null);
+  const { addToast } = useToastContext();
 
   const inputCls =
     "block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] dark:text-gray-100";
@@ -58,7 +60,7 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     setSaving(field as string);
     const res = await updateCourse({ id: course_.id, [field]: value } as Parameters<typeof updateCourse>[0]);
     setSaving(null);
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
   }
 
   async function togglePublish() {
@@ -69,7 +71,11 @@ export function CourseEditor({ course, categories, modules: initialModules, less
   async function handleDeleteCourse() {
     if (!confirm("Diesen Kurs inkl. aller Module und Lektionen wirklich löschen?")) return;
     const res = await deleteCourse(course_.id);
-    if (res.error) return alert(res.error);
+    if (res.error) {
+      addToast(res.error, "error");
+      return;
+    }
+    addToast("Kurs gelöscht", "success");
     router.push("/learning/admin");
   }
 
@@ -78,8 +84,12 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     const title = window.prompt("Modul-Titel?");
     if (!title?.trim()) return;
     const res = await createModule({ course_id: course_.id, title });
-    if ("error" in res) return alert(res.error);
+    if ("error" in res) {
+      addToast(res.error, "error");
+      return;
+    }
     setModules([...modules, res.module]);
+    addToast("Modul angelegt", "success");
   }
 
   async function handleRenameModule(m: LearningModule) {
@@ -87,7 +97,8 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     if (!title?.trim() || title === m.title) return;
     setModules(modules.map((x) => (x.id === m.id ? { ...x, title } : x)));
     const res = await updateModule({ id: m.id, title });
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Modul umbenannt", "success");
   }
 
   async function handleDeleteModule(m: LearningModule) {
@@ -95,7 +106,8 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     setModules(modules.filter((x) => x.id !== m.id));
     setLessons(lessons.filter((l) => l.module_id !== m.id));
     const res = await deleteModule(m.id);
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Modul gelöscht", "success");
   }
 
   // ─── Lektionen ───────────────────────────────────────────────────
@@ -103,9 +115,13 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     const title = window.prompt("Lektions-Titel?");
     if (!title?.trim()) return;
     const res = await createLesson({ module_id: moduleId, title });
-    if ("error" in res) return alert(res.error);
+    if ("error" in res) {
+      addToast(res.error, "error");
+      return;
+    }
     setLessons([...lessons, res.lesson]);
     setActiveLessonId(res.lesson.id);
+    addToast("Lektion angelegt", "success");
   }
 
   async function handleDeleteLesson(lessonId: string) {
@@ -113,7 +129,8 @@ export function CourseEditor({ course, categories, modules: initialModules, less
     setLessons(lessons.filter((l) => l.id !== lessonId));
     if (activeLessonId === lessonId) setActiveLessonId(null);
     const res = await deleteLesson(lessonId);
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Lektion gelöscht", "success");
   }
 
   function updateLessonLocal(id: string, patch: Partial<LearningLesson>) {
@@ -124,7 +141,8 @@ export function CourseEditor({ course, categories, modules: initialModules, less
   function pushLesson(id: string, patch: Omit<Parameters<typeof updateLesson>[0], "id">) {
     start(async () => {
       const res = await updateLesson({ ...patch, id });
-      if (res.error) alert(res.error);
+      if (res.error) addToast(res.error, "error");
+      else addToast("Gespeichert", "success");
     });
   }
 
@@ -135,12 +153,24 @@ export function CourseEditor({ course, categories, modules: initialModules, less
       lessonId,
       files: [{ clientId, fileName: file.name, mimeType: file.type, sizeBytes: file.size }],
     });
-    if ("error" in ticketRes) return alert(ticketRes.error);
-    if (ticketRes.errors.length > 0) return alert(ticketRes.errors[0].error);
+    if ("error" in ticketRes) {
+      addToast(ticketRes.error, "error");
+      return;
+    }
+    if (ticketRes.errors.length > 0) {
+      addToast(ticketRes.errors[0].error, "error");
+      return;
+    }
     const up = await uploadFileToLearningTicket(ticketRes.tickets[0], file);
-    if ("error" in up) return alert(up.error);
+    if ("error" in up) {
+      addToast(up.error, "error");
+      return;
+    }
     const reg = await registerLessonUpload({ lessonId, ref: up.ref });
-    if ("error" in reg) return alert(reg.error);
+    if ("error" in reg) {
+      addToast(reg.error, "error");
+      return;
+    }
     // Optimistisch in den State einfuegen — ohne signed_url, refresh holt den Rest.
     setAttachments({
       ...attachments,
@@ -156,6 +186,7 @@ export function CourseEditor({ course, categories, modules: initialModules, less
         },
       ],
     });
+    addToast("Anhang hochgeladen", "success");
     router.refresh();
   }
 
@@ -166,7 +197,8 @@ export function CourseEditor({ course, categories, modules: initialModules, less
       [lessonId]: (attachments[lessonId] ?? []).filter((a) => a.id !== attachmentId),
     });
     const res = await deleteLessonAttachment(attachmentId);
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Anhang gelöscht", "success");
   }
 
   const activeLesson = lessons.find((l) => l.id === activeLessonId) ?? null;

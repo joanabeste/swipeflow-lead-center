@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, CheckCircle2 } from "lucide-react";
 import { markLessonComplete, markLessonIncomplete } from "../_actions/progress";
+import { useToastContext } from "../../toast-provider";
 
 export function CompleteLessonButton({
   lessonId,
@@ -16,16 +17,23 @@ export function CompleteLessonButton({
 }) {
   const [pending, start] = useTransition();
   const router = useRouter();
+  const { addToast } = useToastContext();
 
   function handleClick() {
     start(async () => {
       const res = completed ? await markLessonIncomplete(lessonId) : await markLessonComplete(lessonId);
       if (res.error) {
-        alert(res.error);
+        addToast(res.error, "error");
         return;
       }
-      if (!completed && nextHref) router.push(nextHref);
-      else router.refresh();
+      if (!completed) {
+        addToast("Lektion abgeschlossen", "success");
+        if (nextHref) router.push(nextHref);
+        else router.refresh();
+      } else {
+        addToast("Lektion zurückgesetzt", "info");
+        router.refresh();
+      }
     });
   }
 

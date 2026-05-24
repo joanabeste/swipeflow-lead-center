@@ -92,6 +92,8 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
   useEffect(() => {
     if (!jobId) return;
     let cancelled = false;
+    let consecutiveErrors = 0;
+    let errorToastFired = false;
 
     async function tick() {
       if (cancelled) return;
@@ -106,6 +108,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
           lastError: string | null;
         };
         if (cancelled) return;
+        consecutiveErrors = 0;
         setResults(data.results);
         setCompleted(data.processed);
         setCurrentLead(data.currentLeadName ?? "");
@@ -114,7 +117,12 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
           return; // Polling stoppen
         }
       } catch {
-        // Netz-Wackler — einfach weiter pollen.
+        // Netz-Wackler einzeln schlucken; bei dauerhaftem Ausfall einmal warnen.
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 3 && !errorToastFired && !cancelled) {
+          addToast("Status-Abfrage hängt — Anreicherung läuft im Hintergrund weiter.", "error");
+          errorToastFired = true;
+        }
       }
       if (!cancelled) {
         pollRef.current = setTimeout(tick, POLL_INTERVAL_MS);
@@ -129,7 +137,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
         pollRef.current = null;
       }
     };
-  }, [jobId]);
+  }, [jobId, addToast]);
 
   const startEnrichment = useCallback(async () => {
     setPhase("running");

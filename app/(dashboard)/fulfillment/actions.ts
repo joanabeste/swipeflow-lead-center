@@ -180,6 +180,7 @@ export async function updateProject(id: string, patch: Partial<{
   if (error) return { error: dbError("updateProject", error) };
   await logAudit({ userId: uid, action: "project.update", entityType: "project", entityId: id, details: update });
   revalidatePath("/fulfillment");
+  revalidatePath("/fulfillment/projekte");
   revalidatePath(`/fulfillment/projekte/${id}`);
   return { success: true };
 }

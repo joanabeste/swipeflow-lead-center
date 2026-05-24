@@ -4,11 +4,13 @@ import { useState, useTransition } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import type { LearningCategory } from "@/lib/types";
 import { createCategory, deleteCategory, updateCategory } from "../../_actions/courses";
+import { useToastContext } from "../../../toast-provider";
 
 export function CategoriesManager({ initial }: { initial: LearningCategory[] }) {
   const [cats, setCats] = useState(initial);
   const [name, setName] = useState("");
   const [pending, start] = useTransition();
+  const { addToast } = useToastContext();
 
   const inputCls =
     "block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e] dark:text-gray-100";
@@ -18,9 +20,13 @@ export function CategoriesManager({ initial }: { initial: LearningCategory[] }) 
     if (!name.trim()) return;
     start(async () => {
       const res = await createCategory({ name });
-      if ("error" in res) return alert(res.error);
+      if ("error" in res) {
+        addToast(res.error, "error");
+        return;
+      }
       setCats([...cats, res.category]);
       setName("");
+      addToast("Kategorie angelegt", "success");
     });
   }
 
@@ -29,14 +35,16 @@ export function CategoriesManager({ initial }: { initial: LearningCategory[] }) 
     if (!newName?.trim() || newName === c.name) return;
     setCats(cats.map((x) => (x.id === c.id ? { ...x, name: newName } : x)));
     const res = await updateCategory({ id: c.id, name: newName });
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Kategorie umbenannt", "success");
   }
 
   async function handleDelete(c: LearningCategory) {
     if (!confirm(`Kategorie "${c.name}" löschen? Kurse darin behalten "Ohne Kategorie".`)) return;
     setCats(cats.filter((x) => x.id !== c.id));
     const res = await deleteCategory(c.id);
-    if (res.error) alert(res.error);
+    if (res.error) addToast(res.error, "error");
+    else addToast("Kategorie gelöscht", "success");
   }
 
   return (

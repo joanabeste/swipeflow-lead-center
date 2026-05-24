@@ -37,15 +37,25 @@ export function AvatarUpload({ currentUrl, fallback }: { currentUrl: string | nu
 
   async function handleConfirm() {
     if (!imageSrc || !croppedPixels) return;
-    const dataUrl = await cropToDataUrl(imageSrc, croppedPixels);
+    let dataUrl: string;
+    try {
+      dataUrl = await cropToDataUrl(imageSrc, croppedPixels);
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : "Bild konnte nicht zugeschnitten werden.", "error");
+      return;
+    }
     startTransition(async () => {
-      const res = await saveMyAvatar(dataUrl);
-      if (res.error) {
-        addToast(res.error, "error");
-      } else {
-        addToast("Profilbild aktualisiert.", "success");
-        setImageSrc(null);
-        router.refresh();
+      try {
+        const res = await saveMyAvatar(dataUrl);
+        if (res.error) {
+          addToast(res.error, "error");
+        } else {
+          addToast("Profilbild aktualisiert.", "success");
+          setImageSrc(null);
+          router.refresh();
+        }
+      } catch (e) {
+        addToast(e instanceof Error ? e.message : "Upload fehlgeschlagen.", "error");
       }
     });
   }
@@ -54,11 +64,15 @@ export function AvatarUpload({ currentUrl, fallback }: { currentUrl: string | nu
     if (!currentUrl) return;
     if (!confirm("Profilbild wirklich entfernen?")) return;
     startDelete(async () => {
-      const res = await removeMyAvatar();
-      if (res.error) addToast(res.error, "error");
-      else {
-        addToast("Profilbild entfernt.", "success");
-        router.refresh();
+      try {
+        const res = await removeMyAvatar();
+        if (res.error) addToast(res.error, "error");
+        else {
+          addToast("Profilbild entfernt.", "success");
+          router.refresh();
+        }
+      } catch (e) {
+        addToast(e instanceof Error ? e.message : "Entfernen fehlgeschlagen.", "error");
       }
     });
   }

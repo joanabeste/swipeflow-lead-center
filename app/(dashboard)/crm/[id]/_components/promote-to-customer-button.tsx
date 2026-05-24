@@ -26,11 +26,15 @@ export function PromoteToCustomerButton({ leadId, alreadyCustomer }: { leadId: s
   function handleClick() {
     if (!confirm("Diesen Lead als Kunde markieren? Der Lead wandert ins Fulfillment-Modul (Daten bleiben erhalten).")) return;
     startTransition(async () => {
-      const res = await setLifecycleStage(leadId, "customer");
-      if ("error" in res) addToast(res.error, "error");
-      else {
-        addToast("Lead ist jetzt Kunde.", "success");
-        router.push(`/fulfillment/kunden/${leadId}`);
+      try {
+        const res = await setLifecycleStage(leadId, "customer");
+        if ("error" in res) addToast(res.error, "error");
+        else {
+          addToast("Lead ist jetzt Kunde.", "success");
+          router.push(`/fulfillment/kunden/${leadId}`);
+        }
+      } catch (e) {
+        addToast(e instanceof Error ? e.message : "Konvertieren fehlgeschlagen.", "error");
       }
     });
   }

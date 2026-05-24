@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Briefcase } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { listAllProjects } from "@/lib/fulfillment/data";
-import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, type ProjectStatus } from "@/lib/fulfillment/types";
-import { formatDateDe } from "@/lib/zeit/format";
+import { type ProjectStatus } from "@/lib/fulfillment/types";
+import { ProjectStatusCell } from "./_components/project-status-cell";
+import { ProjectNameCell } from "./_components/project-name-cell";
+import { ProjectStartCell } from "./_components/project-start-cell";
 
 const STATUS_OPTIONS: Array<{ id: ProjectStatus | "all"; label: string }> = [
   { id: "all", label: "Alle" },
@@ -69,7 +71,7 @@ export default async function ProjekteListePage({ searchParams }: { searchParams
               {projects.map((p) => (
                 <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.02]">
                   <td className="px-4 py-3">
-                    <Link href={`/fulfillment/projekte/${p.id}`} className="font-medium text-gray-900 hover:text-primary dark:text-white">{p.name}</Link>
+                    <ProjectNameCell projectId={p.id} initial={p.name} />
                   </td>
                   <td className="px-4 py-3">
                     <Link href={`/fulfillment/kunden/${p.lead_id}`} className="text-gray-600 hover:text-primary dark:text-gray-300">
@@ -77,12 +79,12 @@ export default async function ProjekteListePage({ searchParams }: { searchParams
                     </Link>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${PROJECT_STATUS_COLORS[p.status]}`}>
-                      {PROJECT_STATUS_LABELS[p.status]}
-                    </span>
+                    <ProjectStatusCell projectId={p.id} current={p.status} />
                   </td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.vertical ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.started_at ? formatDateDe(p.started_at) : "—"}</td>
+                  <td className="px-4 py-3">
+                    <ProjectStartCell projectId={p.id} initial={p.started_at} />
+                  </td>
                 </tr>
               ))}
             </tbody>

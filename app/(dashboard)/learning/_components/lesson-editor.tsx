@@ -22,6 +22,7 @@ import {
 import { createLessonUploadTickets, registerLessonUpload } from "../_actions/attachments";
 import { uploadFileToLearningTicket } from "../_lib/client-upload";
 import { LEARNING_ATTACHMENT_BUCKET } from "../_lib/format";
+import { useToastContext } from "../../toast-provider";
 
 interface Props {
   lessonId: string;
@@ -49,6 +50,7 @@ export function LessonEditor({ lessonId, initialHtml, onChange }: Props) {
   });
 
   const [imgPending, setImgPending] = useState(false);
+  const { addToast } = useToastContext();
 
   // Initial-Sync nach Mount, weil immediatelyRender:false (Next 16 + SSR)
   useEffect(() => {
@@ -83,13 +85,25 @@ export function LessonEditor({ lessonId, initialHtml, onChange }: Props) {
         lessonId,
         files: [{ clientId, fileName: file.name, mimeType: file.type, sizeBytes: file.size }],
       });
-      if ("error" in ticketRes) return alert(ticketRes.error);
-      if (ticketRes.errors.length > 0) return alert(ticketRes.errors[0].error);
+      if ("error" in ticketRes) {
+        addToast(ticketRes.error, "error");
+        return;
+      }
+      if (ticketRes.errors.length > 0) {
+        addToast(ticketRes.errors[0].error, "error");
+        return;
+      }
       const ticket = ticketRes.tickets[0];
       const up = await uploadFileToLearningTicket(ticket, file, LEARNING_ATTACHMENT_BUCKET);
-      if ("error" in up) return alert(up.error);
+      if ("error" in up) {
+        addToast(up.error, "error");
+        return;
+      }
       const reg = await registerLessonUpload({ lessonId, ref: up.ref });
-      if ("error" in reg) return alert(reg.error);
+      if ("error" in reg) {
+        addToast(reg.error, "error");
+        return;
+      }
 
       // Signed URL holen — hier reicht der bucket-pfad, oeffentlich via signed URL.
       // Wir bauen die URL via Browser-Client.
@@ -100,6 +114,7 @@ export function LessonEditor({ lessonId, initialHtml, onChange }: Props) {
         .createSignedUrl(reg.attachment.storage_path, 60 * 60 * 24 * 7);
       if (signed?.signedUrl) {
         editor!.chain().focus().setImage({ src: signed.signedUrl, alt: file.name }).run();
+        addToast("Bild hochgeladen", "success");
       }
     } finally {
       setImgPending(false);

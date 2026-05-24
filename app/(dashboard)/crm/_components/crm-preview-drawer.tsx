@@ -11,6 +11,7 @@ import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
 import { prefetchNeighbors } from "@/lib/preview/prefetch";
+import { useToastContext } from "../../toast-provider";
 
 interface Props {
   previewId: string | null;
@@ -30,6 +31,7 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const { addToast } = useToastContext();
 
   const loadBundle = useCallback(
     (id: string, opts?: { silent?: boolean }) => {
@@ -50,13 +52,15 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
         })
         .catch((e: unknown) => {
           if (ac.signal.aborted) return;
-          setError(e instanceof Error ? e.message : "Unbekannter Fehler");
+          const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
+          setError(msg);
+          addToast(`Vorschau konnte nicht geladen werden: ${msg}`, "error");
         })
         .finally(() => {
           if (!ac.signal.aborted && !opts?.silent) setLoading(false);
         });
     },
-    [],
+    [addToast],
   );
 
   // Fetch on previewId-change; setState im Effect ist hier bewusst (externer

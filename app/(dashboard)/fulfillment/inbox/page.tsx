@@ -18,7 +18,13 @@ const TABS: Array<{ id: Filter; label: string }> = [
 export default async function InboxPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
   const sp = await searchParams;
   const filter: Filter = isFilter(sp.filter) ? sp.filter : "all";
-  const threads = await loadAllThreads(filter).catch(() => []);
+  let threads: Awaited<ReturnType<typeof loadAllThreads>> = [];
+  let loadError: string | null = null;
+  try {
+    threads = await loadAllThreads(filter);
+  } catch (e) {
+    loadError = e instanceof Error ? e.message : "Threads konnten nicht geladen werden.";
+  }
 
   // Lead-Namen für zugeordnete Threads laden.
   const leadIds = [...new Set(threads.map((t) => t.lead_id).filter(Boolean) as string[])];
@@ -54,7 +60,12 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         })}
       </div>
 
-      {threads.length === 0 ? (
+      {loadError ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+          <p className="font-medium">Threads konnten nicht geladen werden.</p>
+          <p className="mt-1 text-xs opacity-80">{loadError}</p>
+        </div>
+      ) : threads.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-gray-200 p-12 text-center text-sm text-gray-400 dark:border-[#2c2c2e]/60">
           Keine Threads gefunden. Richte dein IMAP-Konto unter{" "}
           <Link href="/einstellungen/email" className="text-primary hover:underline">Einstellungen → E-Mail</Link>{" "}
