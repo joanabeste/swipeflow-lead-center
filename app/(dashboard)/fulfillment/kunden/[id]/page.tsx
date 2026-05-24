@@ -7,11 +7,13 @@ import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
 import { ZeitTab } from "./_components/zeit-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
+import { MailsTab } from "./_components/mails-tab";
+import { loadThreadsForLead } from "@/lib/email/data";
 
-type Tab = "verlauf" | "kontakte" | "projekte" | "zeit";
+type Tab = "verlauf" | "kontakte" | "projekte" | "zeit" | "mails";
 
 function isTab(s: string | undefined): s is Tab {
-  return s === "verlauf" || s === "kontakte" || s === "projekte" || s === "zeit";
+  return s === "verlauf" || s === "kontakte" || s === "projekte" || s === "zeit" || s === "mails";
 }
 
 export default async function KundenDetailPage({
@@ -86,6 +88,13 @@ export default async function KundenDetailPage({
       {tab === "kontakte" && <ContactsTab leadId={id} contacts={contacts} />}
       {tab === "projekte" && <ProjectsTab leadId={id} projects={projects} />}
       {tab === "zeit" && <ZeitTab leadId={id} />}
+      {tab === "mails" && (
+        <MailsTab
+          leadId={id}
+          initialThreads={await loadThreadsForLead(id).catch(() => [])}
+          defaultTo={contacts.find((c) => c.is_primary && c.email)?.email ?? contacts.find((c) => c.email)?.email ?? customer.email ?? null}
+        />
+      )}
     </div>
   );
 }

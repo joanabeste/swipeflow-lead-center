@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/cleanup-import-csvs",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/email-sync",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

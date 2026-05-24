@@ -92,6 +92,7 @@ const fulfillmentSection: Section = {
     { items: [
       { href: "/fulfillment/kunden", label: "Kunden", icon: Users },
       { href: "/fulfillment/projekte", label: "Projekte", icon: Briefcase },
+      { href: "/fulfillment/inbox", label: "Mail-Inbox", icon: Inbox },
       { href: "/fulfillment/tasks", label: "ClickUp-Tasks", icon: CheckSquare },
     ]},
     { label: "Admin", rolesAllowed: ROLES_ADMIN, items: [
