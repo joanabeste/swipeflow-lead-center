@@ -66,10 +66,14 @@ export async function findCompanyWebsite(companyName: string, city?: string | nu
     if (isStrictlyRelevant(c.domain, tokens)) return c.domain;
   }
 
-  // 5. Heuristisches Domain-Guessing (HEAD-Probe).
+  // 5. Heuristisches Domain-Guessing (HEAD-Probe). KEIN early-return — die
+  // Guesses fliessen als zusaetzliche Kandidaten in den LLM-Disambiguator
+  // (Schritt 6). Frueher wurde guessed[0] blind zurueckgeliefert, was bei
+  // schwachen Vermutungen (z.B. „bernd.com" aus „Bernd Burmester Dachdeckerei")
+  // zu unsinnigen „Domain-Kandidat … konnte nicht bestaetigt werden"-Fehlern
+  // fuehrte, weil der Verifier sie nachgelagert wieder verwerfen musste.
   const guessed = await guessDomainsFromTokens(tokens);
   for (const d of guessed) candidates.push({ domain: d, source: "guess" });
-  if (guessed.length > 0) return guessed[0];
 
   // 6. LLM-Disambiguation als Last Resort, wenn die Suchen Treffer hatten,
   // aber kein striktes Token-Match gefunden wurde. Wir schicken die Top-N
@@ -192,19 +196,16 @@ async function guessDomainsFromTokens(tokens: string[]): Promise<string[]> {
     variants.add(firstTwo.join(""));
   }
 
-  // 4. Jeden meaningful Token solo, falls genug lang (z.B. „quarder" aus
-  //    „Erwin Quarder Systemtechnik" oder „acryldecor" als Einwort-Marke).
-  for (const t of meaningful) {
-    if (t.length >= 4) variants.add(t);
-  }
+  // 4. (entfernt) Solo-Tokens als Domain — „bernd.com", „eberhard.de" usw.
+  //    waren in 99% der Faelle falsche Vermutungen; jetzt nicht mehr generiert.
 
-  // 6. Erster + letzter Token (Vor- + Nachname Pattern)
+  // 6. Erster + letzter Token (Vor- + Nachname Pattern). Nur die natuerliche
+  //    Reihenfolge — `last-first` (umgekehrt) war zu spekulativ.
   if (meaningful.length >= 2) {
     const first = meaningful[0];
     const last = meaningful[meaningful.length - 1];
     if (first.length >= 3 && last.length >= 3) {
       variants.add(`${first}-${last}`);
-      variants.add(`${last}-${first}`);
       variants.add(`${first}${last}`);
     }
   }
