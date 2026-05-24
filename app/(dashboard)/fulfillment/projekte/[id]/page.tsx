@@ -26,7 +26,6 @@ export default async function ProjektDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const tab: ProjectTab = isTab(sp.tab) ? sp.tab : "uebersicht";
-  const showClosed = sp.closed === "1";
 
   const project = await loadProject(id);
   if (!project) notFound();
@@ -100,10 +99,10 @@ export default async function ProjektDetailPage({
       })()}
 
       {tab === "tasks" && await (async () => {
-        const tasks = await loadCachedTasks(id, showClosed);
+        const tasks = await loadCachedTasks(id, true);
         return (
           <section>
-            <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} showClosed={showClosed} />
+            <TaskList projectId={project.id} clickupListId={project.clickup_list_id} initialTasks={tasks} />
           </section>
         );
       })()}
