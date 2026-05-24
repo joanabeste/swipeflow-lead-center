@@ -20,7 +20,7 @@ export default async function ImportPage() {
   // Robust gegen alte Schemata: zuerst minimale Spalten, dann Full-Select
   const { data: imports, error: importsError, count } = await db
     .from("import_logs")
-    .select("id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count", { count: "exact" })
+    .select("id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count, csv_storage_path, csv_expires_at", { count: "exact" })
     .order("created_at", { ascending: false })
     .limit(20);
 

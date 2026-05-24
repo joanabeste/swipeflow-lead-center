@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Trash2, FileSpreadsheet, Globe, List, MapPin, Briefcase } from "lucide-react";
+import { Trash2, FileSpreadsheet, Globe, List, MapPin, Briefcase, Download } from "lucide-react";
 import { deleteImport } from "./actions";
 
 interface ImportLog {
@@ -16,6 +16,8 @@ interface ImportLog {
   import_type?: string | null;
   source_url?: string | null;
   updated_count?: number | null;
+  csv_storage_path?: string | null;
+  csv_expires_at?: string | null;
 }
 
 interface Props {
@@ -105,14 +107,29 @@ export function ImportHistory({ imports }: Props) {
                 {new Date(imp.created_at).toLocaleString("de-DE")}
               </td>
               <td className="px-4 py-3 text-right">
-                <button
-                  onClick={() => handleDelete(imp)}
-                  disabled={isPending}
-                  className="text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
-                  title="Import und alle zugehörigen Leads löschen"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="inline-flex items-center gap-2">
+                  {imp.csv_storage_path && (
+                    <a
+                      href={`/api/import/${imp.id}/download`}
+                      title={
+                        imp.csv_expires_at
+                          ? `Original-CSV herunterladen (verfuegbar bis ${new Date(imp.csv_expires_at).toLocaleDateString("de-DE")})`
+                          : "Original-CSV herunterladen"
+                      }
+                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                    >
+                      <Download className="h-4 w-4" />
+                    </a>
+                  )}
+                  <button
+                    onClick={() => handleDelete(imp)}
+                    disabled={isPending}
+                    className="text-red-500 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:text-red-300"
+                    title="Import und alle zugehörigen Leads löschen"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}

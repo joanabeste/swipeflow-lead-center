@@ -25,6 +25,7 @@ export async function processImport(
   delimiter: string,
   templateName?: string,
   vertical: "webdesign" | "recruiting" | null = null,
+  originalFileName?: string,
 ) {
   const supabase = await createClient();
   const db = createServiceClient();
@@ -43,13 +44,36 @@ export async function processImport(
   let importLog;
   try {
     importLog = await createImportLog(db, {
-      fileName: "csv-import",
+      fileName: originalFileName ?? "csv-import",
       rowCount: rows.length,
       importType: "csv",
       userId: user?.id ?? null,
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+  }
+
+  // Original-CSV in Supabase Storage ablegen — best-effort, der Import laeuft
+  // auch ohne Upload weiter. Nach 30 Tagen wird die Datei vom Cleanup-Cron
+  // (/api/cron/cleanup-import-csvs) wieder entfernt.
+  const csvBytes = Buffer.byteLength(fileContent, "utf8");
+  const MAX_CSV_BYTES = 20 * 1024 * 1024; // 20 MB
+  if (csvBytes <= MAX_CSV_BYTES) {
+    const storagePath = `${importLog.id}.csv`;
+    const { error: upErr } = await db.storage
+      .from("import-csvs")
+      .upload(storagePath, fileContent, {
+        contentType: "text/csv; charset=utf-8",
+        upsert: true,
+        cacheControl: "0",
+      });
+    if (!upErr) {
+      await db.from("import_logs").update({
+        csv_storage_path: storagePath,
+        csv_size_bytes: csvBytes,
+        csv_expires_at: new Date(Date.now() + 30 * 24 * 3600_000).toISOString(),
+      }).eq("id", importLog.id);
+    }
   }
 
   // Zeilen auf Lead-Feld-Schema mappen + CSV-Injection sanitizen.
@@ -356,10 +380,10 @@ export async function deleteImport(importId: string) {
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Import-Log laden für Audit
+  // Import-Log laden für Audit + Storage-Pfad fuer Cleanup
   const { data: importLog } = await db
     .from("import_logs")
-    .select("file_name, imported_count")
+    .select("file_name, imported_count, csv_storage_path")
     .eq("id", importId)
     .single();
 
@@ -372,6 +396,11 @@ export async function deleteImport(importId: string) {
     .eq("source_import_id", importId);
 
   if (leadsError) return { error: leadsError.message };
+
+  // Original-CSV im Storage mit-loeschen, damit nichts verwaist (best-effort).
+  if (importLog.csv_storage_path) {
+    await db.storage.from("import-csvs").remove([importLog.csv_storage_path as string]);
+  }
 
   // Import-Log löschen
   const { error: logError } = await db

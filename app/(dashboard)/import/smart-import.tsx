@@ -238,7 +238,7 @@ export function SmartImport({ templates, forcedFormat }: Props) {
         const res = await processInstantScraperImport(allRows, headers, vertical, override);
         setResult(res);
       } else {
-        const res = await processImport(fileContent, mapping, delimiter, undefined, vertical);
+        const res = await processImport(fileContent, mapping, delimiter, undefined, vertical, fileName);
         setResult(res);
       }
       setPhase("result");
