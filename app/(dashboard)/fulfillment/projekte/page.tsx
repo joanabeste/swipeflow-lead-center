@@ -61,7 +61,7 @@ export default async function ProjekteListePage({ searchParams }: { searchParams
                 <th className="px-4 py-3 text-left">Projekt</th>
                 <th className="px-4 py-3 text-left">Kunde</th>
                 <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Vertikale</th>
+                <th className="px-4 py-3 text-left">Bereich</th>
                 <th className="px-4 py-3 text-left">Start</th>
               </tr>
             </thead>

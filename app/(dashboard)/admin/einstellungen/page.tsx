@@ -23,7 +23,7 @@ const GROUPS: SettingGroup[] = [
     icon: Building2,
     items: [
       { href: "/einstellungen/standort", label: "Standort", desc: "HQ-Adresse, Geo-Daten", icon: MapPin },
-      { href: "/einstellungen/crm-status", label: "CRM-Status", desc: "Workflow-Stati pro Vertikale", icon: Tag },
+      { href: "/einstellungen/crm-status", label: "CRM-Status", desc: "Workflow-Stati pro Bereich", icon: Tag },
       { href: "/einstellungen/deal-stages", label: "Deal-Stages", desc: "Pipeline-Phasen", icon: Banknote },
     ],
   },
@@ -57,7 +57,7 @@ const GROUPS: SettingGroup[] = [
     label: "Marketing",
     icon: Globe,
     items: [
-      { href: "/einstellungen/landing-pages", label: "Landing-Pages", desc: "Personalisierte LPs pro Vertikale", icon: Globe },
+      { href: "/einstellungen/landing-pages", label: "Landing-Pages", desc: "Personalisierte LPs pro Bereich", icon: Globe },
     ],
   },
   {

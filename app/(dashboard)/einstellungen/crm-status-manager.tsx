@@ -201,19 +201,19 @@ function StatusForm({
           />
         </label>
         <label className="text-sm md:col-span-2">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Vertikale</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">Bereich</span>
           <select
             name="vertical"
             defaultValue={status?.vertical ?? ""}
             className="mt-1 w-full rounded-md border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#161618]"
           >
-            <option value="">Beide / Vertikal-agnostisch</option>
+            <option value="">Beide / Bereichs-agnostisch</option>
             <option value="recruiting">Recruiting</option>
             <option value="webdesign">Webdesign</option>
           </select>
           <span className="mt-1 block text-[11px] text-gray-500 dark:text-gray-400">
             Bestimmt, in welche Bewertungs-KI dieser Status als Trainingssignal einfliesst.
-            Recruiting- und Webdesign-Bewertung sehen jeweils nur die zu ihrer Vertikalen
+            Recruiting- und Webdesign-Bewertung sehen jeweils nur die zu ihrem Bereich
             passenden Status (plus alle &bdquo;Beide&ldquo;).
           </span>
         </label>

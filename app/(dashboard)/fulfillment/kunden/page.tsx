@@ -45,7 +45,7 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
               <tr>
                 <th className="px-4 py-3 text-left">Firma</th>
                 <th className="px-4 py-3 text-left">Stadt</th>
-                <th className="px-4 py-3 text-left">Vertikale</th>
+                <th className="px-4 py-3 text-left">Bereich</th>
                 <th className="px-4 py-3 text-left">Kunde seit</th>
               </tr>
             </thead>

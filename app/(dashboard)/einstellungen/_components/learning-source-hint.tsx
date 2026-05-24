@@ -33,7 +33,7 @@ export async function LearningSourceHint({ vertical }: { vertical: LeadVertical 
           <p className="text-sm font-medium">Womit lernt diese Bewertung?</p>
           <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
             Die KI vergleicht Leads in den folgenden Status, um Anpassungen
-            vorzuschlagen. Status ohne Vertikale-Bindung gelten fuer beide Bewertungen.
+            vorzuschlagen. Status ohne Bereichs-Bindung gelten fuer beide Bewertungen.
           </p>
 
           {rows.length === 0 ? (
