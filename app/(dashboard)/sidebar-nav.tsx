@@ -79,7 +79,6 @@ const vertriebSection: Section = {
     ]},
     { label: "Verwaltung", items: [
       { href: "/blacklist", label: "Ausschluss", icon: ShieldBan },
-      { href: "/einstellungen", label: "Vertriebs-Einstellungen", icon: Settings },
     ]},
   ],
 };
@@ -104,7 +103,7 @@ const fulfillmentSection: Section = {
 
 const zeitSection: Section = {
   id: "zeit",
-  label: "Zeit",
+  label: "Timetracking",
   icon: Clock,
   defaultPath: "/zeit",
   requires: "can_zeit",
@@ -118,11 +117,8 @@ const zeitSection: Section = {
       { href: "/zeit/provision", label: "Provision", icon: Coins },
       { href: "/zeit/einstellungen", label: "Einstellungen", icon: Settings },
     ]},
-    { label: "Admin", rolesAllowed: ROLES_ADMIN, items: [
-      { href: "/zeit/admin/mitarbeiter", label: "Mitarbeiter", icon: UserCog },
-      { href: "/zeit/admin/abwesenheiten", label: "Antraege", icon: Pause, badgeKey: "absences_pending" },
-      { href: "/zeit/admin/reports", label: "Gesamt-Reports", icon: BarChart3 },
-    ]},
+    // Admin-Funktionen fuer Timetracking (Mitarbeiter-Verwaltung, Abwesenheits-Antraege,
+    // Gesamt-Reports) leben jetzt in der Admin-Sektion (Gruppe "Timetracking-Admin").
   ],
 };
 
@@ -135,10 +131,18 @@ const adminSection: Section = {
   groups: [
     { items: [
       { href: "/admin", label: "Uebersicht", icon: LayoutDashboard },
-      { href: "/admin/team", label: "Team-Uebersicht", icon: Users },
-      { href: "/einstellungen/team", label: "Nutzer & Rollen", icon: UserCog },
+      { href: "/admin/team", label: "Team & Nutzer", icon: Users },
+      { href: "/admin/provisionen", label: "Provisionen & Loehne", icon: Coins },
       { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
-      { href: "/aktivitaet", label: "Aktivitaet", icon: ActivityIcon },
+      { href: "/admin/einstellungen/integrationen", label: "Integrationen", icon: CheckSquare },
+    ]},
+    { label: "Timetracking-Admin", items: [
+      { href: "/zeit/admin/mitarbeiter", label: "Mitarbeiter", icon: UserCog },
+      { href: "/zeit/admin/abwesenheiten", label: "Abwesenheits-Antraege", icon: Pause, badgeKey: "absences_pending" },
+      { href: "/zeit/admin/reports", label: "Stunden-Reports", icon: BarChart3 },
+    ]},
+    { label: "System", items: [
+      { href: "/aktivitaet", label: "Audit-Log", icon: ActivityIcon },
       { href: "/export", label: "Export", icon: Download },
       { href: "/einstellungen/aussortierte-leads", label: "Aussortierte Leads", icon: Archive },
     ]},
@@ -179,6 +183,20 @@ export function SidebarNav({
   const [switcherOpen, setSwitcherOpen] = useState(false);
 
   useEffect(() => {
+    // Admin-Kontext erzwingen fuer Verwaltungs-Routen, die nicht direkt in der Nav stehen
+    // (z.B. /einstellungen/standort, /einstellungen/anreicherung, etc.). So bleibt der
+    // Switcher auf Admin, wenn der User in einem Sub-Setting ist.
+    const adminContext =
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/einstellungen") ||
+      pathname.startsWith("/nutzer") ||
+      pathname.startsWith("/zeit/admin") ||
+      pathname === "/aktivitaet" ||
+      pathname === "/export";
+    if (adminContext && visibleSections.some((s) => s.id === "admin")) {
+      setActiveSection("admin");
+      return;
+    }
     const fromPath = visibleSections.find((s) =>
       s.groups.some((g) =>
         g.items.some((i) => i.href !== "#" && (i.href === "/" ? pathname === "/" : pathname.startsWith(i.href))),

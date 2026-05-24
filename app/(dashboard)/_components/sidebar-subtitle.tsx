@@ -3,8 +3,9 @@
 import { usePathname } from "next/navigation";
 
 function labelFromPath(pathname: string): string {
-  if (pathname.startsWith("/zeit")) return "Zeit";
+  if (pathname.startsWith("/zeit")) return "Timetracking";
   if (pathname.startsWith("/fulfillment")) return "Fulfillment";
+  if (pathname.startsWith("/admin") || pathname.startsWith("/einstellungen") || pathname.startsWith("/nutzer") || pathname.startsWith("/zeit/admin") || pathname === "/aktivitaet" || pathname === "/export") return "Admin";
   return "Vertrieb";
 }
 

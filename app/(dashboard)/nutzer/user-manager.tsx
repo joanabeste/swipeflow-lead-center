@@ -117,7 +117,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Rolle</th>
               <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Vertrieb">Vert.</th>
               <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Fulfillment">Fulf.</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Zeit">Zeit</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Timetracking">Zeit</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Erstellt</th>
               <th className="px-4 py-3" />
@@ -258,7 +258,7 @@ function PermissionCheckbox({
   const FIELD_LABELS: Record<typeof field, string> = {
     can_vertrieb: "Vertrieb",
     can_fulfillment: "Fulfillment",
-    can_zeit: "Zeit",
+    can_zeit: "Timetracking",
   };
   return (
     <input

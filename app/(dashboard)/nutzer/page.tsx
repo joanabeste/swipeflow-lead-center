@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function NutzerPage() {
-  redirect("/einstellungen");
+  redirect("/admin/team#nutzer-verwalten");
 }

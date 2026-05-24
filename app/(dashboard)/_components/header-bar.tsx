@@ -6,14 +6,16 @@ import { ActiveEnrichmentBadge } from "../active-enrichment-badge";
 import { GlobalSearch } from "../global-search";
 import { TimerBar } from "../zeit/_components/timer-bar";
 
-type Section = "vertrieb" | "fulfillment" | "zeit" | "other";
+type Section = "vertrieb" | "fulfillment" | "zeit" | "admin" | "other";
 
 function sectionFromPath(pathname: string): Section {
   if (pathname.startsWith("/zeit")) return "zeit";
   if (pathname.startsWith("/fulfillment")) return "fulfillment";
-  // Vertrieb-Pfade: /, /leads, /import, /crm, /todos, /anrufe, /deals, /blacklist, /einstellungen
-  // Alles andere (z.B. /mein-konto, /nutzer, /aktivitaet, /widgets, /export) → "other"
-  const vertriebPaths = ["/", "/leads", "/import", "/crm", "/todos", "/anrufe", "/deals", "/blacklist", "/einstellungen"];
+  // Admin-Kontext: alle administrativen Verwaltungsseiten landen hier, damit Sidebar/
+  // Subtitle nicht "Vertrieb" anzeigen, wenn man auf /einstellungen/team o.ae. ist.
+  if (pathname.startsWith("/admin") || pathname.startsWith("/einstellungen") || pathname.startsWith("/nutzer") || pathname.startsWith("/zeit/admin") || pathname === "/aktivitaet" || pathname === "/export") return "admin";
+  // Vertrieb-Pfade: /, /leads, /import, /crm, /todos, /anrufe, /deals, /blacklist
+  const vertriebPaths = ["/", "/leads", "/import", "/crm", "/todos", "/anrufe", "/deals", "/blacklist"];
   if (vertriebPaths.some((p) => p === "/" ? pathname === "/" : pathname.startsWith(p))) return "vertrieb";
   return "other";
 }

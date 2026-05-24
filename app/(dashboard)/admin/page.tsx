@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { Users, UserCog, Sliders, Activity, Download, Archive, Coins, Briefcase, Clock } from "lucide-react";
+import { Users, Sliders, Activity, Download, Archive, Coins, Briefcase, Clock, Plug } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { aggregateEntries, getMonthRange } from "@/lib/zeit/reports";
 import { formatHours } from "@/lib/zeit/format";
 
 const TILES = [
-  { href: "/admin/team", label: "Team-Uebersicht", desc: "Alle Mitarbeiter mit Stunden, Provisionen, Auszahlung", icon: Users },
-  { href: "/einstellungen/team", label: "Nutzer & Rollen", desc: "User anlegen, Rollen + Sektion-Berechtigungen", icon: UserCog },
-  { href: "/einstellungen/provisionen", label: "Provisionen & Loehne", desc: "Provisions-Regeln und Stundenloehne pflegen", icon: Coins },
+  { href: "/admin/team", label: "Team & Nutzer", desc: "User anlegen, Rollen + Berechtigungen, Stunden, Auszahlung — alles in einer Ansicht", icon: Users },
+  { href: "/admin/provisionen", label: "Provisionen & Loehne", desc: "Provisions-Regeln und Stundenloehne pflegen", icon: Coins },
   { href: "/admin/einstellungen", label: "Globale Einstellungen", desc: "App-weite Konfiguration", icon: Sliders },
-  { href: "/aktivitaet", label: "Aktivitaet", desc: "Audit-Log aller wichtigen Aktionen", icon: Activity },
+  { href: "/admin/einstellungen/integrationen", label: "Integrationen", desc: "ClickUp, PhoneMondo, Webex, SMTP — Status & Konfiguration", icon: Plug },
+  { href: "/aktivitaet", label: "Audit-Log", desc: "Wer hat wann was geaendert", icon: Activity },
   { href: "/export", label: "Export", desc: "Daten-Export (CSV)", icon: Download },
   { href: "/einstellungen/aussortierte-leads", label: "Aussortierte Leads", desc: "Archivierte Leads ansehen / wiederherstellen", icon: Archive },
 ];

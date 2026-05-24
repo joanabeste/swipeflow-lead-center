@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Users, Settings, Coins } from "lucide-react";
-import { createServiceClient } from "@/lib/supabase/server";
+import { Users, Coins, UserPlus } from "lucide-react";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { UserManager } from "../../nutzer/user-manager";
 import { aggregateEntries, getMonthRange } from "@/lib/zeit/reports";
 import { breakModeFromProfile, type Absence } from "@/lib/zeit/types";
 import { formatHours } from "@/lib/zeit/format";
@@ -14,6 +15,8 @@ type CommissionEvent = { user_id: string; amount_cents: number };
 
 export default async function AdminTeamPage() {
   const db = createServiceClient();
+  const sb = await createClient();
+  const { data: { user: currentUser } } = await sb.auth.getUser();
   const range = getMonthRange();
   const monthLabel = range.from.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
 
@@ -94,12 +97,12 @@ export default async function AdminTeamPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link href="/einstellungen/team" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
-            <Settings className="h-3.5 w-3.5" /> Nutzer & Rollen
-          </Link>
           <Link href="/einstellungen/provisionen" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
-            <Coins className="h-3.5 w-3.5" /> Provisionen
+            <Coins className="h-3.5 w-3.5" /> Provisions-Regeln
           </Link>
+          <a href="#nutzer-verwalten" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
+            <UserPlus className="h-3.5 w-3.5" /> Nutzer anlegen
+          </a>
         </div>
       </div>
 
@@ -112,7 +115,7 @@ export default async function AdminTeamPage() {
 
       {entriesErr && (entriesErr.code === "42P01" || /relation.*does not exist/i.test(entriesErr.message)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Zeit-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
+          Timetracking-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
         </div>
       )}
 
@@ -164,8 +167,13 @@ export default async function AdminTeamPage() {
       </div>
 
       <p className="text-[11px] text-gray-400">
-        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit. Admins haben implizit alle.
+        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Timetracking. Admins haben implizit alle.
       </p>
+
+      <section id="nutzer-verwalten" className="scroll-mt-20">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">Nutzer-Verwaltung</h2>
+        <UserManager profiles={profiles} currentUserId={currentUser?.id ?? ""} />
+      </section>
     </div>
   );
 }
