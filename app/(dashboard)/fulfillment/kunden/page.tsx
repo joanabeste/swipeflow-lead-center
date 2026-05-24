@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Search, Users } from "lucide-react";
 import { listCustomers } from "@/lib/fulfillment/data";
 import { formatDateDe } from "@/lib/zeit/format";
+import { CreateCustomerButton } from "./_components/create-customer-button";
 
 export default async function KundenListePage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const sp = await searchParams;
@@ -18,18 +19,21 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
             {all.length} {all.length === 1 ? "Kunde" : "Kunden"} im Fulfillment
           </p>
         </div>
-        <form className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              name="q"
-              defaultValue={q}
-              placeholder="Name oder Stadt suchen…"
-              className="w-64 rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#161618] dark:text-gray-100"
-            />
-          </div>
-        </form>
+        <div className="flex items-center gap-2">
+          <form>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Name oder Stadt suchen…"
+                className="w-64 rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#161618] dark:text-gray-100"
+              />
+            </div>
+          </form>
+          <CreateCustomerButton />
+        </div>
       </div>
 
       {filtered.length === 0 ? (

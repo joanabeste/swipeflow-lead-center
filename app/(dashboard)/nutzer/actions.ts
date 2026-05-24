@@ -69,17 +69,35 @@ export async function createUser(
 
 export async function updateUser(
   userId: string,
-  updates: { name?: string; role?: string; status?: string },
+  updates: {
+    name?: string;
+    role?: string;
+    status?: string;
+    can_vertrieb?: boolean;
+    can_fulfillment?: boolean;
+    can_zeit?: boolean;
+  },
 ) {
   const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
 
-  const { error } = await supabase
+  // Service-Role-Client umgeht RLS — wir machen den Admin-Check selbst.
+  if (currentUser) {
+    const { data: me } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
+    if (me?.role !== "admin") return { error: "Nur Admins koennen Nutzer aendern." };
+  }
+  const serviceClient = createServiceClient();
+  const { error } = await serviceClient
     .from("profiles")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", userId);
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "42703" || /column.*does not exist/i.test(error.message)) {
+      return { error: "Sektion-Berechtigungen brauchen Migration 075. Bitte im Supabase-SQL-Editor ausfuehren." };
+    }
+    return { error: error.message };
+  }
 
   await logAudit({
     userId: currentUser?.id ?? null,
@@ -90,6 +108,7 @@ export async function updateUser(
   });
 
   revalidatePath("/nutzer");
+  revalidatePath("/einstellungen/team");
   return { success: true };
 }
 

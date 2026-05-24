@@ -15,6 +15,7 @@ const roleLabels: Record<string, string> = {
   admin: "Administrator",
   sales: "Vertrieb",
   viewer: "Betrachter",
+  employee: "Mitarbeiter",
 };
 
 export function UserManager({ profiles, currentUserId }: Props) {
@@ -68,6 +69,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
               <option value="admin">Administrator</option>
               <option value="sales">Vertrieb</option>
               <option value="viewer">Betrachter</option>
+              <option value="employee">Mitarbeiter</option>
             </select>
           </div>
           <button
@@ -89,6 +91,9 @@ export function UserManager({ profiles, currentUserId }: Props) {
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Rolle</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Vertrieb">Vert.</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Fulfillment">Fulf.</th>
+              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Zeit">Zeit</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
               <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Erstellt</th>
               <th className="px-4 py-3" />
@@ -110,6 +115,27 @@ export function UserManager({ profiles, currentUserId }: Props) {
                       <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <PermissionCheckbox
+                    profile={profile}
+                    field="can_vertrieb"
+                    disabled={profile.role === "admin" || profile.id === currentUserId}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <PermissionCheckbox
+                    profile={profile}
+                    field="can_fulfillment"
+                    disabled={profile.role === "admin" || profile.id === currentUserId}
+                  />
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <PermissionCheckbox
+                    profile={profile}
+                    field="can_zeit"
+                    disabled={profile.role === "admin" || profile.id === currentUserId}
+                  />
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <select
@@ -156,5 +182,28 @@ export function UserManager({ profiles, currentUserId }: Props) {
         </table>
       </div>
     </div>
+  );
+}
+
+function PermissionCheckbox({
+  profile,
+  field,
+  disabled,
+}: {
+  profile: Profile;
+  field: "can_vertrieb" | "can_fulfillment" | "can_zeit";
+  disabled?: boolean;
+}) {
+  // Admins haben implizit alles — UI zeigt das als "haken+disabled".
+  const initial = profile.role === "admin" ? true : (profile[field] ?? (field === "can_zeit" ? true : profile.role !== "employee"));
+  return (
+    <input
+      type="checkbox"
+      defaultChecked={initial}
+      disabled={disabled}
+      onChange={(e) => updateUser(profile.id, { [field]: e.target.checked })}
+      className="h-4 w-4 accent-primary disabled:opacity-50"
+      title={disabled && profile.role === "admin" ? "Admins haben immer Zugriff" : ""}
+    />
   );
 }

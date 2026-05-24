@@ -30,8 +30,37 @@ export interface Profile {
   // noch nicht ausgefuehrt ist — UI defaultet auf null/0.
   hourly_wage_cents?: number | null;
   wage_currency?: string | null;
+  // Sektion-Berechtigungen (Migration 075). Admins haben immer Zugriff (siehe permissionsFromProfile).
+  can_vertrieb?: boolean | null;
+  can_fulfillment?: boolean | null;
+  can_zeit?: boolean | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Sektion-Berechtigungen pro User. Admins haben immer Zugriff (Code-Override). */
+export interface SectionPermissions {
+  can_vertrieb: boolean;
+  can_fulfillment: boolean;
+  can_zeit: boolean;
+}
+
+/** Permissions aus dem Profile ableiten, mit Defensiv-Defaults wenn Migration 075 fehlt. */
+export function permissionsFromProfile(profile: Pick<Profile, "role" | "can_vertrieb" | "can_fulfillment" | "can_zeit">): SectionPermissions {
+  if (profile.role === "admin") return { can_vertrieb: true, can_fulfillment: true, can_zeit: true };
+  if (profile.role === "employee") {
+    return {
+      can_vertrieb: profile.can_vertrieb ?? false,
+      can_fulfillment: profile.can_fulfillment ?? false,
+      can_zeit: profile.can_zeit ?? true,
+    };
+  }
+  // sales / viewer
+  return {
+    can_vertrieb: profile.can_vertrieb ?? true,
+    can_fulfillment: profile.can_fulfillment ?? true,
+    can_zeit: profile.can_zeit ?? true,
+  };
 }
 
 export type LeadStatus =

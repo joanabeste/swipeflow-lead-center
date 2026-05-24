@@ -10,7 +10,8 @@ import { CallProvidersProvider } from "@/components/call-providers-context";
 import { ConfettiProvider } from "@/components/confetti";
 import { isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { getWebexCredentials } from "@/lib/webex/auth";
-import type { ServiceMode, UserRole } from "@/lib/types";
+import type { ServiceMode, UserRole, SectionPermissions } from "@/lib/types";
+import { permissionsFromProfile } from "@/lib/types";
 import { loadPendingAbsencesCount, loadRunningEntry } from "./zeit/_components/data-helpers";
 import { HeaderBar } from "./_components/header-bar";
 import { SidebarSubtitle } from "./_components/sidebar-subtitle";
@@ -25,14 +26,23 @@ export default async function DashboardLayout({
   const { data: { user } } = await supabase.auth.getUser();
   let serviceMode: ServiceMode = "recruiting";
   let role: UserRole | undefined;
+  let permissions: SectionPermissions | undefined;
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("service_mode, role")
+      .select("service_mode, role, can_vertrieb, can_fulfillment, can_zeit")
       .eq("id", user.id)
       .single();
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
-    if (profile?.role) role = profile.role as UserRole;
+    if (profile?.role) {
+      role = profile.role as UserRole;
+      permissions = permissionsFromProfile({
+        role,
+        can_vertrieb: profile.can_vertrieb,
+        can_fulfillment: profile.can_fulfillment,
+        can_zeit: profile.can_zeit,
+      });
+    }
   }
 
   const webexCreds = user ? await getWebexCredentials() : null;
@@ -83,6 +93,7 @@ export default async function DashboardLayout({
         <SidebarNav
           badges={{ todos_due_today_or_overdue: todosDueOrOverdue, absences_pending: absencesPending }}
           role={role}
+          permissions={permissions}
         />
 
         <div className="mt-auto space-y-1 border-t border-gray-200 p-3 dark:border-[#2c2c2e]/50">

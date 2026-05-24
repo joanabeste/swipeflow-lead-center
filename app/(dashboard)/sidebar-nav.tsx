@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Upload,
@@ -23,9 +23,13 @@ import {
   BarChart3,
   UserCog,
   Coins,
+  Sliders,
+  Archive,
+  Activity as ActivityIcon,
+  Download,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { UserRole } from "@/lib/types";
+import type { SectionPermissions, UserRole } from "@/lib/types";
 
 interface NavItem {
   href: string;
@@ -36,32 +40,31 @@ interface NavItem {
 
 interface NavGroup {
   label?: string;
-  /** Wenn gesetzt: Gruppe nur fuer diese Rollen sichtbar. */
   rolesAllowed?: UserRole[];
   items: NavItem[];
 }
 
-type SectionId = "vertrieb" | "fulfillment" | "zeit";
+type SectionId = "vertrieb" | "fulfillment" | "zeit" | "admin";
 
 interface Section {
   id: SectionId;
   label: string;
   icon: LucideIcon;
+  /** Erste Route der Sektion — Switcher springt dorthin. */
+  defaultPath: string;
+  /** Pflicht-Permission. "admin" = nur Admins. */
+  requires: keyof SectionPermissions | "admin";
   groups: NavGroup[];
-  comingSoon?: boolean;
-  /** Welche Rollen die Sektion ueberhaupt sehen. */
-  rolesAllowed: UserRole[];
 }
 
-const ROLES_BUSINESS: UserRole[] = ["admin", "sales", "viewer"];
-const ROLES_ALL: UserRole[] = ["admin", "sales", "viewer", "employee"];
 const ROLES_ADMIN: UserRole[] = ["admin"];
 
 const vertriebSection: Section = {
   id: "vertrieb",
   label: "Vertrieb",
   icon: Users,
-  rolesAllowed: ROLES_BUSINESS,
+  defaultPath: "/",
+  requires: "can_vertrieb",
   groups: [
     { items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
     { label: "Leads", items: [
@@ -76,7 +79,7 @@ const vertriebSection: Section = {
     ]},
     { label: "Verwaltung", items: [
       { href: "/blacklist", label: "Ausschluss", icon: ShieldBan },
-      { href: "/einstellungen", label: "Einstellungen", icon: Settings },
+      { href: "/einstellungen", label: "Vertriebs-Einstellungen", icon: Settings },
     ]},
   ],
 };
@@ -85,7 +88,8 @@ const fulfillmentSection: Section = {
   id: "fulfillment",
   label: "Fulfillment",
   icon: Briefcase,
-  rolesAllowed: ROLES_BUSINESS,
+  defaultPath: "/fulfillment/kunden",
+  requires: "can_fulfillment",
   groups: [
     { items: [
       { href: "/fulfillment/kunden", label: "Kunden", icon: Users },
@@ -102,7 +106,8 @@ const zeitSection: Section = {
   id: "zeit",
   label: "Zeit",
   icon: Clock,
-  rolesAllowed: ROLES_ALL,
+  defaultPath: "/zeit",
+  requires: "can_zeit",
   groups: [
     { items: [
       { href: "/zeit", label: "Timer", icon: Clock },
@@ -121,7 +126,25 @@ const zeitSection: Section = {
   ],
 };
 
-const sections: Section[] = [vertriebSection, fulfillmentSection, zeitSection];
+const adminSection: Section = {
+  id: "admin",
+  label: "Admin",
+  icon: Sliders,
+  defaultPath: "/admin",
+  requires: "admin",
+  groups: [
+    { items: [
+      { href: "/admin", label: "Uebersicht", icon: LayoutDashboard },
+      { href: "/einstellungen/team", label: "Nutzer & Rollen", icon: UserCog },
+      { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
+      { href: "/aktivitaet", label: "Aktivitaet", icon: ActivityIcon },
+      { href: "/export", label: "Export", icon: Download },
+      { href: "/einstellungen/aussortierte-leads", label: "Aussortierte Leads", icon: Archive },
+    ]},
+  ],
+};
+
+const ALL_SECTIONS: Section[] = [vertriebSection, fulfillmentSection, zeitSection, adminSection];
 
 const SECTION_STORAGE_KEY = "lead-center:active-section";
 
@@ -130,9 +153,25 @@ export interface SidebarBadges {
   absences_pending?: number;
 }
 
-export function SidebarNav({ badges, role }: { badges?: SidebarBadges; role?: UserRole }) {
+function hasAccess(section: Section, role: UserRole | undefined, permissions: SectionPermissions | undefined): boolean {
+  if (!role) return false;
+  if (role === "admin") return true; // Admins sehen alles
+  if (section.requires === "admin") return false;
+  return permissions?.[section.requires] === true;
+}
+
+export function SidebarNav({
+  badges,
+  role,
+  permissions,
+}: {
+  badges?: SidebarBadges;
+  role?: UserRole;
+  permissions?: SectionPermissions;
+}) {
   const pathname = usePathname();
-  const visibleSections = sections.filter((s) => !role || s.rolesAllowed.includes(role));
+  const router = useRouter();
+  const visibleSections = ALL_SECTIONS.filter((s) => hasAccess(s, role, permissions));
   const fallbackSection: SectionId = visibleSections[0]?.id ?? "vertrieb";
 
   const [activeSection, setActiveSection] = useState<SectionId>(fallbackSection);
@@ -154,45 +193,35 @@ export function SidebarNav({ badges, role }: { badges?: SidebarBadges; role?: Us
     } else {
       setActiveSection(fallbackSection);
     }
-  }, [pathname, role]);
+  }, [pathname, role, permissions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function selectSection(id: SectionId) {
+    const target = visibleSections.find((s) => s.id === id);
+    if (!target) return;
     setActiveSection(id);
     setSwitcherOpen(false);
     if (typeof window !== "undefined") window.localStorage.setItem(SECTION_STORAGE_KEY, id);
+    router.push(target.defaultPath);
   }
 
-  const current = visibleSections.find((s) => s.id === activeSection) ?? visibleSections[0] ?? vertriebSection;
+  const current = visibleSections.find((s) => s.id === activeSection) ?? visibleSections[0];
 
   function isActive(href: string) {
     if (href === "#") return false;
     if (href === "/") return pathname === "/";
-    // Exakter Match fuer /zeit damit /zeit/eintraege nicht beide markiert.
     if (href === "/zeit") return pathname === "/zeit";
+    if (href === "/admin") return pathname === "/admin";
     return pathname.startsWith(href);
   }
 
-  function renderItem(item: NavItem, disabled: boolean) {
-    const active = !disabled && isActive(item.href);
+  function renderItem(item: NavItem) {
+    const active = isActive(item.href);
     const badgeValue = item.badgeKey ? badges?.[item.badgeKey] ?? 0 : 0;
     const className = `flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-      disabled
-        ? "cursor-not-allowed text-gray-400 dark:text-gray-600"
-        : active
-          ? "bg-primary/10 text-primary"
-          : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
+      active
+        ? "bg-primary/10 text-primary"
+        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-200"
     }`;
-
-    if (disabled) {
-      return (
-        <div key={`${item.label}-disabled`} className={className} aria-disabled="true" title="Bald verfuegbar">
-          <item.icon className="h-[18px] w-[18px]" />
-          <span className="flex-1">{item.label}</span>
-          <Lock className="h-3.5 w-3.5 opacity-60" />
-        </div>
-      );
-    }
-
     return (
       <Link key={item.href} href={item.href} className={className}>
         <item.icon className="h-[18px] w-[18px]" />
@@ -203,6 +232,16 @@ export function SidebarNav({ badges, role }: { badges?: SidebarBadges; role?: Us
           </span>
         )}
       </Link>
+    );
+  }
+
+  if (!current) {
+    return (
+      <nav className="flex-1 px-3 py-4">
+        <p className="rounded-xl border border-dashed border-gray-200 p-4 text-center text-xs text-gray-400 dark:border-[#2c2c2e]/60">
+          Keine Bereiche freigegeben. Bitte Admin kontaktieren.
+        </p>
+      </nav>
     );
   }
 
@@ -222,16 +261,10 @@ export function SidebarNav({ badges, role }: { badges?: SidebarBadges; role?: Us
           <div key={`${current.id}-${idx}`}>
             {group.label && <SectionLabel>{group.label}</SectionLabel>}
             <div className={`space-y-1 ${!group.label && idx === 0 ? "mt-3" : ""}`}>
-              {group.items.map((item) => renderItem(item, current.comingSoon === true))}
+              {group.items.map((item) => renderItem(item))}
             </div>
           </div>
         ))}
-
-      {current.comingSoon && (
-        <p className="mt-6 px-3 text-[11px] text-gray-400 dark:text-gray-600">
-          Diese Sektion ist in Vorbereitung — Routen werden in einer spaeteren Phase aktiviert.
-        </p>
-      )}
     </nav>
   );
 }
@@ -278,10 +311,8 @@ function SectionSwitcher({
               >
                 <s.icon className="h-[18px] w-[18px]" />
                 <span className="flex-1 text-left">{s.label}</span>
-                {s.comingSoon && (
-                  <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-600 dark:bg-[#2c2c2e] dark:text-gray-400">
-                    Bald
-                  </span>
+                {s.requires === "admin" && (
+                  <Lock className="h-3.5 w-3.5 opacity-50" />
                 )}
               </button>
             );
