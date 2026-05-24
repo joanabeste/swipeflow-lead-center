@@ -85,9 +85,34 @@ export async function findOrCreateThread(args: {
   return { threadId: created.id as string, isNew: true };
 }
 
+// Free-Mail-Provider — Domain-Match darf nicht auf gmail.com etc. greifen, weil
+// das sonst beliebige Mails dem ersten Lead mit gmail.com-Adresse zuordnen würde.
+const FREEMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com",
+  "gmx.de", "gmx.net", "gmx.at", "gmx.ch", "gmx.com",
+  "web.de", "freenet.de", "t-online.de",
+  "yahoo.com", "yahoo.de", "ymail.com",
+  "outlook.com", "outlook.de", "hotmail.com", "hotmail.de", "live.com", "live.de", "msn.com",
+  "icloud.com", "me.com", "mac.com",
+  "aol.com", "aol.de",
+  "mail.de", "posteo.de", "posteo.net", "mailbox.org", "tutanota.com", "protonmail.com", "proton.me",
+]);
+
+export function extractDomain(email: string | null | undefined): string | null {
+  if (!email) return null;
+  const at = email.indexOf("@");
+  if (at < 0) return null;
+  const dom = email.slice(at + 1).trim().toLowerCase();
+  return dom || null;
+}
+
+export function isFreemailDomain(domain: string | null): boolean {
+  return !!domain && FREEMAIL_DOMAINS.has(domain);
+}
+
 /**
  * Sucht eine Lead-ID anhand der beteiligten Mail-Adressen.
- * Match-Reihenfolge: customer_contacts.email → leads.email.
+ * Match-Reihenfolge: customer_contacts.email → leads.email → leads.domain (außer Freemail).
  */
 export async function findLeadByParticipants(participants: string[]): Promise<string | null> {
   if (participants.length === 0) return null;
@@ -107,6 +132,33 @@ export async function findLeadByParticipants(participants: string[]): Promise<st
     .limit(1);
   if (leads && leads.length > 0) return leads[0].id as string;
 
+  // Domain-Fallback: aus den Beteiligten alle nicht-Freemail-Domains ziehen
+  // und gegen leads.domain matchen. Bei Mehrdeutigkeit (mehrere Leads teilen
+  // sich eine Domain) lieber nicht zuordnen.
+  const domains = [...new Set(
+    participants.map(extractDomain).filter((d): d is string => !!d && !isFreemailDomain(d)),
+  )];
+  if (domains.length === 0) return null;
+
+  const { data: byDomain } = await db
+    .from("leads")
+    .select("id, domain")
+    .in("domain", domains)
+    .limit(5);
+  if (!byDomain || byDomain.length === 0) return null;
+
+  const byDom = new Map<string, string[]>();
+  for (const row of byDomain) {
+    const d = (row.domain as string | null)?.toLowerCase();
+    if (!d) continue;
+    const arr = byDom.get(d) ?? [];
+    arr.push(row.id as string);
+    byDom.set(d, arr);
+  }
+  for (const d of domains) {
+    const ids = byDom.get(d);
+    if (ids && ids.length === 1) return ids[0];
+  }
   return null;
 }
 

@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import nodemailer from "nodemailer";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
-import { loadDecryptedSmtp } from "@/lib/email/user-credentials";
+import { loadDecryptedImap, loadDecryptedSmtp } from "@/lib/email/user-credentials";
+import {
+  extractSignatureWithClaude,
+  shouldAttemptSignatureExtraction,
+  upsertContactFromSignature,
+} from "@/lib/email/signature";
 import { syncUserMailbox, appendToSent } from "@/lib/email/sync";
 import { loadMessages, markThreadRead, type MessageRow } from "@/lib/email/data";
 import {
@@ -303,4 +308,111 @@ export async function sendReply(input: { threadId: string; body: string }): Prom
 
   if (thread.lead_id) revalidatePath(`/fulfillment/kunden/${thread.lead_id}`);
   return { success: true, messageId: res.messageId };
+}
+
+/**
+ * Läuft alle Threads ohne lead_id durch und versucht erneut, einen Lead per
+ * Participants/Domain zuzuordnen. Nutzt das Domain-Matching aus thread.ts.
+ */
+export async function rematchUnassignedThreads(): Promise<Result<{ scanned: number; matched: number }>> {
+  const user = await getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+  const { data: threads, error } = await db
+    .from("email_threads")
+    .select("id, participants")
+    .is("lead_id", null)
+    .limit(500);
+  if (error) return { error: error.message };
+
+  let matched = 0;
+  for (const t of threads ?? []) {
+    const parts = ((t.participants as string[] | null) ?? []).map((p) => p.toLowerCase());
+    if (parts.length === 0) continue;
+    const leadId = await findLeadByParticipants(parts);
+    if (!leadId) continue;
+    const { error: updErr } = await db
+      .from("email_threads")
+      .update({ lead_id: leadId })
+      .eq("id", t.id as string);
+    if (!updErr) matched += 1;
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "email.rematch_unassigned",
+    entityType: "email_thread",
+    details: { scanned: threads?.length ?? 0, matched },
+  });
+  revalidatePath("/fulfillment/inbox");
+  return { success: true, scanned: threads?.length ?? 0, matched };
+}
+
+/**
+ * Backfill: durchsucht eingehende Nachrichten in Threads mit Lead-Match,
+ * deren Absender noch nicht als Kontakt existiert, und legt via Claude
+ * extrahierte Signaturen als customer_contacts an.
+ *
+ * limit begrenzt die Anzahl der bearbeiteten Mails (LLM-Cost-Schutz).
+ */
+export async function backfillSignaturesForExistingMails(limit = 100): Promise<Result<{ scanned: number; created: number }>> {
+  const user = await getUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  const db = createServiceClient();
+
+  const imap = await loadDecryptedImap(user.id);
+  const ownerEmail = imap?.username?.includes("@") ? imap.username.toLowerCase() : null;
+
+  // Eingehende Mails mit Lead-Match, neueste zuerst — die wichtigsten zuerst.
+  const { data: msgs, error } = await db
+    .from("email_thread_messages")
+    .select("id, thread_id, from_email, from_name, body_text, email_threads!inner(lead_id)")
+    .eq("direction", "in")
+    .not("from_email", "is", null)
+    .order("received_at", { ascending: false })
+    .limit(Math.max(1, Math.min(500, limit)));
+  if (error) return { error: error.message };
+
+  let created = 0;
+  const seenPairs = new Set<string>();
+
+  for (const m of msgs ?? []) {
+    const threadJoin = m.email_threads as { lead_id: string | null } | { lead_id: string | null }[] | null;
+    const leadId = Array.isArray(threadJoin) ? threadJoin[0]?.lead_id : threadJoin?.lead_id;
+    if (!leadId) continue;
+    const fromEmail = (m.from_email as string | null)?.toLowerCase() ?? null;
+    if (!fromEmail) continue;
+    if (!shouldAttemptSignatureExtraction({ fromEmail, ownerEmail })) continue;
+
+    const pair = `${leadId}|${fromEmail}`;
+    if (seenPairs.has(pair)) continue;
+    seenPairs.add(pair);
+
+    const { data: existing } = await db
+      .from("customer_contacts")
+      .select("id")
+      .eq("lead_id", leadId)
+      .eq("email", fromEmail)
+      .maybeSingle();
+    if (existing) continue;
+
+    const body = ((m.body_text as string | null) ?? "").toString();
+    if (body.trim().length < 10) continue;
+
+    const fromName = (m.from_name as string | null) ?? null;
+    const extracted = await extractSignatureWithClaude({ body, fromName, fromEmail });
+    if (!extracted) continue;
+
+    const res = await upsertContactFromSignature({ leadId, email: fromEmail, fromName, extracted });
+    if (res.created) created += 1;
+  }
+
+  await logAudit({
+    userId: user.id,
+    action: "email.backfill_signatures",
+    entityType: "email_thread_message",
+    details: { scanned: msgs?.length ?? 0, created, limit },
+  });
+  revalidatePath("/fulfillment/inbox");
+  return { success: true, scanned: msgs?.length ?? 0, created };
 }
