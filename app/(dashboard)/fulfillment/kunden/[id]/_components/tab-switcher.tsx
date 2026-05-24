@@ -20,7 +20,7 @@ export function TabSwitcher({ current, basePath }: { current: Tab; basePath: str
           <Link
             key={t.id}
             href={`${basePath}?tab=${t.id}`}
-            className={`rounded-lg px-3 py-1.5 font-medium transition ${active ? "bg-primary text-white shadow-sm" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"}`}
+            className={`rounded-lg px-3 py-1.5 font-medium transition ${active ? "bg-primary text-gray-900 shadow-sm" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"}`}
           >
             {t.label}
           </Link>

@@ -100,7 +100,7 @@ export default async function AdminTeamPage() {
           <Link href="/einstellungen/provisionen" className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
             <Coins className="h-3.5 w-3.5" /> Provisions-Regeln
           </Link>
-          <a href="#nutzer-verwalten" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
+          <a href="#nutzer-verwalten" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-primary-dark">
             <UserPlus className="h-3.5 w-3.5" /> Nutzer anlegen
           </a>
         </div>

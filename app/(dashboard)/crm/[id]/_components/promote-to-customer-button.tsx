@@ -40,7 +40,7 @@ export function PromoteToCustomerButton({ leadId, alreadyCustomer }: { leadId: s
       type="button"
       onClick={handleClick}
       disabled={pending}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-50"
+      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50"
     >
       <CheckCircle2 className="h-3.5 w-3.5" /> {pending ? "Wandele…" : "Als Kunde markieren"}
     </button>

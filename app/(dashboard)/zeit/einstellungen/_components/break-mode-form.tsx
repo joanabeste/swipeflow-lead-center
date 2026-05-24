@@ -30,7 +30,7 @@ export function BreakModeForm({ initial }: { initial: BreakMode }) {
         Hinweis: §4 ArbZG verpflichtet ab 6h Arbeitszeit zu 30 min, ab 9h zu 45 min Pause.
       </div>
       <div className="mt-3 flex justify-end">
-        <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-dark disabled:opacity-50">
+        <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-primary-dark disabled:opacity-50">
           {pending ? "Speichern…" : "Speichern"}
         </button>
       </div>

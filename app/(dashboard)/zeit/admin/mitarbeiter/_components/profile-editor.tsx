@@ -84,7 +84,7 @@ export function ProfileEditorRow({ row }: { row: Row }) {
         </select>
       </td>
       <td className="px-3 py-2 text-right">
-        <button onClick={save} disabled={!dirty || pending} className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-primary-dark disabled:opacity-40">
+        <button onClick={save} disabled={!dirty || pending} className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-semibold text-gray-900 shadow-sm hover:bg-primary-dark disabled:opacity-40">
           <Check className="h-3.5 w-3.5" /> Speichern
         </button>
       </td>

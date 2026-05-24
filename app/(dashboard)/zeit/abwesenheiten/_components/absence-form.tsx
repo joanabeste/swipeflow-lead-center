@@ -48,7 +48,7 @@ export function AbsenceForm() {
         </Field>
       </div>
       <div className="mt-3 flex justify-end">
-        <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:opacity-50">
+        <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-primary-dark disabled:opacity-50">
           {pending ? "Senden…" : "Antrag stellen"}
         </button>
       </div>

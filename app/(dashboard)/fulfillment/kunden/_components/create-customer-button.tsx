@@ -43,7 +43,7 @@ export function CreateCustomerButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white hover:bg-primary-dark"
+        className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark"
       >
         <Plus className="h-4 w-4" /> Neuer Kunde
       </button>
@@ -93,7 +93,7 @@ export function CreateCustomerButton() {
               <button type="button" disabled={pending} onClick={() => setOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm hover:bg-gray-100 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
                 Abbrechen
               </button>
-              <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-50">
+              <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50">
                 {pending ? "Speichern…" : "Anlegen"}
               </button>
             </div>

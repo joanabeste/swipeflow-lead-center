@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 import type { BlacklistEntry, BlacklistRule, CancelRule } from "@/lib/types";
 import { BlacklistManager } from "./blacklist-manager";
 import { CancelRulesManager } from "./cancel-rules-manager";
 
 export default async function BlacklistPage() {
+  await requireAdmin();
   const supabase = await createClient();
 
   const [{ data: entries }, { data: rules }, { data: cancelRules }] = await Promise.all([

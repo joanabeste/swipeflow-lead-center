@@ -21,7 +21,7 @@ export function PeriodTabs({ basePath, current }: { basePath: string; current: P
             href={`${basePath}?view=${v.id}`}
             className={`rounded-lg px-3 py-1.5 font-medium transition ${
               active
-                ? "bg-primary text-white shadow-sm"
+                ? "bg-primary text-gray-900 shadow-sm"
                 : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
             }`}
           >

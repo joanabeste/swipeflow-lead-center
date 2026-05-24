@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
+import { checkAdmin } from "@/lib/auth";
 import type { EnrichmentConfig, ServiceMode, WebdevStrictness, LeadVertical } from "@/lib/types";
 import { generateScoringSuggestion, type ReviewOutcome } from "@/lib/learning/scoring-reviewer";
 import {
@@ -71,20 +72,10 @@ export async function saveEnrichmentDefaults(
   _prev: EnrichmentDefaultsState | undefined,
   formData: FormData,
 ): Promise<EnrichmentDefaultsState> {
-  const supabase = await createClient();
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren dürfen Defaults ändern." };
+  const user = ctx.user;
   const db = createServiceClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  // Admin-Check
-  const { data: profile } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", user!.id)
-    .single();
-
-  if (profile?.role !== "admin") {
-    return { error: "Nur Administratoren dürfen Defaults ändern." };
-  }
 
   const mode = formData.get("mode") as ServiceMode;
   if (mode !== "recruiting" && mode !== "webdev") {
@@ -130,18 +121,10 @@ export async function saveWebdevScoring(
   _prev: { error?: string; success?: boolean } | undefined,
   formData: FormData,
 ): Promise<{ error?: string; success?: boolean }> {
-  const supabase = await createClient();
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren dürfen die Webdesign-Bewertung ändern." };
+  const user = ctx.user;
   const db = createServiceClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: profile } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", user!.id)
-    .single();
-  if (profile?.role !== "admin") {
-    return { error: "Nur Administratoren dürfen die Webdesign-Bewertung ändern." };
-  }
 
   const strictness = formData.get("strictness") as WebdevStrictness;
   if (!["lax", "normal", "strict"].includes(strictness)) {
@@ -191,18 +174,10 @@ export async function saveRecruitingScoring(
   _prev: { error?: string; success?: boolean } | undefined,
   formData: FormData,
 ): Promise<{ error?: string; success?: boolean }> {
-  const supabase = await createClient();
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren dürfen die Recruiting-Bewertung ändern." };
+  const user = ctx.user;
   const db = createServiceClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: profile } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", user!.id)
-    .single();
-  if (profile?.role !== "admin") {
-    return { error: "Nur Administratoren dürfen die Recruiting-Bewertung ändern." };
-  }
 
   const minJobs = Math.max(0, parseInt((formData.get("min_job_postings_to_qualify") as string) ?? "1", 10) || 1);
 
@@ -235,18 +210,10 @@ export async function saveHqLocation(
   _prev: { error?: string; success?: boolean } | undefined,
   formData: FormData,
 ): Promise<{ error?: string; success?: boolean }> {
-  const supabase = await createClient();
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren dürfen den Standort ändern." };
+  const user = ctx.user;
   const db = createServiceClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const { data: profile } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", user!.id)
-    .single();
-  if (profile?.role !== "admin") {
-    return { error: "Nur Administratoren dürfen den Standort ändern." };
-  }
 
   const label = ((formData.get("label") as string) ?? "").trim() || "Unser Standort";
   const address = ((formData.get("address") as string) ?? "").trim();
@@ -294,12 +261,9 @@ export async function deleteFieldProfile(id: string) {
 // ─── Custom Lead Status (CRM-Workflow) ───────────────────────────────
 
 async function ensureAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Nicht angemeldet." as const };
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return { error: "Nur Administratoren." as const };
-  return { user };
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren." as const };
+  return { user: ctx.user };
 }
 
 function slugify(input: string): string {

@@ -79,7 +79,7 @@ export function ClickupTokenForm({
             <input value={workspaceLabel} onChange={(e) => setWorkspaceLabel(e.target.value)} placeholder="z.B. Swipeflow" className={inputCls} />
           </Field>
           <div className="flex justify-end">
-            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-50">
+            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50">
               {pending ? "Pruefen…" : "Verbinden"}
             </button>
           </div>

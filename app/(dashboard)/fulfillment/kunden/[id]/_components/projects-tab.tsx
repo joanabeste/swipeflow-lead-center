@@ -50,7 +50,7 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
         <button
           type="button"
           onClick={() => setShowAdd((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-primary-dark"
         >
           <Plus className="h-3.5 w-3.5" /> Neues Projekt
         </button>
@@ -87,7 +87,7 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
           </div>
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" onClick={() => setShowAdd(false)} className="rounded-xl border border-gray-200 px-3 py-1.5 text-sm hover:bg-gray-100 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">Abbrechen</button>
-            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-dark disabled:opacity-50">{pending ? "Speichern…" : "Anlegen"}</button>
+            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50">{pending ? "Speichern…" : "Anlegen"}</button>
           </div>
         </form>
       )}

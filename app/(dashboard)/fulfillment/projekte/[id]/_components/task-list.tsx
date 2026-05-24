@@ -69,7 +69,7 @@ export function TaskList({
           <button onClick={refresh} disabled={pending} className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium hover:bg-gray-100 disabled:opacity-50 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">
             <RefreshCw className={`h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} /> Sync
           </button>
-          <button onClick={() => setShowAdd((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-dark">
+          <button onClick={() => setShowAdd((v) => !v)} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-gray-900 hover:bg-primary-dark">
             <Plus className="h-3.5 w-3.5" /> Neue Aufgabe
           </button>
         </div>
@@ -81,7 +81,7 @@ export function TaskList({
           <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} rows={2} placeholder="Beschreibung (optional)" className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#1c1c1e]" />
           <div className="mt-2 flex justify-end gap-2">
             <button type="button" onClick={() => setShowAdd(false)} className="rounded-xl border border-gray-200 px-3 py-1 text-xs hover:bg-gray-100 dark:border-[#2c2c2e]/60 dark:hover:bg-white/5">Abbrechen</button>
-            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-3 py-1 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-50">{pending ? "Anlegen…" : "Anlegen"}</button>
+            <button type="submit" disabled={pending} className="rounded-xl bg-primary px-3 py-1 text-xs font-semibold text-gray-900 hover:bg-primary-dark disabled:opacity-50">{pending ? "Anlegen…" : "Anlegen"}</button>
           </div>
         </form>
       )}

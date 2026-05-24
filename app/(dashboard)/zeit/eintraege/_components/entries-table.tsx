@@ -128,7 +128,7 @@ function EditRow({
         <button
           onClick={() => onSave({ started_at: new Date(start).toISOString(), ended_at: end ? new Date(end).toISOString() : null, note: note || null })}
           disabled={pending}
-          className="mr-2 rounded-md bg-primary p-1.5 text-white hover:bg-primary-dark disabled:opacity-50"
+          className="mr-2 rounded-md bg-primary p-1.5 text-gray-900 hover:bg-primary-dark disabled:opacity-50"
         >
           <Check className="h-4 w-4" />
         </button>

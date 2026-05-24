@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 
 const actionLabels: Record<string, string> = {
   "lead.enriched": "Lead angereichert",
@@ -63,6 +64,7 @@ function formatDetails(action: string, details: Record<string, unknown>): string
 }
 
 export default async function AktivitaetPage() {
+  await requireAdmin();
   const supabase = await createClient();
 
   const { data: logs } = await supabase

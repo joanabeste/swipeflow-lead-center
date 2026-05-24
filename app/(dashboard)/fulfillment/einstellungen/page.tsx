@@ -1,9 +1,11 @@
 import { createServiceClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/auth";
 import { listAllProjects } from "@/lib/fulfillment/data";
 import { ClickupTokenForm } from "./_components/clickup-token-form";
 import { ClickupListMapper } from "./_components/clickup-list-mapper";
 
 export default async function FulfillmentEinstellungenPage() {
+  await requireAdmin();
   const db = createServiceClient();
   const { data: integration } = await db
     .from("app_integrations")

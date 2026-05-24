@@ -67,7 +67,7 @@ export function TimerWidget({ running }: Props) {
             type="button"
             onClick={handleStart}
             disabled={pending}
-            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
           >
             <Play className="h-4 w-4" />
             Starten

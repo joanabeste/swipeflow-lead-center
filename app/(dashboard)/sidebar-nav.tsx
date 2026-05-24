@@ -17,7 +17,6 @@ import {
   Clock,
   ChevronDown,
   CheckSquare,
-  Lock,
   Calendar,
   Pause,
   BarChart3,
@@ -330,9 +329,6 @@ function SectionSwitcher({
               >
                 <s.icon className="h-[18px] w-[18px]" />
                 <span className="flex-1 text-left">{s.label}</span>
-                {s.requires === "admin" && (
-                  <Lock className="h-3.5 w-3.5 opacity-50" />
-                )}
               </button>
             );
           })}
