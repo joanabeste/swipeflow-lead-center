@@ -14,7 +14,10 @@ export default async function FulfillmentEinstellungenPage() {
     .maybeSingle();
   const projects = await listAllProjects();
 
-  const isConfigured = !!integration?.workspace_id;
+  // Mapper anzeigen, sobald ueberhaupt eine Integration existiert (Token verbunden).
+  // Frueher war Bedingung workspace_id — das versteckte den Mapper, falls die
+  // Workspace-ID beim Connect leer war (sie wird jetzt eh automatisch gefuellt).
+  const isConfigured = !!integration;
 
   return (
     <div className="space-y-6">
