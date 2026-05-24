@@ -19,18 +19,27 @@ async function requireAdminId(): Promise<string | { error: string }> {
 export async function saveClickupToken(token: string, workspaceId?: string, workspaceName?: string): Promise<Result> {
   const u = await requireAdminId();
   if (typeof u !== "string") return u;
-  if (!token?.trim()) return { error: "Token fehlt." };
+  const trimmed = token?.trim();
+  if (!trimmed) return { error: "Token fehlt." };
 
   // Token gegen ClickUp testen.
   try {
-    await clickupFetch("/team", { token });
+    await clickupFetch("/team", { token: trimmed });
   } catch (e) {
     if (e instanceof ClickupError && e.status === 401) return { error: "Token ungueltig — pruefe in ClickUp unter Apps → API-Token." };
     return { error: e instanceof Error ? e.message : "Verbindungsfehler." };
   }
 
+  // Verschluesseln — schlaegt fehl wenn CREDENTIALS_ENCRYPTION_KEY fehlt/falsch.
+  let encrypted: string;
+  try {
+    encrypted = encryptSecret(trimmed);
+  } catch (e) {
+    console.error("[saveClickupToken] encryptSecret failed:", e);
+    return { error: e instanceof Error ? `Konfigurations-Fehler: ${e.message}` : "Token-Verschluesselung fehlgeschlagen." };
+  }
+
   const db = createServiceClient();
-  const encrypted = encryptSecret(token.trim());
   const { error } = await db.from("app_integrations").upsert({
     provider: "clickup",
     config_encrypted: encrypted,
@@ -39,7 +48,12 @@ export async function saveClickupToken(token: string, workspaceId?: string, work
     configured_by: u,
     updated_at: new Date().toISOString(),
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (/relation.*does not exist/i.test(error.message)) {
+      return { error: "Tabelle app_integrations fehlt — Migration 074 muss in Supabase ausgefuehrt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
   invalidateClickupConfigCache();
   await logAudit({ userId: u, action: "clickup.token.save" });
   revalidatePath("/fulfillment/einstellungen");
