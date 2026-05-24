@@ -23,6 +23,12 @@ export const leadFields: LeadField[] = [
   { key: "legal_form", label: "Rechtsform", type: "text", required: false },
   { key: "register_id", label: "Handelsregister-Nr.", type: "text", required: false },
   { key: "description", label: "Beschreibung", type: "text", required: false },
+  // Ansprechpartner-Slots: jeder Slot ist eine eigene Spalte mit einem
+  // Namen (optional in der Form "Max Mustermann (Geschaeftsfuehrer)" —
+  // Role wird beim Import aus den Klammern geparst).
+  { key: "contact_1_name", label: "Ansprechpartner 1 – Name", type: "text", required: false },
+  { key: "contact_2_name", label: "Ansprechpartner 2 – Name", type: "text", required: false },
+  { key: "contact_3_name", label: "Ansprechpartner 3 – Name", type: "text", required: false },
 ];
 
 /** Bekannte CSV-Spaltenbezeichnungen -> Lead-Feld-Key. Wird für Auto-Mapping genutzt. */
@@ -63,7 +69,14 @@ export const knownColumnAliases: Record<string, string> = {
   "bundesland": "state",
   "land": "country",
   "country": "country",
-  "geschäftsvertreter": "description",
+  // Northdata: „Ges. Vertreter 1/2/3" → strukturierte Ansprechpartner.
+  "ges. vertreter 1": "contact_1_name",
+  "ges. vertreter 2": "contact_2_name",
+  "ges. vertreter 3": "contact_3_name",
+  "gesetzlicher vertreter 1": "contact_1_name",
+  "gesetzlicher vertreter 2": "contact_2_name",
+  "gesetzlicher vertreter 3": "contact_3_name",
+  "geschäftsvertreter": "contact_1_name",
   "register-id": "register_id",
   "register_id": "register_id",
   "handelsregister": "register_id",

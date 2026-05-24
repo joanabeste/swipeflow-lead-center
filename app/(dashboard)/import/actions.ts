@@ -16,6 +16,7 @@ import {
   createImportLog,
   finalizeImportLog,
   batchInsert,
+  parseContactName,
 } from "@/lib/csv/import-helpers";
 
 export async function processImport(
@@ -99,6 +100,11 @@ export async function processImport(
   // Batch-Insert: 500er Chunks
   const BATCH_SIZE = 500;
   const leadsToInsert: Record<string, unknown>[] = [];
+  // Kontakte aus contact_N_name-Slots (z.B. Northdata „Ges. Vertreter").
+  // Werden NACH erfolgreichem Lead-Batch-Insert in lead_contacts geschrieben.
+  const contactsToInsert: { lead_id: string; name: string; role: string | null }[] = [];
+  // Kontakte fuer Re-Imports (existierende Leads): dedupliziert per name pro lead_id.
+  const contactsForExistingLeads: { lead_id: string; name: string; role: string | null }[] = [];
 
   const updateFields = [
     "website", "phone", "email", "street", "city", "zip", "state",
@@ -162,6 +168,14 @@ export async function processImport(
         } else {
           duplicateCount++;
         }
+        // Ansprechpartner-Slots auch beim Re-Import auf den existierenden Lead anwenden.
+        // Werden weiter unten gegen die bereits vorhandenen lead_contacts dedupliziert,
+        // damit nichts doppelt einfaerbt.
+        for (const slot of ["contact_1_name", "contact_2_name", "contact_3_name"] as const) {
+          const parsed = parseContactName(row[slot] as string | null | undefined);
+          if (!parsed) continue;
+          contactsForExistingLeads.push({ lead_id: existingLeadId, name: parsed.name, role: parsed.role });
+        }
       }
       continue;
     }
@@ -195,7 +209,12 @@ export async function processImport(
       cancelReason = "Webdesign-Import: keine Website";
     }
 
+    // Lead-ID clientseitig vorgenerieren, damit lead_contacts ohne separates
+    // Insert-with-Select-Roundtrip referenzieren koennen.
+    const leadId = crypto.randomUUID();
+
     leadsToInsert.push({
+      id: leadId,
       company_name: row.company_name,
       website: row.website,
       phone: row.phone,
@@ -220,6 +239,17 @@ export async function processImport(
       created_by: user?.id ?? null,
     });
 
+    // Ansprechpartner-Slots einsammeln (1-3 pro Lead), Dedup innerhalb des Leads.
+    const seenNames = new Set<string>();
+    for (const slot of ["contact_1_name", "contact_2_name", "contact_3_name"] as const) {
+      const parsed = parseContactName(row[slot] as string | null | undefined);
+      if (!parsed) continue;
+      const key = parsed.name.toLowerCase();
+      if (seenNames.has(key)) continue;
+      seenNames.add(key);
+      contactsToInsert.push({ lead_id: leadId, name: parsed.name, role: parsed.role });
+    }
+
     importedCount++;
   }
 
@@ -229,6 +259,41 @@ export async function processImport(
     importedCount -= batchResult.failed;
     errorCount += batchResult.failed;
     batchResult.errors.forEach((msg) => errors.push({ row: -1, field: "batch", message: msg }));
+  }
+
+  // Kontakt-Insert NACH erfolgreichem Lead-Insert. Erst die Kontakte fuer
+  // neue Leads, dann die fuer existierende (Re-Import). Bei Re-Import
+  // dedupliziert gegen den schon-vorhandenen Bestand, damit nichts doppelt
+  // einfaerbt — Dedup per lowercase(name) pro lead_id.
+  let contactsImportedCount = 0;
+  if (contactsToInsert.length > 0) {
+    const cRes = await batchInsert(db, "lead_contacts", contactsToInsert, BATCH_SIZE);
+    contactsImportedCount += cRes.inserted;
+    cRes.errors.forEach((msg) => errors.push({ row: -1, field: "lead_contacts", message: msg }));
+  }
+  if (contactsForExistingLeads.length > 0) {
+    // Bestand pro betroffenem Lead laden, dann clientseitig filtern.
+    const affectedIds = Array.from(new Set(contactsForExistingLeads.map((c) => c.lead_id)));
+    const { data: existingContacts } = await db
+      .from("lead_contacts")
+      .select("lead_id, name")
+      .in("lead_id", affectedIds);
+    const seen = new Set<string>();
+    for (const c of existingContacts ?? []) {
+      seen.add(`${c.lead_id}|${(c.name as string).toLowerCase().trim()}`);
+    }
+    const filtered: typeof contactsForExistingLeads = [];
+    for (const c of contactsForExistingLeads) {
+      const key = `${c.lead_id}|${c.name.toLowerCase().trim()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      filtered.push(c);
+    }
+    if (filtered.length > 0) {
+      const cRes2 = await batchInsert(db, "lead_contacts", filtered, BATCH_SIZE);
+      contactsImportedCount += cRes2.inserted;
+      cRes2.errors.forEach((msg) => errors.push({ row: -1, field: "lead_contacts", message: msg }));
+    }
   }
 
   // Import-Log abschließen
@@ -266,6 +331,7 @@ export async function processImport(
       duplicates: duplicateCount,
       archived: archivedCount,
       errors: errorCount,
+      contacts_imported: contactsImportedCount,
     },
   });
 
@@ -281,6 +347,7 @@ export async function processImport(
     updated: updatedCount,
     archived: archivedCount,
     errors: errorCount,
+    contacts_imported: contactsImportedCount,
   };
 }
 

@@ -344,6 +344,23 @@ export async function finalizeImportLog(
 // ─── Batch-Insert Helper ────────────────────────────────────
 
 /**
+ * Parst einen importierten Vertreter-/Kontakt-Namen.
+ *
+ * Akzeptiert Formen wie:
+ *   "Max Mustermann"                      → { name: "Max Mustermann", role: null }
+ *   "Max Mustermann (Geschaeftsfuehrer)"  → { name: "Max Mustermann", role: "Geschaeftsfuehrer" }
+ * Liefert null, wenn der Wert leer/whitespace ist.
+ */
+export function parseContactName(raw: string | null | undefined): { name: string; role: string | null } | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (match) return { name: match[1].trim(), role: match[2].trim() };
+  return { name: trimmed, role: null };
+}
+
+/**
  * Inserts in Chunks à `batchSize`. Sammelt Fehler pro Batch ohne abzubrechen.
  * Gibt zurück: erfolgreich inserted, fehlgeschlagen, Fehler-Details.
  */

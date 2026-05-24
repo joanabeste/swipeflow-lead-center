@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCardClient } from "./lead-screenshot-card-client";
 import type { LeadDetailBundle } from "@/lib/leads/load-lead-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
+import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
 
 interface Props {
   /** lead-id im ?preview=… Query-Param; null = zu */
