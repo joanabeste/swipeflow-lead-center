@@ -135,6 +135,7 @@ const adminSection: Section = {
   groups: [
     { items: [
       { href: "/admin", label: "Uebersicht", icon: LayoutDashboard },
+      { href: "/admin/team", label: "Team-Uebersicht", icon: Users },
       { href: "/einstellungen/team", label: "Nutzer & Rollen", icon: UserCog },
       { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
       { href: "/aktivitaet", label: "Aktivitaet", icon: ActivityIcon },

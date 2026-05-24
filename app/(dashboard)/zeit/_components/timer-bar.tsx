@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Play, Square, Clock } from "lucide-react";
+import { Play, Square, Clock, Loader2 } from "lucide-react";
 import { useToastContext } from "../../toast-provider";
 import { startTimer, stopTimer } from "../actions";
 import { formatDuration } from "@/lib/zeit/format";
@@ -69,15 +69,24 @@ export function TimerBar({ running }: Props) {
         </span>
         {running.note && <span className="hidden max-w-[200px] truncate text-xs text-gray-500 sm:inline">{running.note}</span>}
         <button onClick={handleStop} disabled={pending} className="rounded-md bg-red-500 px-2 py-1 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-50">
-          <Square className="h-3.5 w-3.5" />
+          {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
         </button>
       </div>
     );
   }
 
   return (
-    <button onClick={handleStart} disabled={pending} className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e]/60 dark:text-gray-300 dark:hover:bg-white/5">
-      <Play className="h-3.5 w-3.5" /> Timer
+    <button
+      onClick={handleStart}
+      disabled={pending}
+      className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
+        pending
+          ? "border-primary/50 bg-primary/10 text-primary"
+          : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-[#2c2c2e]/60 dark:text-gray-300 dark:hover:bg-white/5"
+      }`}
+    >
+      {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+      {pending ? "Startet…" : "Timer"}
     </button>
   );
 }

@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { UserCog, Sliders, Activity, Download, Archive } from "lucide-react";
+import { Users, UserCog, Sliders, Activity, Download, Archive, Coins } from "lucide-react";
 
 const TILES = [
+  { href: "/admin/team", label: "Team-Uebersicht", desc: "Alle Mitarbeiter mit Stunden, Provisionen, Auszahlung", icon: Users },
   { href: "/einstellungen/team", label: "Nutzer & Rollen", desc: "User anlegen, Rollen + Sektion-Berechtigungen", icon: UserCog },
+  { href: "/einstellungen/provisionen", label: "Provisionen & Loehne", desc: "Provisions-Regeln und Stundenloehne pflegen", icon: Coins },
   { href: "/admin/einstellungen", label: "Globale Einstellungen", desc: "App-weite Konfiguration", icon: Sliders },
   { href: "/aktivitaet", label: "Aktivitaet", desc: "Audit-Log aller wichtigen Aktionen", icon: Activity },
   { href: "/export", label: "Export", desc: "Daten-Export (CSV)", icon: Download },
