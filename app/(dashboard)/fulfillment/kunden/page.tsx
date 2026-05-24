@@ -7,7 +7,7 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const q = sp.q?.trim().toLowerCase() ?? "";
   const all = await listCustomersWithActiveProject();
-  const filtered = q ? all.filter((c) => (c.company_name ?? "").toLowerCase().includes(q) || (c.city ?? "").toLowerCase().includes(q)) : all;
+  const filtered = q ? all.filter((c) => (c.company_name ?? "").toLowerCase().includes(q)) : all;
 
   return (
     <div className="space-y-6">
@@ -26,7 +26,7 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
                 type="text"
                 name="q"
                 defaultValue={q}
-                placeholder="Name oder Stadt suchen…"
+                placeholder="Name suchen…"
                 className="w-64 rounded-xl border border-gray-200 bg-white py-2 pl-8 pr-3 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#161618] dark:text-gray-100"
               />
             </div>
@@ -42,8 +42,6 @@ export default async function KundenListePage({ searchParams }: { searchParams: 
           rows={filtered.map((c) => ({
             id: c.id,
             company_name: c.company_name ?? "—",
-            city: c.city,
-            vertical: c.vertical,
             became_customer_at: c.became_customer_at ?? null,
             active_project: c.active_project,
           }))}

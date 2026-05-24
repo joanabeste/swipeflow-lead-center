@@ -11,8 +11,6 @@ import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS, type ProjectStatus } from
 export type CustomerRow = {
   id: string;
   company_name: string;
-  city: string | null;
-  vertical: string | null;
   became_customer_at: string | null;
   active_project: { id: string; name: string; status: string } | null;
 };
@@ -43,8 +41,6 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
         <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-[#1c1c1e]">
           <tr>
             <th className="px-4 py-3 text-left">Firma</th>
-            <th className="px-4 py-3 text-left">Stadt</th>
-            <th className="px-4 py-3 text-left">Bereich</th>
             <th className="px-4 py-3 text-left">Aktives Projekt</th>
             <th className="px-4 py-3 text-left">Kunde seit</th>
             <th className="w-10 px-4 py-3" />
@@ -61,8 +57,6 @@ export function CustomersTable({ rows }: { rows: CustomerRow[] }) {
                     {c.company_name}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.city ?? "—"}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{c.vertical ?? "—"}</td>
                 <td className="px-4 py-3">
                   {ap && apStatus ? (
                     <Link
