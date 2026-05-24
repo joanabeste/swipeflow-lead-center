@@ -17,12 +17,33 @@ export default async function ImportPage() {
     .select("*")
     .order("name");
 
-  // Robust gegen alte Schemata: zuerst minimale Spalten, dann Full-Select
-  const { data: imports, error: importsError, count } = await db
+  // Robust gegen alte Schemata: zuerst mit den neuen CSV-Storage-Spalten
+  // versuchen, bei „column does not exist" auf die Basis-Spalten fallback.
+  // So funktioniert die Seite auch bevor Migration 060 in der DB liegt.
+  const BASE_COLS = "id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count";
+  const WITH_CSV_COLS = `${BASE_COLS}, csv_storage_path, csv_expires_at`;
+  let imports: Record<string, unknown>[] | null = null;
+  let importsError: { message: string; code?: string } | null = null;
+  let count: number | null = null;
+  const first = await db
     .from("import_logs")
-    .select("id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count, csv_storage_path, csv_expires_at", { count: "exact" })
+    .select(WITH_CSV_COLS, { count: "exact" })
     .order("created_at", { ascending: false })
     .limit(20);
+  if (first.error && first.error.code === "42703") {
+    const second = await db
+      .from("import_logs")
+      .select(BASE_COLS, { count: "exact" })
+      .order("created_at", { ascending: false })
+      .limit(20);
+    imports = second.data;
+    importsError = second.error;
+    count = second.count;
+  } else {
+    imports = first.data;
+    importsError = first.error;
+    count = first.count;
+  }
 
   return (
     <div>
@@ -78,7 +99,7 @@ export default async function ImportPage() {
             <p className="mt-1 font-mono text-xs">{importsError.message} (Code: {importsError.code ?? "?"})</p>
           </div>
         )}
-        <ImportHistory imports={imports ?? []} />
+        <ImportHistory imports={(imports ?? []) as unknown as Parameters<typeof ImportHistory>[0]["imports"]} />
       </div>
     </div>
   );
