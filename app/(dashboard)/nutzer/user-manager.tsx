@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState } from "react";
-import { Plus, Trash2, KeyRound } from "lucide-react";
+import { useActionState, useState } from "react";
+import { Plus, Trash2, KeyRound, Check, Loader2 } from "lucide-react";
 import type { Profile } from "@/lib/types";
 import { createUser, updateUser, deleteUser, resetPassword } from "./actions";
 import { PasswordInput } from "@/components/password-input";
+import { useToastContext } from "../toast-provider";
 
 interface Props {
   profiles: Profile[];
@@ -18,8 +19,31 @@ const roleLabels: Record<string, string> = {
   employee: "Mitarbeiter",
 };
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 export function UserManager({ profiles, currentUserId }: Props) {
   const [state, formAction, pending] = useActionState(createUser, undefined);
+  const { addToast } = useToastContext();
+  const [saving, setSaving] = useState<Record<string, SaveState>>({});
+
+  function setRow(id: string, s: SaveState) {
+    setSaving((prev) => ({ ...prev, [id]: s }));
+    if (s === "saved") {
+      setTimeout(() => setSaving((prev) => ({ ...prev, [id]: "idle" })), 1500);
+    }
+  }
+
+  async function applyUpdate(profileId: string, updates: Parameters<typeof updateUser>[1], label: string) {
+    setRow(profileId, "saving");
+    const res = await updateUser(profileId, updates);
+    if (res && "error" in res && res.error) {
+      setRow(profileId, "error");
+      addToast(res.error, "error");
+    } else {
+      setRow(profileId, "saved");
+      addToast(label, "success");
+    }
+  }
 
   return (
     <div className="mt-6 space-y-6">
@@ -100,14 +124,21 @@ export function UserManager({ profiles, currentUserId }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
-            {profiles.map((profile) => (
-              <tr key={profile.id}>
-                <td className="px-4 py-3 text-sm font-medium">{profile.name}</td>
+            {profiles.map((profile) => {
+              const rowState = saving[profile.id] ?? "idle";
+              return (
+              <tr key={profile.id} className={rowState === "saving" ? "bg-primary/[0.03]" : ""}>
+                <td className="px-4 py-3 text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{profile.name}</span>
+                    <SaveIndicator state={rowState} />
+                  </div>
+                </td>
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">{profile.email}</td>
                 <td className="px-4 py-3 text-sm">
                   <select
                     defaultValue={profile.role}
-                    onChange={(e) => updateUser(profile.id, { role: e.target.value })}
+                    onChange={(e) => applyUpdate(profile.id, { role: e.target.value }, `Rolle gespeichert: ${roleLabels[e.target.value] ?? e.target.value}`)}
                     className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                     disabled={profile.id === currentUserId}
                   >
@@ -121,6 +152,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
                     profile={profile}
                     field="can_vertrieb"
                     disabled={profile.role === "admin" || profile.id === currentUserId}
+                    onSave={applyUpdate}
                   />
                 </td>
                 <td className="px-4 py-3 text-center">
@@ -128,6 +160,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
                     profile={profile}
                     field="can_fulfillment"
                     disabled={profile.role === "admin" || profile.id === currentUserId}
+                    onSave={applyUpdate}
                   />
                 </td>
                 <td className="px-4 py-3 text-center">
@@ -135,12 +168,13 @@ export function UserManager({ profiles, currentUserId }: Props) {
                     profile={profile}
                     field="can_zeit"
                     disabled={profile.role === "admin" || profile.id === currentUserId}
+                    onSave={applyUpdate}
                   />
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <select
                     defaultValue={profile.status}
-                    onChange={(e) => updateUser(profile.id, { status: e.target.value })}
+                    onChange={(e) => applyUpdate(profile.id, { status: e.target.value }, e.target.value === "active" ? "Aktiviert." : "Deaktiviert.")}
                     className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                     disabled={profile.id === currentUserId}
                   >
@@ -153,9 +187,18 @@ export function UserManager({ profiles, currentUserId }: Props) {
                 </td>
                 <td className="flex gap-2 px-4 py-3">
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const pw = prompt("Neues Passwort:");
-                      if (pw) resetPassword(profile.id, pw);
+                      if (!pw) return;
+                      setRow(profile.id, "saving");
+                      const res = await resetPassword(profile.id, pw);
+                      if (res && "error" in res && res.error) {
+                        setRow(profile.id, "error");
+                        addToast(res.error, "error");
+                      } else {
+                        setRow(profile.id, "saved");
+                        addToast("Passwort zurueckgesetzt.", "success");
+                      }
                     }}
                     className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     title="Passwort zurücksetzen"
@@ -164,9 +207,15 @@ export function UserManager({ profiles, currentUserId }: Props) {
                   </button>
                   {profile.id !== currentUserId && (
                     <button
-                      onClick={() => {
-                        if (confirm(`${profile.name} wirklich löschen?`)) {
-                          deleteUser(profile.id);
+                      onClick={async () => {
+                        if (!confirm(`${profile.name} wirklich löschen?`)) return;
+                        setRow(profile.id, "saving");
+                        const res = await deleteUser(profile.id);
+                        if (res && "error" in res && res.error) {
+                          setRow(profile.id, "error");
+                          addToast(res.error, "error");
+                        } else {
+                          addToast(`${profile.name} geloescht.`, "success");
                         }
                       }}
                       className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
@@ -177,7 +226,8 @@ export function UserManager({ profiles, currentUserId }: Props) {
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -185,23 +235,37 @@ export function UserManager({ profiles, currentUserId }: Props) {
   );
 }
 
+function SaveIndicator({ state }: { state: SaveState }) {
+  if (state === "saving") return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />;
+  if (state === "saved") return <Check className="h-3.5 w-3.5 text-green-500" />;
+  if (state === "error") return <span className="text-xs font-bold text-red-500">!</span>;
+  return null;
+}
+
 function PermissionCheckbox({
   profile,
   field,
   disabled,
+  onSave,
 }: {
   profile: Profile;
   field: "can_vertrieb" | "can_fulfillment" | "can_zeit";
   disabled?: boolean;
+  onSave: (profileId: string, updates: Parameters<typeof updateUser>[1], label: string) => Promise<void>;
 }) {
   // Admins haben implizit alles — UI zeigt das als "haken+disabled".
   const initial = profile.role === "admin" ? true : (profile[field] ?? (field === "can_zeit" ? true : profile.role !== "employee"));
+  const FIELD_LABELS: Record<typeof field, string> = {
+    can_vertrieb: "Vertrieb",
+    can_fulfillment: "Fulfillment",
+    can_zeit: "Zeit",
+  };
   return (
     <input
       type="checkbox"
       defaultChecked={initial}
       disabled={disabled}
-      onChange={(e) => updateUser(profile.id, { [field]: e.target.checked })}
+      onChange={(e) => onSave(profile.id, { [field]: e.target.checked }, `${FIELD_LABELS[field]} ${e.target.checked ? "aktiviert" : "deaktiviert"}.`)}
       className="h-4 w-4 accent-primary disabled:opacity-50"
       title={disabled && profile.role === "admin" ? "Admins haben immer Zugriff" : ""}
     />
