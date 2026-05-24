@@ -39,6 +39,12 @@ export default async function ProvisionPage({
   const sp = await searchParams;
   const ctx = await requireZeitUser();
   const isAdmin = ctx.profile.role === "admin";
+  // Server-Gate: ?user=-Param wird nur fuer Admins beachtet. Non-Admins werden
+  // mit ?user=fremdeId auf ihre eigene Sicht umgeleitet (kein silent fallback).
+  if (!isAdmin && sp.user && sp.user !== ctx.user.id) {
+    const { redirect } = await import("next/navigation");
+    redirect(`/zeit/provision${sp.month ? `?month=${sp.month}` : ""}`);
+  }
   const targetUserId = isAdmin && sp.user ? sp.user : ctx.user.id;
   const monthDate = parseMonthParam(sp.month);
   const range = getMonthRange(monthDate);

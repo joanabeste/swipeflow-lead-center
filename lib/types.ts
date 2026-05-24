@@ -72,6 +72,18 @@ export type LeadStatus =
   | "qualified"
   | "exported";
 
+/** Anzeige-Optionen fuer LeadStatus — Label + Tailwind-Klassen fuer Status-Pille.
+ *  Wird in lead-detail-panel und lead-profile-panel verwendet (DRY). */
+export const LEAD_STATUS_OPTIONS: { value: LeadStatus; label: string; color: string }[] = [
+  { value: "imported", label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+  { value: "filtered", label: "Gefiltert", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  { value: "cancelled", label: "Ausgeschlossen", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  { value: "enrichment_pending", label: "Anreicherung", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  { value: "enriched", label: "Angereichert", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  { value: "qualified", label: "Qualifiziert", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  { value: "exported", label: "Exportiert", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+];
+
 export type LeadSourceType = "csv" | "url" | "directory" | "manual";
 
 export interface Lead {

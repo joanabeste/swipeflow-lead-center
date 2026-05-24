@@ -1,22 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
+import { checkAdmin } from "@/lib/auth";
 import type { CommissionScope, UserRole } from "@/lib/types";
 
 async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Nicht angemeldet." as const };
-  const db = createServiceClient();
-  const { data: profile } = await db
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  if (profile?.role !== "admin") return { error: "Nur Administratoren." as const };
-  return { user, db };
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren." as const };
+  return { user: ctx.user, db: createServiceClient() };
 }
 
 export interface CommissionRuleInput {
@@ -32,7 +25,9 @@ export interface CommissionRuleInput {
 function validate(input: CommissionRuleInput): string | null {
   if (!input.name.trim()) return "Name fehlt.";
   if (!input.trigger_status_id) return "Trigger-Status fehlt.";
-  if (!(input.amount_euros >= 0)) return "Betrag muss >= 0 sein.";
+  if (!Number.isFinite(input.amount_euros) || input.amount_euros < 0) {
+    return "Betrag muss eine Zahl >= 0 sein.";
+  }
   if (input.scope === "role" && !input.scope_role) return "Rolle muss gewählt werden.";
   if (input.scope === "user" && !input.scope_user_id) return "Mitarbeiter muss gewählt werden.";
   return null;
@@ -148,7 +143,9 @@ export async function deleteCommissionRule(id: string) {
 export async function updateProfileHourlyWage(profileId: string, euros: number | null) {
   const ctx = await requireAdmin();
   if ("error" in ctx) return { error: ctx.error };
-  if (euros !== null && !(euros >= 0)) return { error: "Stundenlohn muss >= 0 sein." };
+  if (euros !== null && (!Number.isFinite(euros) || euros < 0)) {
+    return { error: "Stundenlohn muss eine Zahl >= 0 sein." };
+  }
   const cents = euros === null ? null : Math.round(euros * 100);
 
   const { error } = await ctx.db

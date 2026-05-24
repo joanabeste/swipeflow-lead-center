@@ -19,11 +19,16 @@ export function CrmStatusManager({ statuses }: { statuses: CustomLeadStatus[] })
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">CRM-Status verwalten</h3>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold">CRM-Status verwalten</h3>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            Labels, Farben und KI-Lernsignal für deinen Sales-Workflow. Reihenfolge bestimmt die Anzeige im CRM.
+          </p>
+        </div>
         <button
           onClick={() => setAdding(true)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-gray-900 hover:bg-primary-dark"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm text-gray-900 hover:bg-primary-dark"
         >
           <Plus className="h-4 w-4" />
           Neuer Status

@@ -77,7 +77,9 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
                     : prev,
                 );
               })
-              .catch(() => {});
+              .catch((err) => {
+                if (!ac.signal.aborted) console.warn("[lead-preview] geocode-fallback failed:", err);
+              });
           }
         })
         .catch((e: unknown) => {

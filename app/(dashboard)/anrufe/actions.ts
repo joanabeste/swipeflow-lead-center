@@ -7,6 +7,7 @@ import { startCall as startCrmCall, updateCallNotes as updateCrmCallNotes } from
 import { getHqLocation } from "@/lib/app-settings";
 import { haversineKm } from "@/lib/geo/distance";
 import { isHrContact } from "@/lib/recruiting/hr-contact";
+import { logAudit } from "@/lib/audit-log";
 
 export type CallStatus =
   | "idle"
@@ -143,7 +144,16 @@ export async function saveCallQueueStatusIds(
     .eq("id", user.id);
   if (error) return { error: error.message };
 
+  await logAudit({
+    userId: user.id,
+    action: "profile.call_queue_status_ids_updated",
+    entityType: "profile",
+    entityId: user.id,
+    details: { count: cleanIds.length },
+  });
+
   revalidatePath("/anrufe");
+  revalidatePath("/einstellungen/anrufe");
   return { success: true };
 }
 

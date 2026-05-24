@@ -3,25 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
+import { checkAdmin } from "@/lib/auth";
 
 export async function createUser(
   _prev: { error?: string } | undefined,
   formData: FormData,
 ) {
-  const supabase = await createClient();
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Administratoren können Nutzer anlegen." };
+  const currentUser = ctx.user;
   const serviceClient = createServiceClient();
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-  // Admin-Check
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", currentUser!.id)
-    .single();
-
-  if (profile?.role !== "admin") {
-    return { error: "Nur Administratoren können Nutzer anlegen." };
-  }
 
   const email = formData.get("email") as string;
   const name = formData.get("name") as string;
@@ -78,14 +69,9 @@ export async function updateUser(
     can_zeit?: boolean;
   },
 ) {
-  const supabase = await createClient();
-  const { data: { user: currentUser } } = await supabase.auth.getUser();
-
-  // Service-Role-Client umgeht RLS — wir machen den Admin-Check selbst.
-  if (currentUser) {
-    const { data: me } = await supabase.from("profiles").select("role").eq("id", currentUser.id).single();
-    if (me?.role !== "admin") return { error: "Nur Admins koennen Nutzer aendern." };
-  }
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Admins koennen Nutzer aendern." };
+  const currentUser = ctx.user;
   const serviceClient = createServiceClient();
   const { error } = await serviceClient
     .from("profiles")

@@ -13,7 +13,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
 import { EnrichmentDiagnosisModal } from "./enrichment-diagnosis-modal";
-import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
+import { DEFAULT_ENRICHMENT_CONFIG, LEAD_STATUS_OPTIONS as statusOptions } from "@/lib/types";
 import { useServiceMode } from "@/lib/service-mode";
 import { LeadMasterDataForm } from "./_components/lead-master-data-form";
 import { CrmContactsCard } from "../crm/[id]/_components/crm-contacts-card";
@@ -23,16 +23,6 @@ import { LeadDuplicatesCard } from "./_components/lead-duplicates-card";
 import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
 
 export type { ActivityItem };
-
-const statusOptions: { value: string; label: string; color: string }[] = [
-  { value: "imported", label: "Importiert", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
-  { value: "filtered", label: "Gefiltert", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  { value: "cancelled", label: "Ausgeschlossen", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
-  { value: "enrichment_pending", label: "Anreicherung", color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
-  { value: "enriched", label: "Angereichert", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  { value: "qualified", label: "Qualifiziert", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  { value: "exported", label: "Exportiert", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
-];
 
 interface Props {
   lead: Lead;

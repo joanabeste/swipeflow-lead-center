@@ -15,7 +15,9 @@ export default function GlobalError({
 
   return (
     <html lang="de">
-      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#111113", color: "#f3f4f6", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
+      {/* Inline-Styles: bei einem global-error koennte Tailwind/CSS noch nicht geladen sein.
+          Farben aus der Repo-Palette: #161618 (bg dark), #2c2c2e (border). */}
+      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", background: "#161618", color: "#f3f4f6", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}>
         <div style={{ maxWidth: "28rem", width: "100%", textAlign: "center" }}>
           <h1 style={{ fontSize: "1.25rem", fontWeight: 700 }}>Kritischer Fehler</h1>
           <p style={{ marginTop: "0.5rem", fontSize: "0.875rem", opacity: 0.7 }}>
@@ -28,7 +30,7 @@ export default function GlobalError({
           )}
           <button
             onClick={reset}
-            style={{ marginTop: "1.25rem", padding: "0.5rem 1rem", borderRadius: "0.5rem", border: "1px solid #374151", background: "transparent", color: "inherit", cursor: "pointer" }}
+            style={{ marginTop: "1.25rem", padding: "0.5rem 1rem", borderRadius: "0.5rem", border: "1px solid #2c2c2e", background: "transparent", color: "inherit", cursor: "pointer" }}
           >
             Neu laden
           </button>

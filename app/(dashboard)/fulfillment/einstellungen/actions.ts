@@ -1,21 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { clickupFetch, invalidateClickupConfigCache, ClickupError } from "@/lib/clickup/client";
 import { syncListIntoCache } from "@/lib/clickup/tasks";
 import { logAudit } from "@/lib/audit-log";
+import { checkAdmin } from "@/lib/auth";
 
 type Result<T = unknown> = { success: true; data?: T } | { error: string };
 
 async function requireAdminId(): Promise<string | { error: string }> {
-  const sb = await createClient();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return { error: "Nicht angemeldet." };
-  const { data: profile } = await sb.from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || profile.role !== "admin") return { error: "Nur Admins koennen die ClickUp-Integration verwalten." };
-  return user.id;
+  const ctx = await checkAdmin();
+  if (!ctx) return { error: "Nur Admins koennen die ClickUp-Integration verwalten." };
+  return ctx.user.id;
 }
 
 export async function saveClickupToken(token: string, workspaceId?: string, workspaceName?: string): Promise<Result> {

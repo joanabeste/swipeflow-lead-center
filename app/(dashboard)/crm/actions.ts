@@ -66,6 +66,16 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
   // Provisions-Trigger. Idempotent (UNIQUE in 068); ein erneutes Setzen
   // desselben Status erzeugt kein zweites Event.
   const award = await awardCommissionsForStatusChange(db, leadId, statusId);
+  if (award.error) {
+    console.warn("[updateCrmStatus] commission award failed:", award.error);
+    await logAudit({
+      userId: user.id,
+      action: "lead.commission_award_failed",
+      entityType: "lead",
+      entityId: leadId,
+      details: { status_id: statusId, error: award.error },
+    });
+  }
   if (award.inserted > 0) {
     await logAudit({
       userId: user.id,

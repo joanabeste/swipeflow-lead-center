@@ -25,7 +25,9 @@ export default async function LandingPageBySlug({ params }: Props) {
     pageId: page.id,
     userAgent,
     ip,
-  }).catch(() => {});
+  }).catch((err) => {
+    console.warn("[lp] trackLandingPageView failed:", err);
+  });
 
   const embedUrl = toLoomEmbedUrl(page.loom_url);
   const loomSrc = embedUrl

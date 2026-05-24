@@ -33,7 +33,9 @@ export function LeadScreenshotCardClient({ signedUrl, leadId, hasScreenshot, tak
         if (cancelled || !j) return;
         setLazyUrl(j.url);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelled) console.warn("[lead-screenshot] signed-url fetch failed:", err);
+      });
     return () => {
       cancelled = true;
     };

@@ -50,8 +50,13 @@ export function CaseStudiesManager({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">Case Studies</h2>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold">Case Studies</h2>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+            Referenzen für die Landing-Page. Werden je Branche passend zur Lead-Zielgruppe ausgespielt.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => setAdding(true)}
