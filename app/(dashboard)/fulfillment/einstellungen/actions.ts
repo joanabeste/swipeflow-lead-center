@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { clickupFetch, invalidateClickupConfigCache, ClickupError } from "@/lib/clickup/client";
-import { syncListIntoCache } from "@/lib/clickup/tasks";
+import { syncListIntoCache, listTeams, listSpaces, listFolders, listFolderlessLists } from "@/lib/clickup/tasks";
 import { logAudit } from "@/lib/audit-log";
 import { checkAdmin } from "@/lib/auth";
 

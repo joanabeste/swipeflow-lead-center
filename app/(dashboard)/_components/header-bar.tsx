@@ -31,6 +31,7 @@ export function HeaderBar({ running }: Props) {
   const showServiceMode = section === "vertrieb";
   const showEnrichment = section === "vertrieb";
   const showSearch = section === "vertrieb" || section === "fulfillment";
+  const showTimer = section === "zeit";
 
   return (
     <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-8 py-3 dark:border-[#2c2c2e]/50">
@@ -38,7 +39,7 @@ export function HeaderBar({ running }: Props) {
         {showServiceMode && <ServiceModeSwitch />}
       </div>
       <div className="flex items-center gap-3">
-        <TimerBar running={running} />
+        {showTimer && <TimerBar running={running} />}
         {showEnrichment && <ActiveEnrichmentBadge />}
         {showSearch && <GlobalSearch />}
       </div>

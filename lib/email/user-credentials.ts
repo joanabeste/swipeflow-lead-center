@@ -101,6 +101,176 @@ export async function deleteUserSmtp(userId: string): Promise<void> {
   await db.from("user_smtp_credentials").delete().eq("user_id", userId);
 }
 
+// ─── IMAP ────────────────────────────────────────────────────────
+
+export interface ImapConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string;
+  sentFolder: string;
+}
+
+export interface UserImapRecord {
+  userId: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  sentFolder: string;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  verifiedAt: string | null;
+}
+
+/** Lädt IMAP-Metadaten ohne Passwort. */
+export async function getUserImap(userId: string): Promise<UserImapRecord | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("user_smtp_credentials")
+    .select(
+      "user_id, imap_host, imap_port, imap_secure, imap_username, imap_sent_folder, imap_last_sync_at, imap_last_sync_error, imap_verified_at",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data || !data.imap_host) return null;
+  return {
+    userId: data.user_id as string,
+    host: data.imap_host as string,
+    port: (data.imap_port as number) ?? 993,
+    secure: (data.imap_secure as boolean) ?? true,
+    username: data.imap_username as string,
+    sentFolder: (data.imap_sent_folder as string) ?? "Sent",
+    lastSyncAt: (data.imap_last_sync_at as string | null) ?? null,
+    lastSyncError: (data.imap_last_sync_error as string | null) ?? null,
+    verifiedAt: (data.imap_verified_at as string | null) ?? null,
+  };
+}
+
+/**
+ * Speichert IMAP-Zugangsdaten. Voraussetzung: SMTP-Record existiert bereits
+ * (IMAP-Felder hängen am gleichen Row).
+ */
+export async function saveUserImap(
+  userId: string,
+  input: {
+    host: string;
+    port: number;
+    secure: boolean;
+    username: string;
+    password: string | null; // null/"" = nicht ändern
+    sentFolder: string;
+    verifiedAt: Date | null;
+  },
+): Promise<void> {
+  const db = createServiceClient();
+
+  // Sicherstellen, dass ein SMTP-Record existiert (FK über user_id-PK).
+  const { data: existing } = await db
+    .from("user_smtp_credentials")
+    .select("user_id, imap_password_encrypted")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!existing) {
+    throw new Error("Bitte zuerst SMTP-Zugangsdaten speichern.");
+  }
+  if (!input.password && !existing.imap_password_encrypted) {
+    throw new Error("IMAP-Passwort ist Pflicht beim ersten Speichern.");
+  }
+
+  const update: Record<string, unknown> = {
+    imap_host: input.host,
+    imap_port: input.port,
+    imap_secure: input.secure,
+    imap_username: input.username,
+    imap_sent_folder: input.sentFolder,
+    imap_verified_at: input.verifiedAt ? input.verifiedAt.toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.password && input.password.length > 0) {
+    update.imap_password_encrypted = encryptSecret(input.password);
+  }
+
+  await db.from("user_smtp_credentials").update(update).eq("user_id", userId);
+}
+
+export async function deleteUserImap(userId: string): Promise<void> {
+  const db = createServiceClient();
+  await db
+    .from("user_smtp_credentials")
+    .update({
+      imap_host: null,
+      imap_port: null,
+      imap_username: null,
+      imap_password_encrypted: null,
+      imap_sent_folder: null,
+      imap_last_uid_inbox: null,
+      imap_last_uid_sent: null,
+      imap_last_sync_at: null,
+      imap_last_sync_error: null,
+      imap_verified_at: null,
+    })
+    .eq("user_id", userId);
+}
+
+/** Lädt komplette ImapConfig inkl. entschlüsseltem Passwort. Nur im Server. */
+export async function loadDecryptedImap(userId: string): Promise<ImapConfig | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("user_smtp_credentials")
+    .select(
+      "imap_host, imap_port, imap_secure, imap_username, imap_password_encrypted, imap_sent_folder",
+    )
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data || !data.imap_host || !data.imap_password_encrypted) return null;
+  try {
+    const password = decryptSecret(data.imap_password_encrypted as string);
+    return {
+      host: data.imap_host as string,
+      port: (data.imap_port as number) ?? 993,
+      secure: (data.imap_secure as boolean) ?? true,
+      username: data.imap_username as string,
+      password,
+      sentFolder: (data.imap_sent_folder as string) ?? "Sent",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Lädt Sync-Cursor für inkrementellen IMAP-Sync. */
+export async function loadImapSyncCursor(
+  userId: string,
+): Promise<{ lastUidInbox: number | null; lastUidSent: number | null }> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("user_smtp_credentials")
+    .select("imap_last_uid_inbox, imap_last_uid_sent")
+    .eq("user_id", userId)
+    .maybeSingle();
+  return {
+    lastUidInbox: (data?.imap_last_uid_inbox as number | null) ?? null,
+    lastUidSent: (data?.imap_last_uid_sent as number | null) ?? null,
+  };
+}
+
+export async function updateImapSyncCursor(
+  userId: string,
+  cursor: { lastUidInbox?: number | null; lastUidSent?: number | null },
+  error: string | null = null,
+): Promise<void> {
+  const db = createServiceClient();
+  const update: Record<string, unknown> = {
+    imap_last_sync_at: new Date().toISOString(),
+    imap_last_sync_error: error,
+  };
+  if (cursor.lastUidInbox !== undefined) update.imap_last_uid_inbox = cursor.lastUidInbox;
+  if (cursor.lastUidSent !== undefined) update.imap_last_uid_sent = cursor.lastUidSent;
+  await db.from("user_smtp_credentials").update(update).eq("user_id", userId);
+}
+
 /** Lädt komplettes SmtpConfig inkl. entschlüsseltem Passwort. Nur im Server. */
 export async function loadDecryptedSmtp(userId: string): Promise<SmtpConfig | null> {
   const db = createServiceClient();
