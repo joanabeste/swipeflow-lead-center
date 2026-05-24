@@ -13,7 +13,7 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
   const { addToast } = useToastContext();
   const [showAdd, setShowAdd] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState<{ name: string; vertical: "" | "webdesign" | "recruiting"; status: ProjectStatus; started_at: string; notes: string }>(
+  const [draft, setDraft] = useState<{ name: string; vertical: "" | "webdesign" | "recruiting" | "sonstiges"; status: ProjectStatus; started_at: string; notes: string }>(
     { name: "", vertical: "", status: "onboarding", started_at: new Date().toISOString().slice(0, 10), notes: "" },
   );
 
@@ -62,11 +62,12 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
             <Field label="Projekt-Name *">
               <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="Vertikale">
-              <select value={draft.vertical} onChange={(e) => setDraft({ ...draft, vertical: e.target.value as "" | "webdesign" | "recruiting" })} className={inputCls}>
+            <Field label="Bereich">
+              <select value={draft.vertical} onChange={(e) => setDraft({ ...draft, vertical: e.target.value as "" | "webdesign" | "recruiting" | "sonstiges" })} className={inputCls}>
                 <option value="">—</option>
                 <option value="webdesign">Webdesign</option>
                 <option value="recruiting">Recruiting</option>
+                <option value="sonstiges">Sonstiges</option>
               </select>
             </Field>
             <Field label="Status">

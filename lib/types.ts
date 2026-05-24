@@ -93,7 +93,7 @@ export interface Lead {
   career_page_url: string | null;
   description: string | null;
   /** Vertikale aus dem Import-Tab (Webdesign oder Recruiting). Null = generischer Import. */
-  vertical: "webdesign" | "recruiting" | null;
+  vertical: "webdesign" | "recruiting" | "sonstiges" | null;
   /** Alte HubSpot-Referenz — bleibt als Altlast für Migrations-/Audit-Zwecke, wird nicht mehr geschrieben. */
   hubspot_company_id: string | null;
   /** ID aus der custom_lead_statuses-Tabelle — CRM-Workflow-Status (Sales). */

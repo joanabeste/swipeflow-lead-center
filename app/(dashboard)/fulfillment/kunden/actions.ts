@@ -13,7 +13,7 @@ export async function createCustomer(input: {
   phone?: string;
   website?: string;
   city?: string;
-  vertical?: "webdesign" | "recruiting";
+  vertical?: "webdesign" | "recruiting" | "sonstiges";
 }): Promise<Result> {
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
@@ -58,7 +58,7 @@ export async function createCustomerAndRedirect(formData: FormData) {
     phone: String(formData.get("phone") ?? "") || undefined,
     website: String(formData.get("website") ?? "") || undefined,
     city: String(formData.get("city") ?? "") || undefined,
-    vertical: (formData.get("vertical") as "webdesign" | "recruiting") || undefined,
+    vertical: (formData.get("vertical") as "webdesign" | "recruiting" | "sonstiges") || undefined,
   });
   if ("error" in res) throw new Error(res.error);
   redirect(`/fulfillment/kunden/${res.id}`);

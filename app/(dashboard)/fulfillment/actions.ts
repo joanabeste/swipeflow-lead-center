@@ -124,7 +124,7 @@ export async function createProject(input: {
   lead_id: string;
   name: string;
   status?: ProjectStatus;
-  vertical?: "webdesign" | "recruiting";
+  vertical?: "webdesign" | "recruiting" | "sonstiges";
   started_at?: string;
   notes?: string;
 }): Promise<Result<{ id: string }>> {
@@ -155,7 +155,7 @@ export async function createProject(input: {
 export async function updateProject(id: string, patch: Partial<{
   name: string;
   status: ProjectStatus;
-  vertical: "webdesign" | "recruiting" | null;
+  vertical: "webdesign" | "recruiting" | "sonstiges" | null;
   clickup_list_id: string | null;
   started_at: string | null;
   completed_at: string | null;

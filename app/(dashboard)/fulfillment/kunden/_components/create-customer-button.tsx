@@ -11,7 +11,7 @@ export function CreateCustomerButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState({ company_name: "", email: "", phone: "", website: "", city: "", vertical: "" as "" | "webdesign" | "recruiting" });
+  const [draft, setDraft] = useState({ company_name: "", email: "", phone: "", website: "", city: "", vertical: "" as "" | "webdesign" | "recruiting" | "sonstiges" });
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,11 +79,12 @@ export function CreateCustomerButton() {
               <Field label="Stadt">
                 <input value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} className={inputCls} />
               </Field>
-              <Field label="Vertikale" full>
-                <select value={draft.vertical} onChange={(e) => setDraft({ ...draft, vertical: e.target.value as "" | "webdesign" | "recruiting" })} className={inputCls}>
+              <Field label="Bereich" full>
+                <select value={draft.vertical} onChange={(e) => setDraft({ ...draft, vertical: e.target.value as "" | "webdesign" | "recruiting" | "sonstiges" })} className={inputCls}>
                   <option value="">—</option>
                   <option value="webdesign">Webdesign</option>
                   <option value="recruiting">Recruiting</option>
+                  <option value="sonstiges">Sonstiges</option>
                 </select>
               </Field>
             </div>
