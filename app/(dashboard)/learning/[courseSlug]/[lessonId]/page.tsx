@@ -12,6 +12,7 @@ import { CompleteLessonButton } from "../../_components/complete-lesson-button";
 import { CourseTree } from "../../_components/course-tree";
 import { getAttachmentsForLessons } from "../../_lib/attachments";
 import { formatBytes, isImageMime } from "../../_lib/format";
+import { normalizeBlocks } from "../../_lib/blocks";
 
 export default async function LessonViewerPage({
   params,
@@ -65,6 +66,7 @@ export default async function LessonViewerPage({
 
   const attachmentMap = await getAttachmentsForLessons([lesson.id]);
   const attachments = attachmentMap.get(lesson.id) ?? [];
+  const lessonBlocks = normalizeBlocks((lesson as unknown as { blocks?: unknown }).blocks);
 
   return (
     <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
@@ -89,10 +91,10 @@ export default async function LessonViewerPage({
         </header>
 
         {/* V4: wenn Blocks vorhanden → Block-Renderer */}
-        {lesson.blocks && lesson.blocks.length > 0 ? (
+        {lessonBlocks.length > 0 ? (
           (() => {
             const signedUrls = new Map(attachments.map((a) => [a.id, a.signed_url]));
-            return <BlockRenderer blocks={lesson.blocks} signedUrls={signedUrls} />;
+            return <BlockRenderer blocks={lessonBlocks} signedUrls={signedUrls} />;
           })()
         ) : (
           <>
@@ -105,7 +107,7 @@ export default async function LessonViewerPage({
         )}
 
         {/* Legacy-Materialien-Liste: nur fuer Pre-V4-Lessons ohne Blocks. */}
-        {(!lesson.blocks || lesson.blocks.length === 0) && attachments.length > 0 && !(lesson.content_html ?? "").includes("data-learning-file") && (
+        {lessonBlocks.length === 0 && attachments.length > 0 && !(lesson.content_html ?? "").includes("data-learning-file") && (
           <section className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
             <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
               <Paperclip className="h-4 w-4" /> Materialien

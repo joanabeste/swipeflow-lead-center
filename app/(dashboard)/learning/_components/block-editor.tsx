@@ -7,15 +7,18 @@ import type { LearningBlock, LearningBlockType, LearningLesson, LoadedLearningAt
 import { updateLesson } from "../_actions/courses";
 import { deleteLessonAttachment } from "../_actions/attachments";
 import { useAutosave, type AutosaveResult } from "../_hooks/use-autosave";
+import { normalizeBlocks } from "../_lib/blocks";
 import { BlockFrame } from "./blocks/block-frame";
 import { TextBlock } from "./blocks/text-block";
 import { VideoBlock } from "./blocks/video-block";
 import { ImageBlock } from "./blocks/image-block";
 import { FileBlock } from "./blocks/file-block";
 import { ButtonBlock } from "./blocks/button-block";
-import { BlockAddBar } from "./block-add-bar";
+import { BlockAddBar, type BlockAddTrigger } from "./block-add-bar";
 import { BlockAddInline } from "./block-add-inline";
 import { LegacyContentBox } from "./legacy-content-box";
+import { AIContentModal } from "./ai-content-modal";
+import { Sparkles } from "lucide-react";
 
 interface Props {
   lesson: LearningLesson;
@@ -49,8 +52,12 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
   const dialog = useDialog();
   const { addToast } = useToastContext();
   const autosave = useAutosave(800);
-  const [blocks, setBlocks] = useState<LearningBlock[]>(lesson.blocks ?? []);
+  const [blocks, setBlocks] = useState<LearningBlock[]>(() =>
+    normalizeBlocks((lesson as unknown as { blocks?: unknown }).blocks),
+  );
   const [focusBlockId, setFocusBlockId] = useState<string | null>(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiInsertIndex, setAiInsertIndex] = useState<number | null>(null);
   const titleSavedRef = useRef(lesson.title);
 
   useEffect(() => onSaveStateChange(autosave), [autosave.state, autosave.lastSavedAt, autosave.error]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -58,7 +65,7 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
     titleSavedRef.current = lesson.title;
   }, [lesson.title]);
 
-  const showLegacy = (lesson.blocks?.length ?? 0) === 0 && Boolean(lesson.content_html?.trim());
+  const showLegacy = blocks.length === 0 && Boolean(lesson.content_html?.trim());
 
   const persistBlocks = useCallback(
     (next: LearningBlock[]) => {
@@ -85,6 +92,25 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
       return copy;
     });
     setFocusBlockId(block.id);
+  }
+
+  function triggerAdd(trigger: BlockAddTrigger, atIndex?: number) {
+    if (trigger === "ai") {
+      setAiInsertIndex(atIndex ?? null);
+      setAiModalOpen(true);
+      return;
+    }
+    addBlock(trigger, atIndex);
+  }
+
+  function applyAiBlocks(newBlocks: LearningBlock[]) {
+    updateBlocks((prev) => {
+      if (aiInsertIndex === null) return [...prev, ...newBlocks];
+      const copy = [...prev];
+      copy.splice(aiInsertIndex, 0, ...newBlocks);
+      return copy;
+    });
+    setAiInsertIndex(null);
   }
 
   function moveBlock(id: string, direction: -1 | 1) {
@@ -156,9 +182,22 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
       {!showLegacy && (
         <div className="pt-4">
           {blocks.length === 0 ? (
-            <p className="rounded-xl bg-gray-50 px-4 py-6 text-center text-sm text-gray-400 dark:bg-[#1c1c1e]">
-              Diese Lektion ist leer. Wähle unten einen Block-Typ.
-            </p>
+            <div className="space-y-3 rounded-2xl bg-gray-50 px-4 py-6 text-center dark:bg-[#1c1c1e]">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Diese Lektion ist leer.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setAiInsertIndex(null);
+                  setAiModalOpen(true);
+                }}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-primary-dark"
+              >
+                <Sparkles className="h-4 w-4" /> KI schreibt diese Lektion
+              </button>
+              <p className="text-[11px] text-gray-400">oder wähle unten einen Block-Typ</p>
+            </div>
           ) : (
             <div className="space-y-1">
               {blocks.map((b, i) => (
@@ -173,7 +212,7 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
                     {renderBlock(b, lesson.id, focusBlockId === b.id, patchBlock)}
                   </BlockFrame>
                   {i < blocks.length - 1 && (
-                    <BlockAddInline onAdd={(type) => addBlock(type, i + 1)} />
+                    <BlockAddInline onAdd={(type) => triggerAdd(type, i + 1)} />
                   )}
                 </div>
               ))}
@@ -184,7 +223,22 @@ export function BlockEditor({ lesson, initialAttachments, onLessonChange, onSave
             <BlockAddBar
               variant="bar"
               title={blocks.length === 0 ? "Erster Block" : "Block hinzufügen"}
-              onAdd={(type) => addBlock(type)}
+              onAdd={(type) => triggerAdd(type)}
+            />
+          </div>
+        </div>
+      )}
+
+      {aiModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl dark:bg-[#1c1c1e]">
+            <AIContentModal
+              lessonId={lesson.id}
+              onGenerated={(newBlocks) => applyAiBlocks(newBlocks)}
+              onClose={() => {
+                setAiModalOpen(false);
+                setAiInsertIndex(null);
+              }}
             />
           </div>
         </div>

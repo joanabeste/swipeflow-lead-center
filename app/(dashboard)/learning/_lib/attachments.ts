@@ -139,12 +139,40 @@ export async function getAttachmentsForLessons(
   if (lessonIds.length === 0) return map;
 
   const db = createServiceClient();
-  const { data: rows } = await db
+  // Versucht mit sort_order (Migration 088). Falls Spalte fehlt (42703 column does not exist):
+  // Fallback ohne sort_order, allen Rows sort_order = 0.
+  type AttRow = {
+    id: string;
+    lesson_id: string;
+    storage_path: string;
+    file_name: string;
+    mime_type: string;
+    size_bytes: number;
+    sort_order?: number | null;
+  };
+  let rows: AttRow[] = [];
+
+  const primary = await db
     .from("learning_lesson_attachments")
     .select("id, lesson_id, storage_path, file_name, mime_type, size_bytes, sort_order")
     .in("lesson_id", lessonIds)
     .order("sort_order");
-  if (!rows || rows.length === 0) return map;
+  if (primary.error) {
+    if (primary.error.code === "42703" || /sort_order/i.test(primary.error.message)) {
+      console.warn("[getAttachmentsForLessons] sort_order fehlt — Migration 088 nachholen.");
+      const fallback = await db
+        .from("learning_lesson_attachments")
+        .select("id, lesson_id, storage_path, file_name, mime_type, size_bytes")
+        .in("lesson_id", lessonIds);
+      rows = (fallback.data ?? []) as unknown as AttRow[];
+    } else {
+      console.error("[getAttachmentsForLessons]", primary.error);
+      return map;
+    }
+  } else {
+    rows = (primary.data ?? []) as unknown as AttRow[];
+  }
+  if (rows.length === 0) return map;
 
   const signed = await Promise.all(
     rows.map(async (r) => {

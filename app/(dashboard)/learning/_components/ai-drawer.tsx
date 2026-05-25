@@ -24,6 +24,7 @@ export function AIDrawer({ open, onClose, courseId }: Props) {
   const [moduleCount, setModuleCount] = useState(4);
   const [lessonsPerModule, setLessonsPerModule] = useState(3);
   const [outline, setOutline] = useState<CourseOutline | null>(null);
+  const [withContent, setWithContent] = useState(false);
   const [pending, start] = useTransition();
   const [applying, setApplying] = useState(false);
 
@@ -49,10 +50,13 @@ export function AIDrawer({ open, onClose, courseId }: Props) {
     });
     if (!ok) return;
     setApplying(true);
-    const res = await applyOutlineToCourse({ courseId, outline });
+    const res = await applyOutlineToCourse({ courseId, outline, withContent });
     setApplying(false);
     if ("error" in res) return addToast(res.error, "error");
-    addToast(`${res.moduleCount} Module + ${res.lessonCount} Lektionen angelegt`, "success");
+    const msg = withContent
+      ? `${res.moduleCount} Module + ${res.lessonCount} Lektionen angelegt · ${res.contentGenerated} Inhalte geschrieben`
+      : `${res.moduleCount} Module + ${res.lessonCount} Lektionen angelegt`;
+    addToast(msg, "success");
     onClose();
     location.reload();
   }
@@ -128,13 +132,30 @@ export function AIDrawer({ open, onClose, courseId }: Props) {
                 </div>
               ))}
             </div>
+            <label className="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs dark:border-[#2c2c2e]/50 dark:bg-[#222224]">
+              <input
+                type="checkbox"
+                checked={withContent}
+                onChange={(e) => setWithContent(e.target.checked)}
+                disabled={applying}
+                className="mt-0.5 h-4 w-4 accent-primary"
+              />
+              <span>
+                <span className="block font-medium text-gray-900 dark:text-gray-100">
+                  ✨ Auch fertige Texte schreiben
+                </span>
+                <span className="block text-[10px] text-gray-500 dark:text-gray-400">
+                  KI füllt jede Lektion mit Text-Blöcken. Dauert ~30 s pro Lektion.
+                </span>
+              </span>
+            </label>
             <button
               onClick={handleApply}
               disabled={applying}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 shadow-sm transition hover:bg-primary-dark disabled:opacity-50"
             >
               {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-              {applying ? "Wende an…" : "Outline auf Kurs anwenden"}
+              {applying ? (withContent ? "Schreibe Inhalte…" : "Wende an…") : "Outline auf Kurs anwenden"}
             </button>
           </div>
         )}

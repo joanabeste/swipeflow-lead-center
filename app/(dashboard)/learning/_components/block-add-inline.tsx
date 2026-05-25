@@ -2,14 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
-import type { LearningBlockType } from "@/lib/types";
-import { BlockAddBar } from "./block-add-bar";
+import { BlockAddBar, type BlockAddTrigger } from "./block-add-bar";
 
 /**
  * Diskreter „+"-Button zwischen 2 Blöcken. Erscheint auf Hover der Gap.
  * Klick öffnet ein Popover mit den 5 Block-Tiles.
  */
-export function BlockAddInline({ onAdd }: { onAdd: (type: LearningBlockType) => void }) {
+export function BlockAddInline({ onAdd }: { onAdd: (type: BlockAddTrigger) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

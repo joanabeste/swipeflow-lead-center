@@ -1,10 +1,13 @@
 "use client";
 
-import { Type, PlayCircle, Paperclip, Image as ImageIcon, MousePointer2 } from "lucide-react";
+import { Type, PlayCircle, Paperclip, Image as ImageIcon, MousePointer2, Sparkles } from "lucide-react";
 import type { LearningBlockType } from "@/lib/types";
 
+/** Spezial-Trigger fuer KI-Text-Generation (kein echter Block-Typ). */
+export type BlockAddTrigger = LearningBlockType | "ai";
+
 export const BLOCK_TILES: Array<{
-  type: LearningBlockType;
+  type: BlockAddTrigger;
   label: string;
   hint: string;
   icon: typeof Type;
@@ -14,10 +17,11 @@ export const BLOCK_TILES: Array<{
   { type: "file", label: "Datei", hint: "PDF, Office, etc.", icon: Paperclip },
   { type: "image", label: "Bild", hint: "Inline-Bild", icon: ImageIcon },
   { type: "button", label: "Button", hint: "CTA-Link", icon: MousePointer2 },
+  { type: "ai", label: "KI-Text", hint: "Inhalt schreiben lassen", icon: Sparkles },
 ];
 
 interface Props {
-  onAdd: (type: LearningBlockType) => void;
+  onAdd: (type: BlockAddTrigger) => void;
   variant?: "bar" | "popover";
   title?: string;
 }
@@ -30,7 +34,7 @@ interface Props {
 export function BlockAddBar({ onAdd, variant = "bar", title }: Props) {
   if (variant === "popover") {
     return (
-      <div className="grid grid-cols-5 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+      <div className="grid grid-cols-6 gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
         {BLOCK_TILES.map((t) => (
           <button
             key={t.type}
@@ -54,7 +58,7 @@ export function BlockAddBar({ onAdd, variant = "bar", title }: Props) {
           {title}
         </p>
       )}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         {BLOCK_TILES.map((t) => (
           <button
             key={t.type}
