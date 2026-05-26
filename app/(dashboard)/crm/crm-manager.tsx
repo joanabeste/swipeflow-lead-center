@@ -571,7 +571,7 @@ function FilterSelect({
         className="appearance-none rounded-md border border-gray-200 bg-white py-2 pl-3 pr-8 text-sm hover:bg-gray-50 dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-gray-100 dark:hover:bg-white/5"
         style={
           isActive && activeColor
-            ? { borderColor: activeColor, color: activeColor, backgroundColor: `${activeColor}10` }
+            ? { borderColor: activeColor, backgroundColor: `${activeColor}10` }
             : undefined
         }
       >
