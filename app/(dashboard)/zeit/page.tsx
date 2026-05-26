@@ -1,5 +1,5 @@
 import { requireZeitUser } from "@/lib/zeit/auth";
-import { aggregateEntries, entriesAsSegments, getDayRange, getRangeFor, isPeriodView, targetSecondsInRange } from "@/lib/zeit/reports";
+import { aggregateEntries, entriesAsSegments, getDayRange, getRangeFor, getYearRange, isPeriodView, targetSecondsInRange } from "@/lib/zeit/reports";
 import { scheduleFromProfile, breakModeFromProfile, vacationDaysFromProfile } from "@/lib/zeit/types";
 import { formatHours } from "@/lib/zeit/format";
 import { loadEntriesInRange, loadOwnAbsences, loadRunningEntry } from "./_components/data-helpers";
@@ -28,7 +28,8 @@ export default async function ZeitDashboardPage({ searchParams }: { searchParams
   const segments = entriesAsSegments(todayEntries);
   const aggregate = aggregateEntries(periodEntries, breakMode);
   const target = targetSecondsInRange(schedule, range.from, range.to, absences);
-  const vacationUsed = countWorkdaysInAbsences(absences, new Date(new Date().getFullYear(), 0, 1), new Date(new Date().getFullYear() + 1, 0, 1));
+  const yearRange = getYearRange();
+  const vacationUsed = countWorkdaysInAbsences(absences, yearRange.from, yearRange.to);
   const vacationTotal = vacationDaysFromProfile(ctx.profile);
 
   return (

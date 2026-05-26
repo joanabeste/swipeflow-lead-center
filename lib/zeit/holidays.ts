@@ -1,6 +1,13 @@
 // NRW-Feiertage, portiert aus Swipeflow Time Tracking.
 // Berechnung deterministisch (Gauss'sche Osterformel) — keine API noetig.
 
+import {
+  addDaysToStartOfDayInAppTz,
+  dateKeyInAppTz,
+  getDayOfWeekInAppTz,
+  startOfDayInAppTzFromDateKey,
+} from "@/lib/zeit/timezone";
+
 export interface Holiday {
   date: string;
   name: string;
@@ -62,11 +69,11 @@ export function getNrwHolidays(year: number): Holiday[] {
 
 export function getHolidaysInRange(from: Date, to: Date): Map<string, string> {
   const result = new Map<string, string>();
-  const startYear = from.getFullYear();
-  const endYear = new Date(to.getTime() - 1).getFullYear();
+  const startYear = Number(dateKeyInAppTz(from).slice(0, 4));
+  const endYear = Number(dateKeyInAppTz(new Date(to.getTime() - 1)).slice(0, 4));
   for (let y = startYear; y <= endYear; y++) {
     for (const h of getNrwHolidays(y)) {
-      const d = new Date(h.date + "T00:00:00");
+      const d = startOfDayInAppTzFromDateKey(h.date);
       if (d >= from && d < to) result.set(h.date, h.name);
     }
   }
@@ -76,10 +83,10 @@ export function getHolidaysInRange(from: Date, to: Date): Map<string, string> {
 export function countBusinessDays(from: Date, to: Date): number {
   const holidays = getHolidaysInRange(from, to);
   let days = 0;
-  for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-    const dow = d.getDay();
+  for (let d = from; d < to; d = addDaysToStartOfDayInAppTz(d, 1)) {
+    const dow = getDayOfWeekInAppTz(d);
     if (dow === 0 || dow === 6) continue;
-    if (holidays.has(dateKey(d))) continue;
+    if (holidays.has(dateKeyInAppTz(d))) continue;
     days += 1;
   }
   return days;

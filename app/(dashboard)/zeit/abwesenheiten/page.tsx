@@ -3,8 +3,9 @@ import { loadAllProfiles, loadOwnAbsences } from "../_components/data-helpers";
 import { AbsenceForm } from "./_components/absence-form";
 import { DeleteAbsenceButton } from "./_components/absence-actions";
 import { vacationDaysFromProfile } from "@/lib/zeit/types";
-import { countWorkdaysInAbsences } from "@/lib/zeit/reports";
+import { countWorkdaysInAbsences, getYearRange } from "@/lib/zeit/reports";
 import { formatDateDe } from "@/lib/zeit/format";
+import { addDaysToStartOfDayInAppTz, getDayOfWeekInAppTz, startOfDayInAppTzFromDateKey } from "@/lib/zeit/timezone";
 
 const TYPE_LABELS: Record<string, string> = { vacation: "Urlaub", sick: "Krank", other: "Sonstiges" };
 const STATUS_LABELS: Record<string, string> = { pending: "Ausstehend", approved: "Genehmigt", rejected: "Abgelehnt" };
@@ -16,20 +17,19 @@ export default async function ZeitAbwesenheitenPage() {
     loadAllProfiles(),
   ]);
   const nameById = new Map(profiles.map((p) => [p.id, p.name || p.email]));
-  const year = new Date().getFullYear();
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year + 1, 0, 1);
+  const { from: yearStart, to: yearEnd } = getYearRange();
 
   const total = vacationDaysFromProfile(ctx.profile);
   const approved = countWorkdaysInAbsences(absences, yearStart, yearEnd, "vacation");
   const pending = absences
     .filter((a) => a.status === "pending" && a.type === "vacation")
     .reduce((acc, a) => {
-      const f = new Date(a.date_from + "T00:00:00");
-      const t = new Date(a.date_to + "T00:00:00");
+      const f = startOfDayInAppTzFromDateKey(a.date_from);
+      const tExclusive = addDaysToStartOfDayInAppTz(startOfDayInAppTzFromDateKey(a.date_to), 1);
       let days = 0;
-      for (const d = new Date(f); d <= t; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() !== 0 && d.getDay() !== 6) days += 1;
+      for (let d = f; d < tExclusive; d = addDaysToStartOfDayInAppTz(d, 1)) {
+        const dow = getDayOfWeekInAppTz(d);
+        if (dow !== 0 && dow !== 6) days += 1;
       }
       return acc + days;
     }, 0);

@@ -1,5 +1,6 @@
 import type { DaySegment } from "@/lib/zeit/reports";
 import { formatTimeDe, formatHours } from "@/lib/zeit/format";
+import { addDaysToStartOfDayInAppTz, startOfDayInAppTz } from "@/lib/zeit/timezone";
 
 interface Props {
   segments: DaySegment[];
@@ -14,11 +15,11 @@ export function DayTimeline({ segments }: Props) {
     );
   }
 
-  // Auf 24h-Schiene skalieren (Mitternacht bis Mitternacht).
-  const dayStart = new Date(segments[0].startsAt);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
+  // Auf 24h-Schiene skalieren (Berliner Mitternacht bis Mitternacht — DST-sicher,
+  // damit Server (UTC) und Client identisch rendern und die Eintraege auf den
+  // richtigen Kalendertag fallen).
+  const dayStart = startOfDayInAppTz(segments[0].startsAt);
+  const dayEnd = addDaysToStartOfDayInAppTz(dayStart, 1);
   const totalMs = dayEnd.getTime() - dayStart.getTime();
 
   return (

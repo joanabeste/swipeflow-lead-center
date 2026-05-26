@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Absence, TimeEntry } from "@/lib/zeit/types";
 import { getHolidaysInRange } from "@/lib/zeit/holidays";
 import { formatHours } from "@/lib/zeit/format";
+import { dateKeyInAppTz } from "@/lib/zeit/timezone";
 
 interface Props {
   year: number;
@@ -33,7 +34,10 @@ export function CalendarMonthView({ year, month, entries, absences, basePath = "
   const entriesByDay = new Map<string, TimeEntry[]>();
   for (const e of entries) {
     if (!e.ended_at) continue;
-    const k = dateKey(new Date(e.started_at));
+    // Eintrag zum Berliner Kalendertag zuordnen, nicht zum Server-UTC-Tag.
+    // Ohne diese Korrektur landet ein Eintrag um 00:30 Berlin (22:30 UTC Vortag)
+    // auf der falschen Kachel im Kalender.
+    const k = dateKeyInAppTz(new Date(e.started_at));
     const list = entriesByDay.get(k) ?? [];
     list.push(e);
     entriesByDay.set(k, list);

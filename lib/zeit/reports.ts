@@ -4,6 +4,17 @@
 import type { BreakMode } from "@/lib/types";
 import type { Absence, DailySchedule, TimeEntry } from "@/lib/zeit/types";
 import { getHolidaysInRange } from "@/lib/zeit/holidays";
+import {
+  APP_TIMEZONE,
+  addDaysToStartOfDayInAppTz,
+  addMonthsToStartOfMonthInAppTz,
+  dateKeyInAppTz,
+  getDayOfWeekInAppTz,
+  startOfDayInAppTz,
+  startOfDayInAppTzFromDateKey,
+  startOfMonthInAppTz,
+  startOfYearInAppTz,
+} from "@/lib/zeit/timezone";
 
 export interface DailyTotal {
   date: string;
@@ -30,31 +41,34 @@ export function isPeriodView(s: string | undefined): s is PeriodView {
   return s === "day" || s === "week" || s === "month" || s === "year";
 }
 
+// Alle Range-Helper liefern UTC-Instants, die Tagesgrenzen in Europe/Berlin
+// repraesentieren. Wichtig, weil der Server in UTC laeuft, aber Tagesgrenzen
+// (z. B. „heute") aus Nutzersicht in Berlin gelten muessen.
+
 export function getDayRange(date: Date = new Date()): { from: Date; to: Date } {
-  const from = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
-  const to = new Date(from);
-  to.setDate(to.getDate() + 1);
+  const from = startOfDayInAppTz(date);
+  const to = addDaysToStartOfDayInAppTz(from, 1);
   return { from, to };
 }
 
 export function getMonthRange(date: Date = new Date()): { from: Date; to: Date } {
-  const from = new Date(date.getFullYear(), date.getMonth(), 1, 0, 0, 0, 0);
-  const to = new Date(date.getFullYear(), date.getMonth() + 1, 1, 0, 0, 0, 0);
+  const from = startOfMonthInAppTz(date);
+  const to = addMonthsToStartOfMonthInAppTz(from, 1);
   return { from, to };
 }
 
 export function getWeekRange(date: Date = new Date()): { from: Date; to: Date } {
-  const d = new Date(date);
-  const day = d.getDay() === 0 ? 7 : d.getDay();
-  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - (day - 1), 0, 0, 0, 0);
-  const nextMonday = new Date(monday);
-  nextMonday.setDate(monday.getDate() + 7);
+  const dow = getDayOfWeekInAppTz(date); // 0=So..6=Sa
+  const offsetFromMonday = dow === 0 ? 6 : dow - 1;
+  const startOfRefDay = startOfDayInAppTz(date);
+  const monday = addDaysToStartOfDayInAppTz(startOfRefDay, -offsetFromMonday);
+  const nextMonday = addDaysToStartOfDayInAppTz(monday, 7);
   return { from: monday, to: nextMonday };
 }
 
 export function getYearRange(date: Date = new Date()): { from: Date; to: Date } {
-  const from = new Date(date.getFullYear(), 0, 1, 0, 0, 0, 0);
-  const to = new Date(date.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+  const from = startOfYearInAppTz(date);
+  const to = addMonthsToStartOfMonthInAppTz(from, 12);
   return { from, to };
 }
 
@@ -67,12 +81,9 @@ export function getRangeFor(view: PeriodView, date: Date = new Date()) {
   }
 }
 
-function localDateKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+// Tages-Key in Europe/Berlin. Vorher: server-lokal (= UTC auf Vercel) → Eintraege
+// kurz nach Berliner Mitternacht landeten beim Vortag. Jetzt konsistent Berlin.
+const localDateKey = dateKeyInAppTz;
 
 /** Mindest-Pause nach §4 ArbZG: <=6h → 0min, >6 und <=9h → 30min, >9h → 45min. */
 export function requiredBreakSeconds(grossSeconds: number): number {
@@ -142,13 +153,12 @@ export function countWorkdaysInAbsences(
   let days = 0;
   for (const a of absences) {
     if (a.status !== "approved" || a.type !== type) continue;
-    const aStart = new Date(a.date_from + "T00:00:00");
-    const aEnd = new Date(a.date_to + "T00:00:00");
-    aEnd.setDate(aEnd.getDate() + 1);
+    const aStart = startOfDayInAppTzFromDateKey(a.date_from);
+    const aEnd = addDaysToStartOfDayInAppTz(startOfDayInAppTzFromDateKey(a.date_to), 1);
     const start = aStart < from ? from : aStart;
     const end = aEnd > to ? to : aEnd;
-    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-      const dow = d.getDay();
+    for (let d = start; d < end; d = addDaysToStartOfDayInAppTz(d, 1)) {
+      const dow = getDayOfWeekInAppTz(d);
       if (dow === 0 || dow === 6) continue;
       const key = localDateKey(d);
       if (holidays.has(key)) continue;
@@ -170,22 +180,21 @@ export function targetSecondsInRange(
   const absenceDays = new Set<string>();
   for (const a of absences) {
     if (a.status !== "approved") continue;
-    const aStart = new Date(a.date_from + "T00:00:00");
-    const aEnd = new Date(a.date_to + "T00:00:00");
-    aEnd.setDate(aEnd.getDate() + 1);
+    const aStart = startOfDayInAppTzFromDateKey(a.date_from);
+    const aEnd = addDaysToStartOfDayInAppTz(startOfDayInAppTzFromDateKey(a.date_to), 1);
     const s = aStart < from ? from : aStart;
     const e = aEnd > to ? to : aEnd;
-    for (const d = new Date(s); d < e; d.setDate(d.getDate() + 1)) {
+    for (let d = s; d < e; d = addDaysToStartOfDayInAppTz(d, 1)) {
       absenceDays.add(localDateKey(d));
     }
   }
 
   let totalHours = 0;
-  for (const d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
+  for (let d = from; d < to; d = addDaysToStartOfDayInAppTz(d, 1)) {
     const key = localDateKey(d);
     if (holidays.has(key)) continue;
     if (absenceDays.has(key)) continue;
-    totalHours += dowToHours[d.getDay()] ?? 0;
+    totalHours += dowToHours[getDayOfWeekInAppTz(d)] ?? 0;
   }
   return Math.round(totalHours * 3600);
 }
@@ -202,9 +211,9 @@ export function entriesToCSV(entries: TimeEntry[], userMap?: Map<string, string>
       const hours = (seconds / 3600).toFixed(2);
       const note = (e.note ?? "").replace(/"/g, '""');
       const cells = [
-        start.toLocaleDateString("de-DE"),
-        start.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
-        end.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+        start.toLocaleDateString("de-DE", { timeZone: APP_TIMEZONE }),
+        start.toLocaleTimeString("de-DE", { timeZone: APP_TIMEZONE, hour: "2-digit", minute: "2-digit" }),
+        end.toLocaleTimeString("de-DE", { timeZone: APP_TIMEZONE, hour: "2-digit", minute: "2-digit" }),
         hours,
         `"${note}"`,
       ];

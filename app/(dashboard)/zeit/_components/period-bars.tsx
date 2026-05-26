@@ -1,5 +1,5 @@
 import type { DailyTotal } from "@/lib/zeit/reports";
-import { formatHours } from "@/lib/zeit/format";
+import { formatDayMonthDe, formatHours } from "@/lib/zeit/format";
 
 interface Props {
   byDay: DailyTotal[];
@@ -39,7 +39,7 @@ export function PeriodBars({ byDay, targetSecondsPerDay }: Props) {
                 )}
               </div>
               <span className="mt-1 text-[10px] text-gray-400">
-                {new Date(d.date + "T00:00:00").toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}
+                {formatDayMonthDe(d.date)}
               </span>
             </div>
           );

@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import { requireZeitUser } from "@/lib/zeit/auth";
 import { aggregateEntries, getRangeFor, isPeriodView, targetSecondsInRange } from "@/lib/zeit/reports";
 import { scheduleFromProfile, breakModeFromProfile } from "@/lib/zeit/types";
-import { formatHours } from "@/lib/zeit/format";
+import { formatHours, formatWeekdayDateDe } from "@/lib/zeit/format";
 import { loadEntriesInRange, loadOwnAbsences } from "../_components/data-helpers";
 import { PeriodTabs } from "../_components/period-tabs";
 import { PeriodBars } from "../_components/period-bars";
@@ -57,7 +57,7 @@ export default async function ZeitReportsPage({ searchParams }: { searchParams: 
           <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]/40">
             {aggregate.byDay.map((d) => (
               <tr key={d.date}>
-                <td className="px-4 py-2 text-gray-700 dark:text-gray-200">{new Date(d.date + "T00:00:00").toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" })}</td>
+                <td className="px-4 py-2 text-gray-700 dark:text-gray-200">{formatWeekdayDateDe(d.date)}</td>
                 <td className="px-4 py-2 text-gray-500">{d.entries}</td>
                 <td className="px-4 py-2 text-right font-mono text-gray-900 dark:text-white">{formatHours(d.seconds)} h</td>
               </tr>
