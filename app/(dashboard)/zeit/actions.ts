@@ -133,6 +133,31 @@ export async function updateEntry(
   return { success: true };
 }
 
+export async function updateEntryNote(entryId: string, note: string | null): Promise<ActionResult> {
+  const ctx = await requireZeitUser();
+  const db = createServiceClient();
+  const { data: existing, error: readErr } = await db
+    .from("time_entries")
+    .select("user_id")
+    .eq("id", entryId)
+    .single();
+  if (readErr) return { error: describeZeitError(readErr) };
+  if (!existing) return { error: "Eintrag nicht gefunden." };
+  if (existing.user_id !== ctx.user.id && ctx.profile.role !== "admin") return { error: "Keine Berechtigung." };
+
+  const { error } = await db
+    .from("time_entries")
+    .update({ note: note?.trim() || null })
+    .eq("id", entryId);
+  if (error) {
+    console.error("[updateEntryNote]", error);
+    return { error: describeZeitError(error) };
+  }
+  await logAudit({ userId: ctx.user.id, action: "zeit.entry.update_note", entityType: "time_entry", entityId: entryId });
+  revalidateZeit();
+  return { success: true };
+}
+
 export async function deleteEntry(entryId: string): Promise<ActionResult> {
   const ctx = await requireZeitUser();
   const db = createServiceClient();

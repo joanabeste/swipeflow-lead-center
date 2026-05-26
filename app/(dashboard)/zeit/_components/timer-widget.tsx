@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Play, Square } from "lucide-react";
 import { useToastContext } from "../../toast-provider";
-import { startTimer, stopTimer } from "../actions";
+import { startTimer, stopTimer, updateEntryNote } from "../actions";
 import { formatDuration } from "@/lib/zeit/format";
 
 interface Props {
@@ -14,7 +14,20 @@ export function TimerWidget({ running }: Props) {
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState(running?.note ?? "");
+  const [savedNote, setSavedNote] = useState(running?.note ?? "");
   const [now, setNow] = useState(() => Date.now());
+  const [lastEntryId, setLastEntryId] = useState<string | undefined>(running?.id);
+
+  // Eintrag gewechselt (Start/Stop): Notiz neu aus Props ziehen. React-canonical
+  // Pattern fuer "reset state on prop change" — vermeidet setState-in-effect und
+  // schuetzt davor, dass ein Revalidate mitten im Tippen die Eingabe killt.
+  // Updates der eigenen Notiz pflegt handleNoteBlur direkt in savedNote.
+  if (running?.id !== lastEntryId) {
+    setLastEntryId(running?.id);
+    const next = running?.note ?? "";
+    setSavedNote(next);
+    setNote(next);
+  }
 
   useEffect(() => {
     if (!running) return;
@@ -38,6 +51,22 @@ export function TimerWidget({ running }: Props) {
       const res = await stopTimer(running.id);
       if ("error" in res) addToast(res.error, "error");
       else addToast("Timer gestoppt.", "success");
+    });
+  }
+
+  function handleNoteBlur() {
+    if (!running || pending) return;
+    const next = note.trim();
+    if (next === savedNote.trim()) return;
+    startTransition(async () => {
+      const res = await updateEntryNote(running.id, next || null);
+      if ("error" in res) {
+        addToast(res.error, "error");
+        // UI auf den letzten persistierten Stand zuruecksetzen.
+        setNote(savedNote);
+      } else {
+        setSavedNote(next);
+      }
     });
   }
 
@@ -83,8 +112,9 @@ export function TimerWidget({ running }: Props) {
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
+          onBlur={handleNoteBlur}
           placeholder="Woran arbeitest du gerade?"
-          disabled={!!running || pending}
+          disabled={pending}
           className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-primary focus:outline-none disabled:opacity-60 dark:border-[#2c2c2e]/60 dark:bg-[#1c1c1e] dark:text-gray-100"
         />
       </div>
