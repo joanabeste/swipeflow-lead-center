@@ -36,6 +36,16 @@ html {
   background: #4b5563;
 }
 
+/* Native <select>/<option> im Dark Mode lesbar halten —
+   ohne color-scheme erbt das OS-Dropdown text-gray-100 auf weißem Hintergrund. */
+.dark select {
+  color-scheme: dark;
+}
+.dark option {
+  background-color: #1c1c1e;
+  color: #f3f4f6;
+}
+
 /* Focus ring styling */
 *:focus-visible {
   outline: 2px solid var(--color-primary);
