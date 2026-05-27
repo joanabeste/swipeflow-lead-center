@@ -120,6 +120,32 @@ export function parseCityZipFromMapsUrl(url: string | null | undefined): {
   return { zip: m[1], city: m[2].trim() };
 }
 
+/** Extrahiert lat/lng aus einer Google-Maps-Place-URL (`!3d<lat>!4d<lng>`). */
+export function parseLatLngFromMapsUrl(url: string | null | undefined): { lat: number; lng: number } | null {
+  if (!url) return null;
+  const m = url.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (!m) return null;
+  const lat = parseFloat(m[1]);
+  const lng = parseFloat(m[2]);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng };
+}
+
+/** Parst "4,8" → 4.8 (deutsches Komma-Format). */
+export function parseGoogleRating(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const n = parseFloat(raw.replace(",", "."));
+  return Number.isNaN(n) || n < 0 || n > 5 ? null : n;
+}
+
+/** Parst "(24)" oder "24" → 24. */
+export function parseGoogleReviewCount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const cleaned = raw.replace(/[().\s]/g, "").replace(",", "");
+  const n = parseInt(cleaned, 10);
+  return Number.isNaN(n) || n < 0 ? null : n;
+}
+
 // ─── CSV-Injection-Schutz ───────────────────────────────────
 
 /**

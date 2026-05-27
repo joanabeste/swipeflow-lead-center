@@ -18,7 +18,13 @@ import {
   fixMojibake,
   extractWebsiteAndDomain,
   extractPhoneSafe,
+  parseLatLngFromMapsUrl,
+  parseGoogleRating,
+  parseGoogleReviewCount,
 } from "@/lib/csv/import-helpers";
+import { reverseGeocodeNominatim } from "@/lib/geo/geocode";
+
+function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 
 export async function processGoogleMapsImport(
   rows: string[][],
@@ -90,6 +96,8 @@ export async function processGoogleMapsImport(
   // Sammelliste neue Leads für Batch-Insert
   const newLeads: Record<string, unknown>[] = [];
 
+  let geocodeCallCount = 0;
+
   for (const row of validRows) {
     const companyName = sanitizeCellValue(fixMojibake(row[col.companyName])) ?? "";
     const phone = extractPhoneSafe(row, col.phone);
@@ -97,6 +105,23 @@ export async function processGoogleMapsImport(
     const address = sanitizeCellValue(fixMojibake(row[col.address]));
 
     const { domain } = extractWebsiteAndDomain(row[col.website]);
+
+    const coords = parseLatLngFromMapsUrl(row[col.mapsUrl]);
+    const rating = parseGoogleRating(row[col.rating]);
+    const reviewCount = parseGoogleReviewCount(row[col.reviewCount]);
+
+    // Reverse-Geocoding fuer PLZ + Stadt (Nominatim: max 1 req/s)
+    let zip: string | null = null;
+    let city: string | null = null;
+    if (coords) {
+      if (geocodeCallCount > 0) await sleep(1050);
+      const geo = await reverseGeocodeNominatim(coords.lat, coords.lng);
+      geocodeCallCount++;
+      if (geo) {
+        zip = geo.zip;
+        city = geo.city;
+      }
+    }
 
     // Blacklist + Cancel
     const leadData: Record<string, string | null> = { company_name: companyName, website: domain, phone };
@@ -114,6 +139,11 @@ export async function processGoogleMapsImport(
         if (!existingLead.website && domain) updates.website = domain;
         if (!existingLead.industry && category) updates.industry = category;
         if (!existingLead.street && address) updates.street = address;
+        if (!existingLead.zip && zip) updates.zip = zip;
+        if (!existingLead.city && city) updates.city = city;
+        if (!existingLead.latitude && coords) { updates.latitude = coords.lat; updates.longitude = coords.lng; updates.geocoded_at = new Date().toISOString(); }
+        if (existingLead.google_rating == null && rating != null) updates.google_rating = rating;
+        if (existingLead.google_review_count == null && reviewCount != null) updates.google_review_count = reviewCount;
         if (Object.keys(updates).length > 0) {
           updates.updated_at = new Date().toISOString();
           await db.from("leads").update(updates).eq("id", existingId);
@@ -127,6 +157,13 @@ export async function processGoogleMapsImport(
         website: domain,
         industry: category || null,
         street: address || null,
+        zip: zip || null,
+        city: city || null,
+        latitude: coords?.lat ?? null,
+        longitude: coords?.lng ?? null,
+        geocoded_at: coords ? new Date().toISOString() : null,
+        google_rating: rating,
+        google_review_count: reviewCount,
         country: "Deutschland",
         source_type: "csv",
         source_import_id: importLog.id,

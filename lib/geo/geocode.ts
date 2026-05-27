@@ -1,7 +1,8 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { LatLng } from "./distance";
 
-const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
+const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 const USER_AGENT = "swipeflow-lead-center/1.0 (kontakt@swipeflow.de)";
 const TIMEOUT_MS = 4000;
 
@@ -20,7 +21,7 @@ export async function geocodeAddress(query: string): Promise<LatLng | null> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const res = await fetch(`${NOMINATIM_URL}?${params}`, {
+    const res = await fetch(`${NOMINATIM_SEARCH_URL}?${params}`, {
       headers: {
         "User-Agent": USER_AGENT,
         "Accept-Language": "de",
@@ -37,6 +38,47 @@ export async function geocodeAddress(query: string): Promise<LatLng | null> {
     const lng = parseFloat(data[0].lon);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
     return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
+/** Lat/Lng → PLZ + Stadt via Nominatim Reverse-Geocoding. */
+export async function reverseGeocodeNominatim(lat: number, lng: number): Promise<{
+  zip: string | null;
+  city: string | null;
+} | null> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: "json",
+    zoom: "18",
+    addressdetails: "1",
+  });
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(`${NOMINATIM_REVERSE_URL}?${params}`, {
+      headers: { "User-Agent": USER_AGENT, "Accept-Language": "de" },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      address?: {
+        postcode?: string;
+        city?: string;
+        town?: string;
+        village?: string;
+        municipality?: string;
+      };
+    };
+    const addr = data?.address;
+    if (!addr) return null;
+    return {
+      zip: addr.postcode ?? null,
+      city: addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? null,
+    };
   } catch {
     return null;
   }
