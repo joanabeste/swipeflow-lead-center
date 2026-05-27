@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { UserCheck } from "lucide-react";
 import { Card } from "./crm-shared";
 import { updateLeadAssignedTo } from "../../actions";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 
 export function CrmAssigneeCard({
   leadId,
@@ -18,7 +18,7 @@ export function CrmAssigneeCard({
   const [value, setValue] = useState<string>(assignedTo ?? "");
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
+  const notify = usePreviewRefresh();
 
   function save(next: string) {
     setValue(next);
@@ -26,7 +26,7 @@ export function CrmAssigneeCard({
     startTransition(async () => {
       const res = await updateLeadAssignedTo(leadId, next || null);
       if (res.error) setError(res.error);
-      else router.refresh();
+      else notify();
     });
   }
 

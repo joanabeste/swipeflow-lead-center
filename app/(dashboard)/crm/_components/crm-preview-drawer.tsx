@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { CrmLeadDetail } from "../[id]/crm-lead-detail";
@@ -17,15 +16,14 @@ interface Props {
   previewId: string | null;
   /** Aktuelle CRM-Lead-Liste in Sortier-Reihenfolge fuer Prev/Next + Prefetch. */
   siblingIds?: string[];
-  /** Basis-Pfad fuer URL-Updates (default /crm). */
-  basePath?: string;
+  /** Callback fuer Prev/Next-Navigation (setzt previewId im Parent). */
+  onNavigate?: (id: string) => void;
   onClose: () => void;
 }
 
 const SLIDE_OUT_MS = 200;
 
-export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm", onClose }: Props) {
-  const router = useRouter();
+export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClose }: Props) {
   const [data, setData] = useState<CrmDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,8 +88,7 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
 
   const handleRefresh = useCallback(() => {
     if (previewId) loadBundle(previewId, { silent: true });
-    router.refresh();
-  }, [previewId, loadBundle, router]);
+  }, [previewId, loadBundle]);
 
   // closing bleibt true bis previewId durch onClose null wird (useEffect oben
   // resetet) — sonst flackert der Drawer 1 Frame lang auf.
@@ -110,9 +107,9 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], basePath = "/crm"
 
   const goTo = useCallback(
     (id: string) => {
-      router.push(`${basePath}?preview=${id}`, { scroll: false });
+      onNavigate?.(id);
     },
-    [router, basePath],
+    [onNavigate],
   );
 
   useEffect(() => {

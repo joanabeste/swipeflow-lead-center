@@ -126,18 +126,14 @@ export function CrmManager({
     router.push(`/crm?${params.toString()}`);
   }
 
-  // Preview-Drawer: ?preview=<lead-id> im Query-State.
-  const previewId = searchParams.get("preview");
+  // Preview-Drawer: rein client-seitig via State, damit kein Server-Re-Render
+  // beim Öffnen/Schließen passiert.
+  const [previewId, setPreviewId] = useState<string | null>(null);
   function openPreview(leadId: string) {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("preview", leadId);
-    router.push(`/crm?${params.toString()}`, { scroll: false });
+    setPreviewId(leadId);
   }
   function closePreview() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("preview");
-    const qs = params.toString();
-    router.push(qs ? `/crm?${qs}` : "/crm", { scroll: false });
+    setPreviewId(null);
   }
 
   function toggleAll() {
@@ -542,6 +538,7 @@ export function CrmManager({
       <CrmPreviewDrawer
         previewId={previewId}
         siblingIds={leads.map((l) => l.id)}
+        onNavigate={setPreviewId}
         onClose={closePreview}
       />
     </div>
