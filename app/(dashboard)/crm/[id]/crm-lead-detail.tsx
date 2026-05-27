@@ -238,23 +238,6 @@ export function CrmLeadDetail({
       {/* Zwei-Spalten-Layout: links schmal (Lead-Info), rechts dominant (Activity-Feed)
           — falls forceStackedLayout: vertikal stacken (z.B. im Drawer). */}
       {(() => {
-        const leftCol = (
-          <CrmLeftColumn
-            lead={lead}
-            contacts={contacts}
-            jobs={jobs}
-            latestEnrichment={latestEnrichment}
-            hq={hq}
-            senderName={senderName}
-            deals={deals}
-            dealStages={dealStages}
-            team={team}
-            industries={industries}
-            caseStudies={caseStudies}
-            landingPages={landingPages}
-            screenshotCard={screenshotCard}
-          />
-        );
         const rightCol = (
           <div className="space-y-4">
             <CrmActivityFeed
@@ -276,12 +259,13 @@ export function CrmLeadDetail({
             <LeadTodosCard leadId={lead.id} todos={todos} />
           </div>
         );
+        const leftColProps = {
+          lead, contacts, jobs, latestEnrichment, hq, senderName,
+          deals, dealStages, team, industries, caseStudies, landingPages, screenshotCard,
+        };
         if (forceStackedLayout) {
           return (
-            <div className="space-y-4">
-              {leftCol}
-              {rightCol}
-            </div>
+            <CrmLeftColumn {...leftColProps} middleSlot={rightCol} />
           );
         }
         return (
@@ -291,7 +275,7 @@ export function CrmLeadDetail({
             defaultWidth={380}
             minWidth={300}
             maxWidth={560}
-            left={leftCol}
+            left={<CrmLeftColumn {...leftColProps} />}
             right={rightCol}
           />
         );

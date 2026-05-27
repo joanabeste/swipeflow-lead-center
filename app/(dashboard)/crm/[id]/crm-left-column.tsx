@@ -27,24 +27,17 @@ interface Props {
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
   screenshotCard?: React.ReactNode;
+  middleSlot?: React.ReactNode;
 }
 
 export function CrmLeftColumn({
   lead, contacts, jobs, latestEnrichment, hq, senderName, deals, dealStages, team,
-  industries, caseStudies, landingPages, screenshotCard,
+  industries, caseStudies, landingPages, screenshotCard, middleSlot,
 }: Props) {
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
-      <CrmAssigneeCard leadId={lead.id} assignedTo={lead.assigned_to} team={team} />
-      {screenshotCard}
-      <CrmDealsCard
-        leadId={lead.id}
-        companyName={lead.company_name}
-        deals={deals}
-        stages={dealStages}
-        team={team}
-      />
+      {middleSlot}
       <CrmContactsCard
         leadId={lead.id}
         contacts={contacts}
@@ -52,6 +45,7 @@ export function CrmLeftColumn({
         companyName={lead.company_name}
         senderName={senderName}
       />
+      {screenshotCard}
       <CrmLandingPagesCard
         leadId={lead.id}
         companyName={lead.company_name}
@@ -72,6 +66,14 @@ export function CrmLeftColumn({
         <CrmLocationMiniCard lat={lead.latitude} lng={lead.longitude} hq={hq} />
       )}
       <CrmMasterdataForm lead={lead} />
+      <CrmAssigneeCard leadId={lead.id} assignedTo={lead.assigned_to} team={team} />
+      <CrmDealsCard
+        leadId={lead.id}
+        companyName={lead.company_name}
+        deals={deals}
+        stages={dealStages}
+        team={team}
+      />
     </>
   );
 }
