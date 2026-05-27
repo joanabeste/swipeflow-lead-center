@@ -1,6 +1,12 @@
 import { buildBuiltInContext, renderTemplate } from "@/lib/email/templates";
 import type { ContactSalutation } from "@/lib/types";
 import type { CaseStudy, Industry } from "./types";
+import {
+  WEBDESIGN_GREETING_TEMPLATE,
+  WEBDESIGN_HEADLINE_TEMPLATE,
+  WEBDESIGN_INTRO_TEMPLATE,
+  WEBDESIGN_OUTRO_TEMPLATE,
+} from "./webdesign-template";
 
 /**
  * Wandelt eine Loom-Share-URL in eine Embed-URL. Akzeptiert beide Formen
@@ -44,6 +50,36 @@ export interface SnapshotDraft {
  * Landing-Page-Draft. Der Anwender kann die Felder danach überschreiben,
  * bevor die Page persistiert wird.
  */
+export interface WebdesignSnapshotInput {
+  contact: {
+    name: string | null;
+    role: string | null;
+    salutation: ContactSalutation | null;
+  } | null;
+  companyName: string;
+  senderName: string | null;
+}
+
+export function buildWebdesignSnapshot(input: WebdesignSnapshotInput): SnapshotDraft {
+  const ctx = buildBuiltInContext({
+    contactName: input.contact?.name ?? null,
+    contactRole: input.contact?.role ?? null,
+    contactSalutation: input.contact?.salutation ?? null,
+    companyName: input.companyName,
+    senderName: input.senderName,
+  });
+
+  return {
+    greeting: renderTemplate(WEBDESIGN_GREETING_TEMPLATE, ctx),
+    headline: renderTemplate(WEBDESIGN_HEADLINE_TEMPLATE, ctx),
+    intro_text: renderTemplate(WEBDESIGN_INTRO_TEMPLATE, ctx),
+    outro_text: renderTemplate(WEBDESIGN_OUTRO_TEMPLATE, ctx),
+    loom_url: null,
+    calendly_url: null,
+    case_study_ids: [],
+  };
+}
+
 export function buildDefaultSnapshot(input: SnapshotInput): SnapshotDraft {
   const ctx = buildBuiltInContext({
     contactName: input.contact?.name ?? null,

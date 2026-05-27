@@ -65,6 +65,7 @@ export function CrmLeftColumn({
           logoUrl: lead.logo_url,
           website: lead.website,
         }}
+        leadVertical={lead.vertical}
       />
       <CrmJobsCard leadId={lead.id} jobs={jobs} careerPageUrl={latestEnrichment?.career_page_url ?? null} />
       {lead.latitude != null && lead.longitude != null && (

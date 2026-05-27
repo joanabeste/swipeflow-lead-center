@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
-import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2, UserPlus } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Eye, Link2, X, Save, Wand2, UserPlus, Users, Globe } from "lucide-react";
 import type { LeadContact } from "@/lib/types";
-import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
-import { buildDefaultSnapshot, toLoomEmbedUrl } from "@/lib/landing-pages/generator";
+import type { CaseStudy, Industry, LandingPage, LandingPageType } from "@/lib/landing-pages/types";
+import { buildDefaultSnapshot, buildWebdesignSnapshot, toLoomEmbedUrl } from "@/lib/landing-pages/generator";
 import { useToastContext } from "../../../toast-provider";
 import { Card } from "./crm-shared";
 import {
@@ -32,6 +32,7 @@ interface Props {
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
   brand: LeadBrand;
+  leadVertical: string | null;
 }
 
 export function CrmLandingPagesCard({
@@ -43,6 +44,7 @@ export function CrmLandingPagesCard({
   caseStudies,
   landingPages,
   brand,
+  leadVertical,
 }: Props) {
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const { addToast } = useToastContext();
@@ -92,9 +94,8 @@ export function CrmLandingPagesCard({
         <button
           type="button"
           onClick={() => setDialogState({ mode: "create" })}
-          disabled={industries.length === 0}
-          title={industries.length === 0 ? "Zuerst unter Einstellungen → Landing Pages eine Branche anlegen." : "Neue Landing-Page erzeugen"}
-          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50 dark:hover:bg-white/5 dark:hover:text-gray-200"
+          title="Neue Landing-Page erzeugen"
+          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -102,9 +103,7 @@ export function CrmLandingPagesCard({
 
       {landingPages.length === 0 ? (
         <p className="mt-2 text-sm text-gray-400">
-          {industries.length === 0
-            ? "Noch keine Branchen — in den Einstellungen konfigurieren."
-            : "Noch keine Landing-Page für diesen Lead."}
+          Noch keine Landing-Page für diesen Lead.
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
@@ -119,8 +118,13 @@ export function CrmLandingPagesCard({
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{lp.headline || lp.greeting}</p>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      {contact?.name ?? "Ohne Kontakt"} · {industry?.label ?? "—"} ·{" "}
+                    <p className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      {lp.page_type === "webdesign" ? (
+                        <span className="rounded px-1 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Webdesign</span>
+                      ) : (
+                        <span className="rounded px-1 py-0.5 text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Recruiting</span>
+                      )}
+                      {contact?.name ?? "Ohne Kontakt"} · {lp.page_type === "webdesign" ? "Webdesign" : (industry?.label ?? "—")} ·{" "}
                       {new Date(lp.created_at).toLocaleDateString("de-DE")}
                     </p>
                     <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
@@ -177,6 +181,7 @@ export function CrmLandingPagesCard({
           industries={industries}
           caseStudies={caseStudies}
           brand={brand}
+          leadVertical={leadVertical}
           state={dialog}
           onClose={() => setDialogState(null)}
           onCreated={(slug) => {
@@ -205,6 +210,7 @@ function LandingPageDialog({
   industries,
   caseStudies,
   brand,
+  leadVertical,
   state,
   onClose,
   onCreated,
@@ -217,12 +223,17 @@ function LandingPageDialog({
   industries: Industry[];
   caseStudies: CaseStudy[];
   brand: LeadBrand;
+  leadVertical: string | null;
   state: DialogState;
   onClose: () => void;
   onCreated: (slug: string) => void;
   onUpdated: () => void;
 }) {
   const existing = state.mode === "edit" ? state.page : null;
+
+  const [pageType, setPageType] = useState<LandingPageType>(
+    existing?.page_type ?? (leadVertical === "webdesign" ? "webdesign" : "recruiting"),
+  );
 
   // Ansprechpartner, die im Dialog frisch angelegt wurden. Werden mit den
   // aus-dem-Lead geladenen zusammengefuehrt, damit der Dropdown den neuen
@@ -325,16 +336,26 @@ function LandingPageDialog({
   );
 
   function applyDefaults() {
+    const contactInput = selectedContact
+      ? { name: selectedContact.name, role: selectedContact.role, salutation: selectedContact.salutation }
+      : null;
+
+    if (pageType === "webdesign") {
+      const draft = buildWebdesignSnapshot({ contact: contactInput, companyName, senderName });
+      setGreeting(draft.greeting);
+      setHeadline(draft.headline);
+      setIntroText(draft.intro_text);
+      setOutroText(draft.outro_text ?? "");
+      setLoomUrl(draft.loom_url ?? "");
+      setCalendlyUrl(draft.calendly_url ?? "");
+      setCaseStudyIds([]);
+      return;
+    }
+
     if (!selectedIndustry) return;
     const draft = buildDefaultSnapshot({
       industry: selectedIndustry,
-      contact: selectedContact
-        ? {
-            name: selectedContact.name,
-            role: selectedContact.role,
-            salutation: selectedContact.salutation,
-          }
-        : null,
+      contact: contactInput,
       companyName,
       senderName,
       caseStudies,
@@ -348,17 +369,16 @@ function LandingPageDialog({
     setCaseStudyIds(draft.case_study_ids);
   }
 
-  // Beim ersten Öffnen im Create-Modus die Defaults der Ausgangsbranche
-  // einmalig ziehen — im Edit-Modus bleibt der gespeicherte Snapshot.
+  // Beim ersten Öffnen im Create-Modus die Defaults einmalig ziehen.
   const didAutofill = useRef(state.mode === "edit");
   useEffect(() => {
     if (didAutofill.current) return;
-    if (!selectedIndustry) return;
+    if (pageType === "recruiting" && !selectedIndustry) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     applyDefaults();
     didAutofill.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIndustry]);
+  }, [selectedIndustry, pageType]);
 
   // Brand-Auto-Extract: einmalig beim ersten Create-Open, wenn der Lead noch
   // nichts cached hat und eine Website/Domain existiert. Ohne `forceRefresh`
@@ -418,13 +438,13 @@ function LandingPageDialog({
     const basePayload = {
       leadId,
       contactId: contactId || null,
-      industryId: industryId || null,
+      industryId: pageType === "webdesign" ? null : (industryId || null),
       greeting,
       headline,
       introText,
       loomUrl: loomUrl.trim() || null,
       outroText: outroText.trim() || null,
-      caseStudyIds,
+      caseStudyIds: pageType === "webdesign" ? [] : caseStudyIds,
       calendlyUrl: calendlyUrl.trim() || null,
       primaryColor: primaryColor.trim() || null,
       logoUrl: logoUrl.trim() || null,
@@ -441,6 +461,7 @@ function LandingPageDialog({
         const res = await createLandingPageAction({
           ...basePayload,
           companyName,
+          pageType,
         });
         if ("error" in res) setError(res.error);
         else onCreated(res.slug);
@@ -475,7 +496,36 @@ function LandingPageDialog({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex rounded-xl border border-gray-200 p-0.5 dark:border-[#2c2c2e]">
+            <button
+              type="button"
+              disabled={!!existing}
+              onClick={() => { setPageType("recruiting"); applyDefaults(); }}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                pageType === "recruiting"
+                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              } disabled:cursor-default`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Recruiting
+            </button>
+            <button
+              type="button"
+              disabled={!!existing}
+              onClick={() => { setPageType("webdesign"); applyDefaults(); }}
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                pageType === "webdesign"
+                  ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900"
+                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              } disabled:cursor-default`}
+            >
+              <Globe className="h-3.5 w-3.5" />
+              Webdesign
+            </button>
+          </div>
+
+          <div className={`grid gap-3 ${pageType === "recruiting" ? "sm:grid-cols-2" : ""}`}>
             <Field label="Kontakt">
               <div className="flex items-center gap-2">
                 <select
@@ -503,17 +553,19 @@ function LandingPageDialog({
                 </button>
               </div>
             </Field>
-            <Field label="Branche">
-              <select
-                value={industryId}
-                onChange={(e) => setIndustryId(e.target.value)}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
-              >
-                {industries.map((ind) => (
-                  <option key={ind.id} value={ind.id}>{ind.label}</option>
-                ))}
-              </select>
-            </Field>
+            {pageType === "recruiting" && (
+              <Field label="Branche">
+                <select
+                  value={industryId}
+                  onChange={(e) => setIndustryId(e.target.value)}
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#232325]"
+                >
+                  {industries.map((ind) => (
+                    <option key={ind.id} value={ind.id}>{ind.label}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
           </div>
 
           {contactFormOpen && (
@@ -587,7 +639,9 @@ function LandingPageDialog({
               onClick={applyDefaults}
               className="text-xs font-medium text-primary hover:underline"
             >
-              ↻ Defaults aus Branche &amp; Kontakt neu laden
+              {pageType === "webdesign"
+                ? "↻ Defaults aus Webdesign-Vorlage & Kontakt neu laden"
+                : "↻ Defaults aus Branche & Kontakt neu laden"}
             </button>
           </div>
 
@@ -713,60 +767,62 @@ function LandingPageDialog({
             </div>
           </div>
 
-          <div>
-            <p className="mb-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
-              Case-Studies ({caseStudyIds.length} ausgewählt)
-            </p>
-            {availableStudies.length === 0 ? (
-              <p className="text-xs text-gray-400">
-                Keine aktiven Case-Studies für diese Branche. Unter Einstellungen → Landing Pages konfigurieren.
+          {pageType === "recruiting" && (
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-gray-600 dark:text-gray-400">
+                Case-Studies ({caseStudyIds.length} ausgewählt)
               </p>
-            ) : (
-              <ul className="space-y-1.5 rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
-                {availableStudies.map((cs) => {
-                  const selected = caseStudyIds.includes(cs.id);
-                  const pos = caseStudyIds.indexOf(cs.id);
-                  return (
-                    <li key={cs.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleStudy(cs.id)}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{cs.title}</p>
-                        {cs.subtitle && (
-                          <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                            {cs.subtitle}
-                          </p>
-                        )}
-                      </div>
-                      {selected && (
-                        <div className="flex items-center gap-0.5 text-xs text-gray-500">
-                          <button
-                            type="button"
-                            disabled={pos <= 0}
-                            onClick={() => moveStudy(cs.id, -1)}
-                            className="rounded px-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            disabled={pos >= caseStudyIds.length - 1}
-                            onClick={() => moveStudy(cs.id, 1)}
-                            className="rounded px-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
-                          >
-                            ↓
-                          </button>
+              {availableStudies.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  Keine aktiven Case-Studies für diese Branche. Unter Einstellungen → Landing Pages konfigurieren.
+                </p>
+              ) : (
+                <ul className="space-y-1.5 rounded-md border border-gray-100 p-2 dark:border-[#2c2c2e]">
+                  {availableStudies.map((cs) => {
+                    const selected = caseStudyIds.includes(cs.id);
+                    const pos = caseStudyIds.indexOf(cs.id);
+                    return (
+                      <li key={cs.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleStudy(cs.id)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-medium">{cs.title}</p>
+                          {cs.subtitle && (
+                            <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                              {cs.subtitle}
+                            </p>
+                          )}
                         </div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+                        {selected && (
+                          <div className="flex items-center gap-0.5 text-xs text-gray-500">
+                            <button
+                              type="button"
+                              disabled={pos <= 0}
+                              onClick={() => moveStudy(cs.id, -1)}
+                              className="rounded px-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              disabled={pos >= caseStudyIds.length - 1}
+                              onClick={() => moveStudy(cs.id, 1)}
+                              className="rounded px-1 hover:bg-gray-100 disabled:opacity-30 dark:hover:bg-white/5"
+                            >
+                              ↓
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-400">

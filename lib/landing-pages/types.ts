@@ -1,3 +1,5 @@
+export type LandingPageType = "recruiting" | "webdesign";
+
 export interface Industry {
   id: string;
   label: string;
@@ -47,6 +49,7 @@ export interface LandingPage {
   updated_at: string;
   expires_at: string | null;
   deleted_at: string | null;
+  page_type: LandingPageType;
 }
 
 export interface LandingPageWithRelations extends LandingPage {

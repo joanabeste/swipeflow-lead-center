@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { generateSlug, randomSuffix, slugifyCompanyName } from "./slug";
-import type { CaseStudy, Industry, LandingPage, LandingPageWithRelations } from "./types";
+import type { CaseStudy, Industry, LandingPage, LandingPageType, LandingPageWithRelations } from "./types";
 
 // ─── Read-Helpers ────────────────────────────────────────────
 
@@ -104,6 +104,7 @@ export async function createLandingPage(input: {
   logoUrl: string | null;
   expiresAt: string | null;
   createdBy: string | null;
+  pageType?: LandingPageType;
 }): Promise<{ id: string; slug: string } | { error: string }> {
   const db = createServiceClient();
 
@@ -138,6 +139,7 @@ export async function createLandingPage(input: {
         logo_url: input.logoUrl,
         expires_at: input.expiresAt,
         created_by: input.createdBy,
+        page_type: input.pageType ?? "recruiting",
       })
       .select("id, slug")
       .single();

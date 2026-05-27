@@ -8,6 +8,7 @@ import {
   softDeleteLandingPage,
   updateLandingPage,
 } from "@/lib/landing-pages/server";
+import type { LandingPageType } from "@/lib/landing-pages/types";
 import { extractBrandFromWebsite } from "@/lib/landing-pages/brand";
 
 async function requireUser() {
@@ -67,6 +68,7 @@ export async function createLandingPageAction(input: {
   calendlyUrl: string | null;
   primaryColor: string | null;
   logoUrl: string | null;
+  pageType?: LandingPageType;
 }): Promise<{ success: true; id: string; slug: string } | { error: string }> {
   const user = await requireUser();
   if (!user) return { error: "Nicht angemeldet." };
@@ -90,6 +92,7 @@ export async function createLandingPageAction(input: {
     logoUrl: cleaned.logoUrl,
     expiresAt: null,
     createdBy: user.id,
+    pageType: input.pageType,
   });
   if ("error" in res) return { error: res.error };
 
@@ -98,7 +101,7 @@ export async function createLandingPageAction(input: {
     action: "landing_page.created",
     entityType: "landing_page",
     entityId: res.id,
-    details: { lead_id: input.leadId, slug: res.slug, industry_id: input.industryId },
+    details: { lead_id: input.leadId, slug: res.slug, industry_id: input.industryId, page_type: input.pageType ?? "recruiting" },
   });
   revalidatePath(`/crm/${input.leadId}`);
   return { success: true, id: res.id, slug: res.slug };

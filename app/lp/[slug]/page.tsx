@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getLandingPageBySlug, trackLandingPageView } from "@/lib/landing-pages/server";
 import { toLoomEmbedUrl } from "@/lib/landing-pages/generator";
+import { WEBDESIGN_PORTFOLIO } from "@/lib/landing-pages/webdesign-template";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +95,43 @@ export default async function LandingPageBySlug({ params }: Props) {
         </div>
       )}
 
-      {page.case_studies.length > 0 && (
+      {page.page_type === "webdesign" ? (
+        <section className="mt-14">
+          <h2 className="text-lg font-semibold text-gray-900">Unsere Referenzen</h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            {WEBDESIGN_PORTFOLIO.map((item) => (
+              <article
+                key={item.title}
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.imageUrl}
+                  alt=""
+                  className="h-40 w-full object-cover"
+                />
+                <div className="p-5">
+                  <h3 className="text-base font-semibold text-gray-900">{item.title}</h3>
+                  <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-600">
+                    {item.description}
+                  </p>
+                  {item.linkUrl && (
+                    <a
+                      href={item.linkUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-3 inline-flex items-center gap-1 text-sm font-medium underline underline-offset-2 hover:no-underline"
+                      style={{ color: "var(--lp-primary)" }}
+                    >
+                      Ansehen →
+                    </a>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : page.case_studies.length > 0 ? (
         <section className="mt-14">
           <h2 className="text-lg font-semibold text-gray-900">Erfolgreiche Beispiele</h2>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -137,7 +174,7 @@ export default async function LandingPageBySlug({ params }: Props) {
             ))}
           </div>
         </section>
-      )}
+      ) : null}
 
       {page.outro_text && (
         <p className="mt-14 whitespace-pre-line text-base leading-relaxed text-gray-700">
