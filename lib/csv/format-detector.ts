@@ -171,7 +171,9 @@ export const GOOGLE_MAPS_TARGETS: MappingTarget[] = [
   { key: "address", label: "Straße + Hausnr." },
   { key: "phone", label: "Telefon" },
   { key: "website", label: "Website" },
-  { key: "mapsUrl", label: "Google-Maps-Link", hint: "Quelle für PLZ/Ort-Extraktion" },
+  { key: "rating", label: "Google-Bewertung", hint: "z. B. 4,8" },
+  { key: "reviewCount", label: "Anzahl Rezensionen", hint: "z. B. (24)" },
+  { key: "mapsUrl", label: "Google-Maps-Link", hint: "PLZ + Ort werden aus den Koordinaten extrahiert" },
 ];
 
 export const INSTANT_SCRAPER_TARGETS: MappingTarget[] = [
