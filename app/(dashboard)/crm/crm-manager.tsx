@@ -16,7 +16,7 @@ import type { ColumnPref } from "@/lib/table-prefs";
 import { updateCrmStatus } from "./actions";
 import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
-import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
+
 import { CrmPreviewDrawer } from "./_components/crm-preview-drawer";
 import { prefetchPreview } from "@/lib/preview/prefetch";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
@@ -95,13 +95,8 @@ export function CrmManager({
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
-  const vertical = MODE_TO_VERTICAL[serviceMode];
   const activeStatuses = statuses.filter((s) => s.is_active);
-  // Status-Liste fuer Inline-/Bulk-Dropdowns: nur Status der aktuellen
-  // Vertikale (oder neutrale). Verhindert versehentliches Cross-Vertical-Setzen.
-  const verticalStatuses = activeStatuses.filter(
-    (s) => !s.vertical || s.vertical === vertical,
-  );
+  const verticalStatuses = activeStatuses;
 
   const { visible, widthOf, totalVisibleWidth, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
     tableKey: "crm",
