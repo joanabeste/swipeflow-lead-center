@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import { updateContractDraft } from "../actions";
 import { parseEuroToCents } from "@/lib/contracts/format";
 import { Button } from "@/components/ui/button";
+import type { ContractType } from "@/lib/contracts/types";
 import { ContractTermsFields, ContractAddressFields, type TermsState, type AddressState } from "./contract-terms-fields";
 
 export function EditContractForm({
   id,
+  type,
   initial,
   initialAddress,
 }: {
   id: string;
+  type: ContractType;
   initial: TermsState;
   initialAddress: AddressState;
 }) {
@@ -31,6 +34,11 @@ export function EditContractForm({
       payment_mode: terms.paymentMode,
       installment_count: terms.paymentMode === "raten" ? Number(terms.installments) : null,
       payment_method: terms.paymentMethod,
+      ad_budget_cents: parseEuroToCents(terms.adBudgetEur),
+      job_title: terms.jobTitle,
+      campaign_start: terms.campaignStart || null,
+      campaign_end: terms.campaignEnd || null,
+      applicant_guarantee: terms.applicantGuarantee,
       billing: address,
     });
     setBusy(false);
@@ -43,7 +51,7 @@ export function EditContractForm({
 
   return (
     <div className="space-y-6">
-      <ContractTermsFields value={terms} onChange={setTerms} />
+      <ContractTermsFields value={terms} onChange={setTerms} type={type} />
 
       <ContractAddressFields value={address} onChange={setAddress} />
 

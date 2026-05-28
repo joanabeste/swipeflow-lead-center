@@ -1,7 +1,7 @@
 "use client";
 
 import { parseEuroToCents, formatEuro, splitInstallments } from "@/lib/contracts/format";
-import type { PaymentMode, PaymentMethod } from "@/lib/contracts/types";
+import type { ContractType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
 
 export interface TermsState {
   setupEur: string;
@@ -9,6 +9,12 @@ export interface TermsState {
   paymentMode: PaymentMode;
   installments: string;
   paymentMethod: PaymentMethod;
+  // Recruiting
+  jobTitle: string;
+  campaignStart: string;
+  campaignEnd: string;
+  adBudgetEur: string;
+  applicantGuarantee: boolean;
 }
 
 export const inputCls =
@@ -17,9 +23,11 @@ export const inputCls =
 export function ContractTermsFields({
   value,
   onChange,
+  type = "webdesign",
 }: {
   value: TermsState;
   onChange: (next: TermsState) => void;
+  type?: ContractType;
 }) {
   const set = (patch: Partial<TermsState>) => onChange({ ...value, ...patch });
 
@@ -29,41 +37,76 @@ export function ContractTermsFields({
   const count = Number(value.installments);
   const showRatePreview = value.paymentMode === "raten" && count >= 2 && setupCents > 0;
   const { base, last } = showRatePreview ? splitInstallments(setupCents, count) : { base: 0, last: 0 };
+  const isRecruiting = type === "recruiting";
 
   return (
     <>
-      <Section title="Konditionen">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Einmaliger Herstellungspreis (€ netto)">
-            <input inputMode="decimal" value={value.setupEur} onChange={(e) => set({ setupEur: e.target.value })} className={inputCls} />
+      {isRecruiting ? (
+        <Section title="Kampagne">
+          <Field label="Jobtitel">
+            <input value={value.jobTitle} onChange={(e) => set({ jobTitle: e.target.value })} className={inputCls} placeholder="z. B. Steuerberater*in" />
           </Field>
-          <Field label="Monatliche Wartung/Hosting (€ netto)">
-            <input inputMode="decimal" value={value.monthlyEur} onChange={(e) => set({ monthlyEur: e.target.value })} className={inputCls} />
-            {monthlyCents > 0 && (
-              <p className="mt-1 text-[11px] text-gray-400">≈ {formatEuro(yearlyCents)} jährlich im Voraus</p>
-            )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Laufzeit von">
+              <input type="date" value={value.campaignStart} onChange={(e) => set({ campaignStart: e.target.value })} className={inputCls} />
+            </Field>
+            <Field label="Laufzeit bis">
+              <input type="date" value={value.campaignEnd} onChange={(e) => set({ campaignEnd: e.target.value })} className={inputCls} />
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Agenturleistung (€ netto)">
+              <input inputMode="decimal" value={value.setupEur} onChange={(e) => set({ setupEur: e.target.value })} className={inputCls} />
+            </Field>
+            <Field label="Werbebudget (€ netto)">
+              <input inputMode="decimal" value={value.adBudgetEur} onChange={(e) => set({ adBudgetEur: e.target.value })} className={inputCls} />
+            </Field>
+          </div>
+          <Field label="Bewerbergarantie (5 qualifizierte Bewerber in 30 Tagen, sonst Verlängerung & 60 % Erstattung)">
+            <div className="flex gap-2">
+              <Toggle active={value.applicantGuarantee} onClick={() => set({ applicantGuarantee: true })}>Mit Garantie</Toggle>
+              <Toggle active={!value.applicantGuarantee} onClick={() => set({ applicantGuarantee: false })}>Ohne Garantie</Toggle>
+            </div>
           </Field>
-        </div>
-      </Section>
+        </Section>
+      ) : (
+        <Section title="Konditionen">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Einmaliger Herstellungspreis (€ netto)">
+              <input inputMode="decimal" value={value.setupEur} onChange={(e) => set({ setupEur: e.target.value })} className={inputCls} />
+            </Field>
+            <Field label="Monatliche Wartung/Hosting (€ netto)">
+              <input inputMode="decimal" value={value.monthlyEur} onChange={(e) => set({ monthlyEur: e.target.value })} className={inputCls} />
+              {monthlyCents > 0 && (
+                <p className="mt-1 text-[11px] text-gray-400">≈ {formatEuro(yearlyCents)} jährlich im Voraus</p>
+              )}
+            </Field>
+          </div>
+        </Section>
+      )}
 
       <Section title="Zahlung">
-        <Field label="Zahlungsart (gilt nur für die Erstellung — Wartung wird immer jährlich abgerechnet)">
-          <div className="flex gap-2">
-            <Toggle active={value.paymentMode === "einmal"} onClick={() => set({ paymentMode: "einmal" })}>Einmalzahlung</Toggle>
-            <Toggle active={value.paymentMode === "raten"} onClick={() => set({ paymentMode: "raten" })}>Ratenzahlung</Toggle>
-          </div>
-        </Field>
-        {value.paymentMode === "raten" && (
-          <Field label="Anzahl Raten">
-            <input inputMode="numeric" value={value.installments} onChange={(e) => set({ installments: e.target.value })} className={`${inputCls} max-w-[120px]`} />
-            {showRatePreview && (
-              <p className="mt-1 text-[11px] text-gray-400">
-                {base === last
-                  ? `${count} × ${formatEuro(base)}`
-                  : `${count - 1} × ${formatEuro(base)} + letzte Rate ${formatEuro(last)}`}
-              </p>
+        {!isRecruiting && (
+          <>
+            <Field label="Zahlungsart (gilt nur für die Erstellung — Wartung wird immer jährlich abgerechnet)">
+              <div className="flex gap-2">
+                <Toggle active={value.paymentMode === "einmal"} onClick={() => set({ paymentMode: "einmal" })}>Einmalzahlung</Toggle>
+                <Toggle active={value.paymentMode === "raten"} onClick={() => set({ paymentMode: "raten" })}>Ratenzahlung</Toggle>
+              </div>
+            </Field>
+            {value.paymentMode === "raten" && (
+              <Field label="Anzahl Raten">
+                <input inputMode="numeric" value={value.installments} onChange={(e) => set({ installments: e.target.value })} className={`${inputCls} max-w-[120px]`} />
+                {showRatePreview && (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    {base === last
+                      ? `${count} × ${formatEuro(base)}`
+                      : `${count - 1} × ${formatEuro(base)} + letzte Rate ${formatEuro(last)}`}
+                  </p>
+                )}
+              </Field>
             )}
-          </Field>
+          </>
         )}
         <Field label="Zahlungsmethode">
           <div className="flex gap-2">
@@ -71,6 +114,9 @@ export function ContractTermsFields({
             <Toggle active={value.paymentMethod === "rechnung"} onClick={() => set({ paymentMethod: "rechnung" })}>Rechnung</Toggle>
           </div>
         </Field>
+        {isRecruiting && (
+          <p className="text-[11px] text-gray-400">Zahlung erfolgt vor Kampagnenstart in einer Summe.</p>
+        )}
       </Section>
     </>
   );

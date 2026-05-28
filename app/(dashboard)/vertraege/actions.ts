@@ -19,8 +19,8 @@ import {
   saveCreditor,
   saveProviderSignaturePath,
 } from "@/lib/contracts/settings";
-import { TEMPLATE_VERSION } from "@/lib/contracts/template";
-import type { ContractRow, ContractLead, ContractEventType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
+import { templateVersion } from "@/lib/contracts/template";
+import type { ContractRow, ContractLead, ContractEventType, ContractType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
 
 const LINK_VALID_DAYS = 30;
 
@@ -44,12 +44,18 @@ async function writeEvent(
 /** Friert die Konditionen beim Aktivieren des Links/Versand ein. */
 function buildTermsSnapshot(contract: ContractRow, creditorId: string): Record<string, unknown> {
   return {
-    template_version: TEMPLATE_VERSION,
+    template_version: templateVersion(contract.type),
+    type: contract.type,
     setup_price_cents: contract.setup_price_cents,
     monthly_maint_cents: contract.monthly_maint_cents,
     payment_mode: contract.payment_mode,
     installment_count: contract.installment_count,
     payment_method: contract.payment_method,
+    ad_budget_cents: contract.ad_budget_cents,
+    job_title: contract.job_title,
+    campaign_start: contract.campaign_start,
+    campaign_end: contract.campaign_end,
+    applicant_guarantee: contract.applicant_guarantee,
     creditor_id: creditorId,
     frozen_at: new Date().toISOString(),
   };
@@ -80,11 +86,20 @@ function normBilling(b: BillingInput | undefined) {
   };
 }
 
-export interface CreateContractInput {
+/** Recruiting-spezifische Felder, geteilt von Create/Update. */
+export interface RecruitingInput {
+  ad_budget_cents?: number;
+  job_title?: string | null;
+  campaign_start?: string | null;
+  campaign_end?: string | null;
+  applicant_guarantee?: boolean;
+}
+
+export interface CreateContractInput extends RecruitingInput {
   lead_id?: string;
   /** Alternativ zu lead_id: neuen Kunden anlegen. */
   new_customer?: { company_name: string; city?: string; email?: string };
-  type?: "webdesign" | "recruiting";
+  type?: ContractType;
   setup_price_cents: number;
   monthly_maint_cents: number;
   payment_mode: PaymentMode;
@@ -93,15 +108,54 @@ export interface CreateContractInput {
   billing?: BillingInput;
 }
 
+interface RecruitingColumns {
+  job_title: string | null;
+  campaign_start: string | null;
+  campaign_end: string | null;
+  ad_budget_cents: number;
+  applicant_guarantee: boolean;
+}
+
+/** Validiert Recruiting-Pflichtfelder und baut die DB-Spalten.
+ *  Erzwingt monthly_maint_cents=0 und payment_mode='einmal' für Recruiting. */
+function recruitingColumns(
+  type: ContractType,
+  input: RecruitingInput,
+): { error: string } | RecruitingColumns {
+  if (type !== "recruiting") {
+    return { job_title: null, campaign_start: null, campaign_end: null, ad_budget_cents: 0, applicant_guarantee: false };
+  }
+  const jobTitle = (input.job_title ?? "").trim();
+  if (!jobTitle) return { error: "Bitte einen Jobtitel angeben." };
+  if (!input.campaign_start || !input.campaign_end) {
+    return { error: "Bitte Start- und Enddatum der Kampagne angeben." };
+  }
+  const budget = Math.round(input.ad_budget_cents ?? 0);
+  if (!Number.isFinite(budget) || budget < 0) return { error: "Ungültiges Werbebudget." };
+  return {
+    job_title: jobTitle,
+    campaign_start: input.campaign_start,
+    campaign_end: input.campaign_end,
+    ad_budget_cents: budget,
+    applicant_guarantee: !!input.applicant_guarantee,
+  };
+}
+
 export async function createContract(input: CreateContractInput): Promise<Result<{ id: string }>> {
   const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   if (!Number.isFinite(input.setup_price_cents) || input.setup_price_cents < 0) {
-    return { error: "Ungültiger Herstellungspreis." };
+    return { error: "Ungültiger Preis." };
   }
-  if (input.payment_mode === "raten" && (!input.installment_count || input.installment_count < 2)) {
+  const type: ContractType = input.type ?? "webdesign";
+  const isRecruiting = type === "recruiting";
+  // Recruiting: einmalige Zahlung vor Kampagnenstart, keine monatliche Pauschale.
+  const paymentMode: PaymentMode = isRecruiting ? "einmal" : input.payment_mode;
+  if (paymentMode === "raten" && (!input.installment_count || input.installment_count < 2)) {
     return { error: "Bei Ratenzahlung mindestens 2 Raten angeben." };
   }
+  const recruiting = recruitingColumns(type, input);
+  if ("error" in recruiting) return recruiting;
 
   const db = createServiceClient();
 
@@ -116,7 +170,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
         company_name: nc.company_name.trim(),
         city: nc.city?.trim() || null,
         email: nc.email?.trim() || null,
-        vertical: "webdesign",
+        vertical: type,
         source_type: "manual",
         status: "imported",
         lifecycle_stage: "customer",
@@ -145,13 +199,14 @@ export async function createContract(input: CreateContractInput): Promise<Result
     .from("contracts")
     .insert({
       lead_id: leadId,
-      type: input.type ?? "webdesign",
+      type,
       status: "draft",
       setup_price_cents: Math.round(input.setup_price_cents),
-      monthly_maint_cents: Math.round(input.monthly_maint_cents),
-      payment_mode: input.payment_mode,
-      installment_count: input.payment_mode === "raten" ? input.installment_count : null,
+      monthly_maint_cents: isRecruiting ? 0 : Math.round(input.monthly_maint_cents),
+      payment_mode: paymentMode,
+      installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      ...recruiting,
       ...normBilling(input.billing),
       created_by: ctx.user.id,
     })
@@ -169,7 +224,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
   return { success: true, id };
 }
 
-export interface UpdateDraftInput {
+export interface UpdateDraftInput extends RecruitingInput {
   setup_price_cents: number;
   monthly_maint_cents: number;
   payment_mode: PaymentMode;
@@ -182,25 +237,31 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
   const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   if (!Number.isFinite(input.setup_price_cents) || input.setup_price_cents < 0) {
-    return { error: "Ungültiger Herstellungspreis." };
-  }
-  if (input.payment_mode === "raten" && (!input.installment_count || input.installment_count < 2)) {
-    return { error: "Bei Ratenzahlung mindestens 2 Raten angeben." };
+    return { error: "Ungültiger Preis." };
   }
 
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
   if (contract.status !== "draft") return { error: "Nur Entwürfe können bearbeitet werden." };
 
+  const isRecruiting = contract.type === "recruiting";
+  const paymentMode: PaymentMode = isRecruiting ? "einmal" : input.payment_mode;
+  if (paymentMode === "raten" && (!input.installment_count || input.installment_count < 2)) {
+    return { error: "Bei Ratenzahlung mindestens 2 Raten angeben." };
+  }
+  const recruiting = recruitingColumns(contract.type, input);
+  if ("error" in recruiting) return recruiting;
+
   const db = createServiceClient();
   const { error } = await db
     .from("contracts")
     .update({
       setup_price_cents: Math.round(input.setup_price_cents),
-      monthly_maint_cents: Math.round(input.monthly_maint_cents),
-      payment_mode: input.payment_mode,
-      installment_count: input.payment_mode === "raten" ? input.installment_count : null,
+      monthly_maint_cents: isRecruiting ? 0 : Math.round(input.monthly_maint_cents),
+      payment_mode: paymentMode,
+      installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      ...recruiting,
       ...normBilling(input.billing),
     })
     .eq("id", id);

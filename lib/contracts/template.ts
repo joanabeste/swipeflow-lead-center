@@ -6,8 +6,15 @@
 // die Version wird beim Versand in terms_snapshot eingefroren.
 
 import { formatEuro, splitInstallments } from "./format";
+import type { ContractType } from "./types";
 
 export const TEMPLATE_VERSION = "webdesign-v3";
+export const RECRUITING_TEMPLATE_VERSION = "recruiting-v1";
+
+/** Eingefrorene Template-Version pro Vertragstyp (für terms_snapshot). */
+export function templateVersion(type: ContractType): string {
+  return type === "recruiting" ? RECRUITING_TEMPLATE_VERSION : TEMPLATE_VERSION;
+}
 
 // Markenlogo (swipeflow „s") als Inline-SVG — muss inline sein, da das PDF via
 // Headless-Chromium aus reinem HTML (setContent, ohne Base-URL) gerendert wird.
@@ -15,6 +22,7 @@ const LOGO_SVG = `<svg viewBox="40 20 280 660" width="34" height="34" xmlns="htt
 
 export interface ContractRenderInput {
   mode: "view" | "pdf";
+  type: ContractType;
 
   // Kunde / Auftraggeber
   customerName: string;
@@ -22,11 +30,20 @@ export interface ContractRenderInput {
   plzCity: string;
 
   // Konditionen
+  // Bei type='webdesign': setupPriceCents = Herstellungspreis.
+  // Bei type='recruiting': setupPriceCents = Agenturleistung (Pauschalvergütung).
   setupPriceCents: number;
   monthlyMaintCents: number;
   paymentMode: "einmal" | "raten";
   installmentCount: number | null;
   paymentMethod: "sepa" | "rechnung";
+
+  // Social-Recruiting-Felder (nur bei type='recruiting')
+  adBudgetCents: number;
+  jobTitle: string;
+  campaignStart: string; // ISO-Datum oder ""
+  campaignEnd: string; // ISO-Datum oder ""
+  applicantGuarantee: boolean;
 
   // SEPA-Gläubiger (aus Env)
   creditor: { id: string; name: string; address: string };
@@ -51,6 +68,15 @@ function esc(s: string): string {
 function blank(value: string | undefined | null, mode: "view" | "pdf"): string {
   if (value && value.trim()) return esc(value);
   return mode === "view" ? "________________________" : "—";
+}
+
+/** Formatiert ein ISO-Datum (YYYY-MM-DD) als deutsches Datum, sonst Platzhalter. */
+function blankDate(iso: string | undefined | null, mode: "view" | "pdf"): string {
+  if (iso && iso.trim()) {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return d.toLocaleDateString("de-DE");
+  }
+  return mode === "view" ? "____________" : "—";
 }
 
 // Beide Hosting-Subunternehmer werden im AV-Vertrag IMMER genannt, damit der
@@ -135,14 +161,17 @@ function sepaMandateSection(input: ContractRenderInput): string {
   if (input.paymentMethod !== "sepa") return "";
   const holder = blank(input.sepa?.accountHolder, input.mode);
   const iban = blank(input.sepa?.ibanDisplay, input.mode);
+  const zweck =
+    input.type === "recruiting"
+      ? "Es handelt sich um die Zahlung der Agenturleistung und des Werbebudgets aus diesem Vertrag."
+      : "Es handelt sich um wiederkehrende Zahlungen (Wartung/Hosting) sowie ggf. die Zahlung(en) für die Erstellung der Webseite.";
   return `
     <h2>SEPA-Lastschriftmandat</h2>
     <p>
       Ich ermächtige die ${esc(input.creditor.name)}, Zahlungen aus diesem Vertrag von
       meinem Konto mittels SEPA-Lastschrift einzuziehen. Zugleich weise ich mein
       Kreditinstitut an, die von der ${esc(input.creditor.name)} auf mein Konto gezogenen
-      Lastschriften einzulösen. Es handelt sich um wiederkehrende Zahlungen (Wartung/Hosting)
-      sowie ggf. die Zahlung(en) für die Erstellung der Webseite.
+      Lastschriften einzulösen. ${zweck}
     </p>
     <p>
       Hinweis: Ich kann innerhalb von acht Wochen, beginnend mit dem Belastungsdatum, die
@@ -204,13 +233,15 @@ function widerrufSection(): string {
 
 function signatureBlock(input: ContractRenderInput): string {
   if (input.mode === "pdf" && input.signature) {
+    const customerRole = input.type === "recruiting" ? "Kunde" : "Auftraggeber";
+    const providerRole = input.type === "recruiting" ? "Agentur" : "Dienstleister";
     return `
       <h2>Unterschrift</h2>
       <div class="sign-grid">
         <div class="sign-box">
           <div class="sign-img"><img src="${input.signature.dataUrl}" alt="Unterschrift" /></div>
           <div class="sign-line">${esc(input.signature.signerName)} — ${esc(input.signature.signedAt)}</div>
-          <div class="sign-cap">${esc(input.customerName)} (Auftraggeber)</div>
+          <div class="sign-cap">${esc(input.customerName)} (${customerRole})</div>
         </div>
         <div class="sign-box">
           <div class="sign-img">${
@@ -219,7 +250,7 @@ function signatureBlock(input: ContractRenderInput): string {
               : ""
           }</div>
           <div class="sign-line">swipeflow GmbH</div>
-          <div class="sign-cap">Dienstleister</div>
+          <div class="sign-cap">${providerRole}</div>
         </div>
       </div>
     `;
@@ -227,10 +258,10 @@ function signatureBlock(input: ContractRenderInput): string {
   return "";
 }
 
-export function renderContractHtml(input: ContractRenderInput): string {
+function webdesignBody(input: ContractRenderInput): string {
   const websitekosten = formatEuro(input.setupPriceCents);
 
-  const body = `
+  return `
     <div class="letterhead">
       ${LOGO_SVG}
       <div class="lh-name">swipeflow GmbH</div>
@@ -387,13 +418,15 @@ export function renderContractHtml(input: ContractRenderInput): string {
 
     ${signatureBlock(input)}
   `;
+}
 
+function wrapDocument(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="de">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Dienstleistungs- und Auftragsverarbeitungsvertrag</title>
+<title>${esc(title)}</title>
 <style>
   @page { size: A4; margin: 20mm; }
   * { box-sizing: border-box; }
@@ -437,4 +470,167 @@ export function renderContractHtml(input: ContractRenderInput): string {
   <div class="doc">${body}</div>
 </body>
 </html>`;
+}
+
+// § 4 Abs. 2: Fälligkeit/Zahlungsweg. Bei Rechnung folgt der PDF-Wortlaut; bei
+// SEPA wird stattdessen der Lastschrifteinzug genannt (sonst widerspräche der
+// Text dem SEPA-Mandat).
+function recruitingZahlung(input: ContractRenderInput): string {
+  const start = blankDate(input.campaignStart, input.mode);
+  if (input.paymentMethod === "sepa") {
+    return `4.2 Die Zahlung wird per SEPA-Lastschrift eingezogen und ist vor dem Kampagnenstart am ${start} ohne Abzüge fällig.`;
+  }
+  return `4.2 Die Zahlung erfolgt nach Rechnungstellung durch die Agentur und ist vor dem Kampagnenstart am ${start} ohne Abzüge fällig.`;
+}
+
+// Bewerbergarantie (Ziff. 2.3–2.5) — nur wenn pro Vertrag aktiviert.
+function bewerbergarantie(input: ContractRenderInput): string {
+  if (!input.applicantGuarantee) return "";
+  return `
+    <p>2.3 Sollten innerhalb der ersten 30 Tage nach dem Kampagnenstart keine fünf qualifizierten Bewerber eingehen, kann die Kampagne nach vorheriger schriftlicher Zustimmung des Kunden einmalig um weitere 30 Tage verlängert werden. In diesem Fall trägt der Kunde lediglich die anfallenden Werbekosten; eine zusätzliche Dienstleistungspauschale wird für den Verlängerungszeitraum nicht erhoben.</p>
+    <p>2.4 Gehen auch nach Ablauf des Verlängerungszeitraums (insgesamt 60 Tage Kampagnenlaufzeit) weniger als fünf qualifizierte Bewerber ein, verpflichtet sich die Agentur, 60 % der ursprünglich vereinbarten Dienstleistungspauschale an den Kunden zu erstatten.</p>
+    <p>2.5 Der Kunde hat einen etwaigen Erstattungsanspruch gemäß Ziffer 2.4 innerhalb von 30 Tagen nach Ende der Kampagnenlaufzeit schriftlich geltend zu machen.</p>
+  `;
+}
+
+function recruitingBody(input: ContractRenderInput): string {
+  const agentur = formatEuro(input.setupPriceCents);
+  const budget = formatEuro(input.adBudgetCents);
+  const laufzeit = `${blankDate(input.campaignStart, input.mode)} – ${blankDate(input.campaignEnd, input.mode)}`;
+
+  return `
+    <div class="letterhead">
+      ${LOGO_SVG}
+      <div class="lh-name">swipeflow GmbH</div>
+    </div>
+
+    <h1>Agentur- und Auftragsverarbeitungsvertrag</h1>
+
+    <p>zwischen</p>
+    <p class="parties">
+      <strong>${blank(input.customerName, input.mode)}</strong><br />
+      ${blank(input.street, input.mode)}<br />
+      ${blank(input.plzCity, input.mode)}
+    </p>
+    <p>– im Folgenden „Kunde“ genannt –</p>
+    <p>und</p>
+    <p class="parties">
+      <strong>swipeflow GmbH</strong><br />
+      Ringstraße 6<br />
+      32339 Espelkamp
+    </p>
+    <p>– im Folgenden „Agentur“ genannt –</p>
+    <p>wird folgender Rahmenvertrag samt Auftragsverarbeitungsvertrag geschlossen:</p>
+
+    <h2>Teil 1 – Agenturvertrag</h2>
+
+    <h3>1. Vertragsgegenstand</h3>
+    <p>1.1 Die Agentur erbringt für den Kunden Dienstleistungen im Bereich Social Recruiting, darunter:</p>
+    <ul>
+      <li>Erstellung von Social Media Stellenanzeigen (Text &amp; Grafiken)</li>
+      <li>Bau einer Landeseite (Landing Page) für den Bewerbungsprozess.</li>
+      <li>Schalten und Optimieren von Werbekampagnen auf Social Media Plattformen (Facebook und Instagram.)</li>
+    </ul>
+    <p>1.2 Die Kampagne wird mit folgenden Daten konkret festgelegt:</p>
+    <table class="kv">
+      <tr><td>Jobtitel</td><td>${blank(input.jobTitle, input.mode)}</td></tr>
+      <tr><td>Laufzeit</td><td>${laufzeit}</td></tr>
+      <tr><td>Preis</td><td>${agentur} Agenturleistung + ${budget} Werbebudget</td></tr>
+    </table>
+    <p>Sofern die Korrekturschleife vor dem ursprünglich geplanten Startdatum abgeschlossen ist und der Kunde einen früheren Kampagnenstart ausdrücklich wünscht, beginnt die Laufzeit der Kampagne entsprechend vorzeitig. In diesem Fall verschiebt sich das ursprünglich vereinbarte Enddatum um denselben Zeitraum nach vorn, sofern nichts Abweichendes vereinbart wird.</p>
+    <p>1.3 Folgeaufträge oder neue Kampagnen werden durch separate Auftragsbestätigungen konkretisiert. Diese werden Bestandteil dieses Agenturvertrages.</p>
+
+    <h3>2. Vertragslaufzeit &amp; Kündigung</h3>
+    <p>2.1 Der Vertrag endet automatisch mit Abschluss der beauftragten Kampagne, ohne dass es einer gesonderten Kündigung bedarf.</p>
+    <p>2.2 Eine Verlängerung des Vertrages bedarf der schriftlichen Vereinbarung beider Parteien.</p>
+    ${bewerbergarantie(input)}
+
+    <h3>3. Auftragserteilung &amp; Abwicklung</h3>
+    <p>Neue Kampagnen oder Folgeaufträge werden durch eine separate Auftragsbestätigung definiert. Diese kann in Schriftform oder per E-Mail erfolgen.</p>
+
+    <h3>4. Vergütung und Zahlungsbedingungen</h3>
+    <p>4.1 Der Kunde zahlt der Agentur eine Pauschalvergütung in Höhe von ${agentur} netto für die Erbringung der vereinbarten Leistungen und ${budget} netto als Werbebudget.</p>
+    <p>${recruitingZahlung(input)}</p>
+    <p>4.3 Die Vergütung von weiteren Kampagnen ist in der Auftragsbestätigung definiert. Der Betrag ist vor dem Kampagnenstart ohne Abzüge fällig.</p>
+
+    <h3>5. Datenschutz &amp; Auftragsverarbeitung</h3>
+    <p>Es gilt der gesondert abgeschlossene Auftragsverarbeitungsvertrag (AVV) zwischen den Parteien (Teil 2).</p>
+
+    <h3>6. Nutzungsrechte</h3>
+    <p>6.1 Die Agentur überträgt dem Kunden die einfachen, räumlich und zeitlich unbegrenzten Nutzungsrechte an den im Rahmen dieses Vertrages erstellten Inhalten.</p>
+
+    <h3>7. Rechte und Pflichten der Parteien</h3>
+    <p>7.1 Die Agentur verpflichtet sich, die vereinbarten Leistungen termingerecht zu erbringen.</p>
+    <p>7.2 Der Kunde stellt der Agentur alle notwendigen Informationen und Materialien für die ordnungsgemäße Erfüllung des Auftrags rechtzeitig zur Verfügung.</p>
+    <p>7.3 Der Kunde ist verantwortlich für die rechtliche Zulässigkeit der bereitgestellten Inhalte und Materialien.</p>
+    <p>7.4 Die Agentur wird keine Inhalte im Namen des Kunden veröffentlichen, ohne vorherige Abstimmung und schriftliche Freigabe durch den Kunden.</p>
+
+    <h2>Teil 2 – Auftragsverarbeitungsvertrag (AVV)</h2>
+
+    <h3>1. Gegenstand und Dauer des Auftrags</h3>
+    <p>1.1 Der Auftragsverarbeiter verarbeitet personenbezogene Daten im Auftrag des Verantwortlichen im Rahmen der folgenden Tätigkeiten:</p>
+    <ul>
+      <li>Erstellung von Social Media Stellenanzeigen (Grafiken und Texte).</li>
+      <li>Bau einer Landeseite (Landing Page) für den Bewerbungsprozess.</li>
+      <li>Aufsetzen und Schalten der Werbekampagne auf Meta-Plattformen (Instagram &amp; Facebook).</li>
+    </ul>
+    <p>1.2 Die Dauer dieses AV-Vertrags richtet sich nach der Laufzeit des Hauptvertrags (Teil 1). Nach Beendigung des Hauptvertrags werden die verarbeiteten Daten nach Maßgabe dieses AV-Vertrags gelöscht oder zurückgegeben.</p>
+
+    <h3>2. Art und Zweck der Verarbeitung</h3>
+    <p>2.1 Die Verarbeitung der personenbezogenen Daten erfolgt ausschließlich zu dem Zweck, die im Hauptvertrag vereinbarten Dienstleistungen zu erbringen, insbesondere die Durchführung von Social Media-Kampagnen und die Bearbeitung von Bewerbungen.</p>
+
+    <h3>3. Art der personenbezogenen Daten und Kategorien betroffener Personen</h3>
+    <p>3.1 Es werden folgende Kategorien personenbezogener Daten verarbeitet:</p>
+    <ul>
+      <li>Kontaktdaten (z. B. Name, E-Mail-Adresse, Telefonnummer)</li>
+      <li>Bewerbungsdaten (z. B. Lebenslauf, Anschreiben, Zeugnisse)</li>
+      <li>Nutzungsdaten (z. B. IP-Adressen, Zugriffszeiten)</li>
+    </ul>
+    <p>3.2 Die Verarbeitung betrifft folgende Kategorien betroffener Personen:</p>
+    <ul>
+      <li>Bewerber auf die vom Verantwortlichen ausgeschriebenen Stellen.</li>
+    </ul>
+
+    <h3>4. Pflichten und Rechte des Verantwortlichen</h3>
+    <p>4.1 Der Verantwortliche ist für die Rechtmäßigkeit der Verarbeitung personenbezogener Daten sowie für die Wahrung der Rechte der betroffenen Personen verantwortlich.</p>
+    <p>4.2 Der Verantwortliche stellt sicher, dass die personenbezogenen Daten in einer Weise erhoben werden, die den Anforderungen der DSGVO entspricht.</p>
+    <p>4.3 Der Verantwortliche hat das Recht, die Einhaltung der datenschutzrechtlichen Vorschriften durch den Auftragsverarbeiter in angemessenen Abständen zu prüfen.</p>
+
+    <h3>5. Pflichten des Auftragsverarbeiters</h3>
+    <p>5.1 Der Auftragsverarbeiter verarbeitet personenbezogene Daten ausschließlich auf dokumentierte Weisung des Verantwortlichen.</p>
+    <p>5.2 Der Auftragsverarbeiter stellt sicher, dass die mit der Verarbeitung von personenbezogenen Daten befassten Personen zur Vertraulichkeit verpflichtet sind und dies schriftlich bestätigt wurde.</p>
+    <p>5.3 Der Auftragsverarbeiter ergreift alle erforderlichen technischen und organisatorischen Maßnahmen (TOMs) gemäß Art. 32 DSGVO, um ein angemessenes Schutzniveau zu gewährleisten.</p>
+    <p>5.4 Der Auftragsverarbeiter unterstützt den Verantwortlichen bei der Erfüllung seiner Pflichten in Bezug auf Anfragen betroffener Personen und die Meldung von Datenschutzverletzungen.</p>
+    <p>5.5 Der Auftragsverarbeiter meldet dem Verantwortlichen unverzüglich alle Verstöße gegen den Schutz personenbezogener Daten.</p>
+
+    <h3>6. Einsatz von Subunternehmern</h3>
+    <p>6.1 Der Auftragsverarbeiter darf nur mit vorheriger schriftlicher Zustimmung des Verantwortlichen Subunternehmer einsetzen.</p>
+    <p>6.2 Der Auftragsverarbeiter stellt sicher, dass Subunternehmer ebenfalls zur Einhaltung der datenschutzrechtlichen Bestimmungen verpflichtet werden.</p>
+
+    <h3>7. Technische und organisatorische Maßnahmen (TOMs), Haftung &amp; Gewährleistung</h3>
+    <p>7.1 Der Auftragsverarbeiter verpflichtet sich, geeignete technische und organisatorische Maßnahmen zu ergreifen, um die Vertraulichkeit, Integrität, Verfügbarkeit und Belastbarkeit der Systeme und Dienste zu gewährleisten.</p>
+    <p>7.2 Eine detaillierte Beschreibung der TOMs ist dem Anhang dieses Vertrages zu entnehmen.</p>
+
+    <h3>8. Rechte der betroffenen Personen</h3>
+    <p>8.1 Der Auftragsverarbeiter unterstützt den Verantwortlichen bei der Erfüllung der Rechte der betroffenen Personen gemäß Kapitel III der DSGVO, insbesondere bei Anfragen auf Auskunft, Berichtigung, Löschung oder Einschränkung der Verarbeitung.</p>
+
+    <h3>9. Löschung und Rückgabe der Daten</h3>
+    <p>9.1 Nach Beendigung des Hauptvertrags und/oder auf Weisung des Verantwortlichen löscht der Auftragsverarbeiter alle personenbezogenen Daten, sofern nicht gesetzliche Aufbewahrungspflichten bestehen.</p>
+
+    <h3>10. Schlussbestimmungen</h3>
+    <p>10.1 Änderungen und Ergänzungen dieses AV-Vertrags bedürfen der Schriftform.</p>
+    <p>10.2 Sollten einzelne Bestimmungen dieses Vertrages unwirksam sein oder werden, so bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.</p>
+    <p>10.3 Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist der Sitz des Verantwortlichen.</p>
+
+    ${sepaMandateSection(input)}
+
+    ${signatureBlock(input)}
+  `;
+}
+
+export function renderContractHtml(input: ContractRenderInput): string {
+  if (input.type === "recruiting") {
+    return wrapDocument("Agentur- und Auftragsverarbeitungsvertrag", recruitingBody(input));
+  }
+  return wrapDocument("Dienstleistungs- und Auftragsverarbeitungsvertrag", webdesignBody(input));
 }

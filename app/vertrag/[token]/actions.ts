@@ -68,13 +68,14 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
   }
 
   // Pflicht-Einwilligungen (Vertragsannahme, Kosten, Datenschutz, Richtigkeit,
-  // vorzeitiger Leistungsbeginn).
+  // vorzeitiger Leistungsbeginn). Recruiting: kein Widerruf/Early-Start (B2B).
+  const isRecruiting = contract.type === "recruiting";
   if (
     !payload.accept_contract ||
     !payload.accept_costs ||
     !payload.accept_privacy ||
     !payload.confirm_data_correct ||
-    !payload.request_early_start
+    (!isRecruiting && !payload.request_early_start)
   ) {
     return { error: "Bitte bestätigen Sie alle Pflichtangaben." };
   }
@@ -157,7 +158,7 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
         costs: true,
         privacy: true,
         data_correct: true,
-        early_start_requested: true,
+        early_start_requested: isRecruiting ? null : true,
         sepa_mandate: contract.payment_method === "sepa" ? true : null,
         accepted_at: signedAt,
       },

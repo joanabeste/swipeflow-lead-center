@@ -14,7 +14,7 @@ export default async function NeuerVertragPage() {
       <div>
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Neuer Vertrag</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Webdesign-Vertrag konfigurieren. Den Link versendest du anschließend auf der Detailseite.
+          Webdesign- oder Social-Recruiting-Vertrag konfigurieren. Den Link versendest du anschließend auf der Detailseite.
         </p>
       </div>
       <NewContractForm customers={customers} />

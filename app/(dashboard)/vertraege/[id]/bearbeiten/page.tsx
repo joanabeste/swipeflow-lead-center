@@ -18,6 +18,11 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
     paymentMode: contract.payment_mode,
     installments: String(contract.installment_count ?? 3),
     paymentMethod: contract.payment_method,
+    jobTitle: contract.job_title ?? "",
+    campaignStart: contract.campaign_start ?? "",
+    campaignEnd: contract.campaign_end ?? "",
+    adBudgetEur: String(contract.ad_budget_cents / 100),
+    applicantGuarantee: contract.applicant_guarantee,
   };
 
   const initialAddress: AddressState = {
@@ -38,7 +43,7 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Vertrag bearbeiten</h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Konditionen des Entwurfs anpassen.</p>
       </div>
-      <EditContractForm id={id} initial={initial} initialAddress={initialAddress} />
+      <EditContractForm id={id} type={contract.type} initial={initial} initialAddress={initialAddress} />
     </div>
   );
 }

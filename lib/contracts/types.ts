@@ -26,6 +26,13 @@ export interface ContractRow {
   installment_count: number | null;
   payment_method: PaymentMethod;
 
+  // Social-Recruiting-Felder (nur bei type='recruiting' befüllt)
+  job_title: string | null;
+  campaign_start: string | null;
+  campaign_end: string | null;
+  ad_budget_cents: number;
+  applicant_guarantee: boolean;
+
   billing_company: string | null;
   billing_street: string | null;
   billing_zip: string | null;
@@ -75,6 +82,11 @@ export interface ContractEvent {
   meta: Record<string, unknown>;
   created_at: string;
 }
+
+export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
+  webdesign: "Webdesign",
+  recruiting: "Social Recruiting",
+};
 
 export const STATUS_LABELS: Record<ContractStatus, string> = {
   draft: "Entwurf",

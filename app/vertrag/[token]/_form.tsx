@@ -7,6 +7,7 @@ import { formatEuro, splitInstallments, isValidIban } from "@/lib/contracts/form
 import { Button } from "@/components/ui/button";
 import { SwipeflowLogo } from "@/app/(dashboard)/swipeflow-logo";
 import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
+import type { ContractType } from "@/lib/contracts/types";
 
 interface Prefill {
   company: string;
@@ -21,23 +22,27 @@ interface Costs {
   monthlyMaintCents: number;
   paymentMode: "einmal" | "raten";
   installmentCount: number | null;
+  adBudgetCents: number;
 }
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export function PublicContractView({
   token,
+  contractType,
   contractHtml,
   paymentMethod,
   prefill,
   costs,
 }: {
   token: string;
+  contractType: ContractType;
   contractHtml: string;
   paymentMethod: "sepa" | "rechnung";
   prefill: Prefill;
   costs: Costs;
 }) {
+  const isRecruiting = contractType === "recruiting";
   const [step, setStep] = useState<1 | 2>(1);
   const [html, setHtml] = useState(contractHtml);
 
@@ -62,7 +67,7 @@ export function PublicContractView({
   const [done, setDone] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  const costText = useMemo(() => buildCostText(costs), [costs]);
+  const costText = useMemo(() => buildCostText(costs, isRecruiting), [costs, isRecruiting]);
 
   async function downloadPdf() {
     setPdfBusy(true);
@@ -122,7 +127,7 @@ export function PublicContractView({
     if (!acceptContractAndCosts) missing.push("Vertrag & Kosten akzeptieren");
     if (!acceptPrivacy) missing.push("Datenschutz");
     if (!confirmData) missing.push("Richtigkeit der Angaben");
-    if (!requestEarlyStart) missing.push("Vorzeitiger Leistungsbeginn");
+    if (!isRecruiting && !requestEarlyStart) missing.push("Vorzeitiger Leistungsbeginn");
     if (paymentMethod === "sepa" && !mandate) missing.push("SEPA-Mandat");
     if (missing.length > 0) {
       setError(`Bitte bestätigen Sie: ${missing.join(", ")}.`);
@@ -145,7 +150,8 @@ export function PublicContractView({
       accept_costs: acceptContractAndCosts,
       accept_privacy: acceptPrivacy,
       confirm_data_correct: confirmData,
-      request_early_start: requestEarlyStart,
+      // Recruiting: kein Widerruf/Early-Start (reine B2B-Annahme).
+      request_early_start: isRecruiting ? true : requestEarlyStart,
     };
     if (paymentMethod === "sepa") {
       payload.sepa_account_holder = holder;
@@ -266,15 +272,30 @@ export function PublicContractView({
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kostenübersicht</p>
                 <dl className="mt-2 space-y-1 text-sm text-gray-700">
-                  <div className="flex justify-between gap-4">
-                    <dt>Einmalige Herstellung</dt>
-                    <dd className="font-medium text-gray-900">{formatEuro(costs.setupPriceCents)} netto</dd>
-                  </div>
-                  {costs.monthlyMaintCents > 0 && (
-                    <div className="flex justify-between gap-4">
-                      <dt>Wartung &amp; Hosting</dt>
-                      <dd className="font-medium text-gray-900">{formatEuro(costs.monthlyMaintCents)} netto / Monat</dd>
-                    </div>
+                  {isRecruiting ? (
+                    <>
+                      <div className="flex justify-between gap-4">
+                        <dt>Agenturleistung</dt>
+                        <dd className="font-medium text-gray-900">{formatEuro(costs.setupPriceCents)} netto</dd>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <dt>Werbebudget</dt>
+                        <dd className="font-medium text-gray-900">{formatEuro(costs.adBudgetCents)} netto</dd>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between gap-4">
+                        <dt>Einmalige Herstellung</dt>
+                        <dd className="font-medium text-gray-900">{formatEuro(costs.setupPriceCents)} netto</dd>
+                      </div>
+                      {costs.monthlyMaintCents > 0 && (
+                        <div className="flex justify-between gap-4">
+                          <dt>Wartung &amp; Hosting</dt>
+                          <dd className="font-medium text-gray-900">{formatEuro(costs.monthlyMaintCents)} netto / Monat</dd>
+                        </div>
+                      )}
+                    </>
                   )}
                 </dl>
                 <p className="mt-2 text-[11px] text-gray-400">zzgl. gesetzl. MwSt.</p>
@@ -298,18 +319,20 @@ export function PublicContractView({
                 </Consent>
               </fieldset>
 
-              <fieldset className="space-y-3 border-t border-gray-100 pt-5">
-                <legend className="text-sm font-semibold text-gray-900">
-                  Vorzeitiger Leistungsbeginn
-                </legend>
-                <Consent checked={requestEarlyStart} onChange={setRequestEarlyStart}>
-                  Ich verlange ausdrücklich, dass swipeflow mit der Ausführung der beauftragten
-                  Leistungen bereits vor Ablauf der 14-tägigen Widerrufsfrist beginnt. Mir ist
-                  bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung erlischt
-                  und ich bei einem Widerruf nach Beginn der Leistung anteiligen Wertersatz für
-                  die bereits erbrachten Leistungen schulde.
-                </Consent>
-              </fieldset>
+              {!isRecruiting && (
+                <fieldset className="space-y-3 border-t border-gray-100 pt-5">
+                  <legend className="text-sm font-semibold text-gray-900">
+                    Vorzeitiger Leistungsbeginn
+                  </legend>
+                  <Consent checked={requestEarlyStart} onChange={setRequestEarlyStart}>
+                    Ich verlange ausdrücklich, dass swipeflow mit der Ausführung der beauftragten
+                    Leistungen bereits vor Ablauf der 14-tägigen Widerrufsfrist beginnt. Mir ist
+                    bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung erlischt
+                    und ich bei einem Widerruf nach Beginn der Leistung anteiligen Wertersatz für
+                    die bereits erbrachten Leistungen schulde.
+                  </Consent>
+                </fieldset>
+              )}
 
               <fieldset className="space-y-3 border-t border-gray-100 pt-5">
                 <legend className="text-sm font-semibold text-gray-900">Unterschrift</legend>
@@ -347,8 +370,11 @@ export function PublicContractView({
 }
 
 /** Baut den Kostentext für den Zustimmungspunkt (Einmal-/Ratenzahlung). */
-function buildCostText(costs: Costs): string {
+function buildCostText(costs: Costs, isRecruiting: boolean): string {
   const setup = formatEuro(costs.setupPriceCents);
+  if (isRecruiting) {
+    return `Agenturleistung ${setup} netto; Werbebudget ${formatEuro(costs.adBudgetCents)} netto. Alle Preise zzgl. gesetzl. MwSt.`;
+  }
   const parts: string[] = [];
   if (costs.paymentMode === "raten" && costs.installmentCount && costs.installmentCount >= 2) {
     const { base, last } = splitInstallments(costs.setupPriceCents, costs.installmentCount);

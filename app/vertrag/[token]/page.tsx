@@ -69,6 +69,7 @@ export default async function PublicContractPage({ params }: { params: Promise<{
   return (
     <PublicContractView
       token={token}
+      contractType={contract.type}
       contractHtml={viewHtml}
       paymentMethod={contract.payment_method}
       prefill={prefill}
@@ -77,6 +78,7 @@ export default async function PublicContractPage({ params }: { params: Promise<{
         monthlyMaintCents: contract.monthly_maint_cents,
         paymentMode: contract.payment_mode,
         installmentCount: contract.installment_count,
+        adBudgetCents: contract.ad_budget_cents,
       }}
     />
   );

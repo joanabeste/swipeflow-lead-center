@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ContractRow, ContractLead, ContractPickerLead, ContractEvent } from "./types";
 
 const CONTRACT_COLS =
-  "id, lead_id, type, status, token, setup_price_cents, monthly_maint_cents, payment_mode, installment_count, payment_method, billing_company, billing_street, billing_zip, billing_city, billing_email, billing_country, sepa_account_holder, sepa_iban_encrypted, sepa_iban_last4, sepa_bic, signature_path, pdf_path, terms_snapshot, sent_at, viewed_at, signed_at, expires_at, created_by, created_at, updated_at";
+  "id, lead_id, type, status, token, setup_price_cents, monthly_maint_cents, payment_mode, installment_count, payment_method, job_title, campaign_start, campaign_end, ad_budget_cents, applicant_guarantee, billing_company, billing_street, billing_zip, billing_city, billing_email, billing_country, sepa_account_holder, sepa_iban_encrypted, sepa_iban_last4, sepa_bic, signature_path, pdf_path, terms_snapshot, sent_at, viewed_at, signed_at, expires_at, created_by, created_at, updated_at";
 
 export interface ContractListItem {
   id: string;

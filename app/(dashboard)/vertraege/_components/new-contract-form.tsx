@@ -6,12 +6,13 @@ import { Search, UserPlus, X } from "lucide-react";
 import { createContract } from "../actions";
 import { Button } from "@/components/ui/button";
 import { parseEuroToCents } from "@/lib/contracts/format";
-import type { ContractPickerLead } from "@/lib/contracts/types";
+import type { ContractPickerLead, ContractType } from "@/lib/contracts/types";
 import {
   ContractTermsFields,
   ContractAddressFields,
   Section,
   Field,
+  Toggle,
   inputCls,
   EMPTY_ADDRESS,
   type TermsState,
@@ -24,6 +25,18 @@ const DEFAULT_TERMS: TermsState = {
   paymentMode: "einmal",
   installments: "3",
   paymentMethod: "sepa",
+  jobTitle: "",
+  campaignStart: "",
+  campaignEnd: "",
+  adBudgetEur: "1200",
+  applicantGuarantee: false,
+};
+
+const RECRUITING_DEFAULT_TERMS: TermsState = {
+  ...DEFAULT_TERMS,
+  setupEur: "2500",
+  monthlyEur: "0",
+  paymentMethod: "rechnung",
 };
 
 function addressFromCustomer(c: ContractPickerLead | undefined): AddressState {
@@ -49,10 +62,16 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
   const [ncEmail, setNcEmail] = useState("");
 
   const [address, setAddress] = useState<AddressState>(EMPTY_ADDRESS);
+  const [contractType, setContractType] = useState<ContractType>("webdesign");
   const [terms, setTerms] = useState<TermsState>(DEFAULT_TERMS);
 
   const [pending, setPending] = useState<"draft" | "create" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  function chooseType(t: ContractType) {
+    setContractType(t);
+    setTerms(t === "recruiting" ? RECRUITING_DEFAULT_TERMS : DEFAULT_TERMS);
+  }
 
   const selected = useMemo(
     () => customers.find((c) => c.id === selectedId),
@@ -96,11 +115,17 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
     const res = await createContract({
       lead_id: mode === "pick" ? selectedId : undefined,
       new_customer: mode === "new" ? { company_name: ncName, city: ncCity, email: ncEmail } : undefined,
+      type: contractType,
       setup_price_cents: parseEuroToCents(terms.setupEur),
       monthly_maint_cents: parseEuroToCents(terms.monthlyEur),
       payment_mode: terms.paymentMode,
       installment_count: terms.paymentMode === "raten" ? Number(terms.installments) : null,
       payment_method: terms.paymentMethod,
+      ad_budget_cents: parseEuroToCents(terms.adBudgetEur),
+      job_title: terms.jobTitle,
+      campaign_start: terms.campaignStart || null,
+      campaign_end: terms.campaignEnd || null,
+      applicant_guarantee: terms.applicantGuarantee,
       billing: address,
     });
     if ("error" in res) {
@@ -113,6 +138,13 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
 
   return (
     <div className="space-y-6">
+      <Section title="Vertragstyp">
+        <div className="flex gap-2">
+          <Toggle active={contractType === "webdesign"} onClick={() => chooseType("webdesign")}>Webdesign</Toggle>
+          <Toggle active={contractType === "recruiting"} onClick={() => chooseType("recruiting")}>Social Recruiting</Toggle>
+        </div>
+      </Section>
+
       <Section title="Kunde">
         {mode === "pick" ? (
           selected ? (
@@ -212,7 +244,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
 
       <ContractAddressFields value={address} onChange={setAddress} />
 
-      <ContractTermsFields value={terms} onChange={setTerms} />
+      <ContractTermsFields value={terms} onChange={setTerms} type={contractType} />
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</p>}
 

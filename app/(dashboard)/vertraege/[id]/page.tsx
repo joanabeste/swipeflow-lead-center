@@ -4,12 +4,16 @@ import { ArrowLeft, Eye, Pencil } from "lucide-react";
 import { loadContract, loadContractEvents } from "@/lib/contracts/data";
 import { buildContractLink } from "@/lib/email/central";
 import { formatEuro } from "@/lib/contracts/format";
-import { EVENT_LABELS, isExpired, type ContractStatus } from "@/lib/contracts/types";
+import { CONTRACT_TYPE_LABELS, EVENT_LABELS, isExpired, type ContractStatus } from "@/lib/contracts/types";
 import { StatusBadge } from "../_components/status-badge";
 import { ContractActions } from "../_components/contract-actions";
 
 function fmtDateTime(iso: string | null): string {
   return iso ? new Date(iso).toLocaleString("de-DE") : "—";
+}
+
+function fmtDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleDateString("de-DE") : "—";
 }
 
 const PAYMENT_MODE_LABEL = { einmal: "Einmalzahlung", raten: "Ratenzahlung" } as const;
@@ -37,7 +41,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
           <div>
             <div className="flex items-center gap-2">
               <StatusBadge status={contract.status as ContractStatus} expired={expired} emailed={!!contract.sent_at} />
-              <span className="text-[11px] uppercase tracking-wider text-gray-400">{contract.type}</span>
+              <span className="text-[11px] uppercase tracking-wider text-gray-400">{CONTRACT_TYPE_LABELS[contract.type]}</span>
             </div>
             <h1 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{customerName}</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -75,13 +79,26 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Konditionen */}
         <Card title="Konditionen">
-          <Row label="Herstellungspreis" value={`${formatEuro(contract.setup_price_cents)} netto`} />
-          <Row label="Wartung/Hosting" value={`${formatEuro(contract.monthly_maint_cents)} netto / Monat (jährlich)`} />
-          <Row label="Zahlungsart" value={PAYMENT_MODE_LABEL[contract.payment_mode]} />
-          {contract.payment_mode === "raten" && (
-            <Row label="Raten" value={`${contract.installment_count ?? "—"}`} />
+          {contract.type === "recruiting" ? (
+            <>
+              <Row label="Jobtitel" value={contract.job_title || "—"} />
+              <Row label="Laufzeit" value={`${fmtDate(contract.campaign_start)} – ${fmtDate(contract.campaign_end)}`} />
+              <Row label="Agenturleistung" value={`${formatEuro(contract.setup_price_cents)} netto`} />
+              <Row label="Werbebudget" value={`${formatEuro(contract.ad_budget_cents)} netto`} />
+              <Row label="Bewerbergarantie" value={contract.applicant_guarantee ? "Ja" : "Nein"} />
+              <Row label="Zahlungsmethode" value={PAYMENT_METHOD_LABEL[contract.payment_method]} />
+            </>
+          ) : (
+            <>
+              <Row label="Herstellungspreis" value={`${formatEuro(contract.setup_price_cents)} netto`} />
+              <Row label="Wartung/Hosting" value={`${formatEuro(contract.monthly_maint_cents)} netto / Monat (jährlich)`} />
+              <Row label="Zahlungsart" value={PAYMENT_MODE_LABEL[contract.payment_mode]} />
+              {contract.payment_mode === "raten" && (
+                <Row label="Raten" value={`${contract.installment_count ?? "—"}`} />
+              )}
+              <Row label="Zahlungsmethode" value={PAYMENT_METHOD_LABEL[contract.payment_method]} />
+            </>
           )}
-          <Row label="Zahlungsmethode" value={PAYMENT_METHOD_LABEL[contract.payment_method]} />
         </Card>
 
         {/* Kunden- & Zahlungsdaten (vom Kunden ausgefüllt) */}

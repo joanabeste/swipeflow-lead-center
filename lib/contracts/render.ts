@@ -60,6 +60,7 @@ export function buildRenderInput(
 
   return {
     mode: opts.mode,
+    type: contract.type,
     customerName,
     street,
     plzCity,
@@ -68,6 +69,11 @@ export function buildRenderInput(
     paymentMode: contract.payment_mode,
     installmentCount: contract.installment_count,
     paymentMethod: contract.payment_method,
+    adBudgetCents: contract.ad_budget_cents,
+    jobTitle: contract.job_title ?? "",
+    campaignStart: contract.campaign_start ?? "",
+    campaignEnd: contract.campaign_end ?? "",
+    applicantGuarantee: contract.applicant_guarantee,
     creditor: opts.creditor,
     mandateReference: mandateReference(contract.id),
     sepa,
