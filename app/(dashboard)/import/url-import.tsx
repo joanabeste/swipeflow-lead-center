@@ -11,6 +11,8 @@ export function UrlImport() {
     success: boolean;
     leadId?: string;
     companyName?: string;
+    duplicate?: boolean;
+    updated?: boolean;
     error?: string;
   } | null>(null);
 
@@ -81,7 +83,9 @@ export function UrlImport() {
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
                 <Check className="h-4 w-4" />
-                Lead &quot;{result.companyName}&quot; erfolgreich importiert und angereichert.
+                {result.duplicate
+                  ? `Firma „${result.companyName}" war bereits vorhanden${result.updated ? " — fehlende Daten aktualisiert" : ""}. Kein neuer Lead angelegt.`
+                  : `Lead „${result.companyName}" erfolgreich importiert und angereichert.`}
               </div>
               <a
                 href={`/leads/${result.leadId}`}

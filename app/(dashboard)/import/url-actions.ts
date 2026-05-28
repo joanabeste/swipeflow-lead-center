@@ -4,11 +4,64 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
 import { fetchCompanyPages } from "@/lib/enrichment/web-fetcher";
+import { safeFetch } from "@/lib/net/safe-fetch";
 import { extractCompaniesFromPage } from "@/lib/enrichment/directory-extractor";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
+import {
+  loadExistingLeadsIndex,
+  findDbDuplicateForLead,
+  findInternalDuplicates,
+  addLeadToIndex,
+} from "@/lib/csv/dedup";
 import type { BlacklistEntry, BlacklistRule, CancelRule } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+
+// Felder, die beim Merge eines Duplikats nur gefuellt werden, wenn sie noch leer sind.
+const MERGE_UPDATE_FIELDS = [
+  "website", "phone", "email", "street", "city", "zip", "state",
+  "country", "industry", "company_size", "legal_form", "register_id",
+  "description",
+] as const;
+
+/** Fuellt fehlende Felder eines bestehenden Leads aus neuen Werten und protokolliert
+ *  die Aenderungen in lead_changes. Gibt zurueck, ob etwas aktualisiert wurde. */
+async function mergeIntoExistingLead(
+  db: ReturnType<typeof createServiceClient>,
+  existingLeadId: string,
+  newValues: Record<string, string | null>,
+  userId: string | null,
+): Promise<boolean> {
+  const { data: existingLead } = await db
+    .from("leads")
+    .select("*")
+    .eq("id", existingLeadId)
+    .single();
+  if (!existingLead) return false;
+
+  const updates: Record<string, string | null> = {};
+  for (const field of MERGE_UPDATE_FIELDS) {
+    const newVal = newValues[field];
+    const oldVal = existingLead[field as keyof typeof existingLead] as string | null;
+    if (newVal && !oldVal) updates[field] = newVal;
+  }
+  if (Object.keys(updates).length === 0) return false;
+
+  updates.updated_at = new Date().toISOString();
+  await db.from("leads").update(updates).eq("id", existingLeadId);
+
+  const changes = Object.entries(updates)
+    .filter(([k]) => k !== "updated_at")
+    .map(([k, v]) => ({
+      lead_id: existingLeadId,
+      user_id: userId,
+      field_name: k,
+      old_value: null,
+      new_value: v,
+    }));
+  if (changes.length > 0) await db.from("lead_changes").insert(changes);
+  return true;
+}
 
 
 // ============================================================
@@ -19,6 +72,8 @@ export async function importFromUrl(url: string): Promise<{
   success: boolean;
   leadId?: string;
   companyName?: string;
+  duplicate?: boolean;
+  updated?: boolean;
   error?: string;
 }> {
   const supabase = await createClient();
@@ -67,7 +122,53 @@ export async function importFromUrl(url: string): Promise<{
       .select()
       .single();
 
-    // 3. Lead erstellen
+    // 3. Duplikat-Pruefung gegen bestehende Leads (strikt: keine Stadt verfuegbar)
+    const index = await loadExistingLeadsIndex(db);
+    const dup = findDbDuplicateForLead(
+      index,
+      { company_name: companyName, website: domain },
+      { strict: true },
+    );
+
+    if (dup) {
+      // Aussortierter Lead: weder Insert noch Update — Negativ-Signal bleibt stabil.
+      if (dup.archived) {
+        await db
+          .from("import_logs")
+          .update({ imported_count: 0, duplicate_count: 1, status: "completed" })
+          .eq("id", importLog?.id);
+        return { success: true, leadId: dup.leadId, companyName, duplicate: true };
+      }
+
+      // Bestehender Lead: fehlende Felder fuellen, Enrichment erneut anstossen.
+      const updated = await mergeIntoExistingLead(db, dup.leadId, { website: domain }, user.id);
+      await enrichLead(dup.leadId, user.id);
+      await db
+        .from("import_logs")
+        .update({
+          imported_count: 0,
+          updated_count: updated ? 1 : 0,
+          duplicate_count: updated ? 0 : 1,
+          status: "completed",
+        })
+        .eq("id", importLog?.id);
+
+      await logAudit({
+        userId: user.id,
+        action: "import.url",
+        entityType: "lead",
+        entityId: dup.leadId,
+        details: { url, company_name: companyName, duplicate: true, updated },
+      });
+
+      revalidatePath("/leads");
+      revalidatePath("/import");
+      revalidatePath("/");
+
+      return { success: true, leadId: dup.leadId, companyName, duplicate: true, updated };
+    }
+
+    // 4. Lead erstellen
     const { data: lead, error: insertError } = await db
       .from("leads")
       .insert({
@@ -86,10 +187,10 @@ export async function importFromUrl(url: string): Promise<{
       return { success: false, error: insertError?.message ?? "Lead konnte nicht erstellt werden." };
     }
 
-    // 4. Enrichment starten
+    // 5. Enrichment starten
     await enrichLead(lead.id, user.id);
 
-    // 5. Import-Log abschließen
+    // 6. Import-Log abschließen
     await db
       .from("import_logs")
       .update({
@@ -131,13 +232,12 @@ export async function discoverFromDirectory(url: string): Promise<{
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
 
-    const res = await fetch(url.startsWith("http") ? url : `https://${url}`, {
+    const res = await safeFetch(url.startsWith("http") ? url : `https://${url}`, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
       signal: controller.signal,
-      redirect: "follow",
     });
 
     clearTimeout(timeout);
@@ -179,6 +279,8 @@ export async function createLeadsFromDirectory(
   success: boolean;
   imported: number;
   filtered: number;
+  duplicates: number;
+  updated: number;
   error?: string;
 }> {
   const supabase = await createClient();
@@ -186,7 +288,7 @@ export async function createLeadsFromDirectory(
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) return { success: false, imported: 0, filtered: 0, error: "Nicht authentifiziert." };
+  if (!user) return { success: false, imported: 0, filtered: 0, duplicates: 0, updated: 0, error: "Nicht authentifiziert." };
 
   const db = createServiceClient();
 
@@ -212,16 +314,56 @@ export async function createLeadsFromDirectory(
     db.from("cancel_rules").select("*").eq("is_active", true),
   ]);
 
+  // Domain pro Firma einmal berechnen → Zeilen fuer Dedup aufbauen.
+  const rows = companies.map((company) => {
+    let domain: string | null = null;
+    if (company.website) {
+      try {
+        domain = new URL(
+          company.website.startsWith("http") ? company.website : `https://${company.website}`,
+        ).hostname.replace(/^www\./, "");
+      } catch {
+        domain = null;
+      }
+    }
+    return { company_name: company.name, website: domain };
+  });
+
+  // Interne Duplikate (gleiche Firma mehrfach auf derselben Seite)
+  const internalDups = findInternalDuplicates(rows);
+  // Bestehende Leads einmal laden (nicht pro Firma)
+  const index = await loadExistingLeadsIndex(db);
+
   let imported = 0;
   let filtered = 0;
+  let duplicates = 0;
+  let updated = 0;
 
-  for (const company of companies) {
-    const domain = company.website
-      ? new URL(company.website.startsWith("http") ? company.website : `https://${company.website}`).hostname.replace(/^www\./, "")
-      : null;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const domain = row.website;
+
+    // Internes Duplikat innerhalb des Batches → ueberspringen
+    if (internalDups.has(i)) {
+      duplicates++;
+      continue;
+    }
+
+    // DB-Duplikat (strikt: Scrape-Leads haben keine Stadt)
+    const dup = findDbDuplicateForLead(index, row, { strict: true });
+    if (dup) {
+      if (dup.archived) {
+        duplicates++;
+        continue;
+      }
+      const didUpdate = await mergeIntoExistingLead(db, dup.leadId, { website: domain }, user.id);
+      if (didUpdate) updated++;
+      else duplicates++;
+      continue;
+    }
 
     const leadData: Record<string, string | null> = {
-      company_name: company.name,
+      company_name: row.company_name,
       website: domain,
     };
 
@@ -259,8 +401,8 @@ export async function createLeadsFromDirectory(
       imported++;
     }
 
-    await db.from("leads").insert({
-      company_name: company.name,
+    const { data: newLead } = await db.from("leads").insert({
+      company_name: row.company_name,
       website: domain,
       source_type: "directory",
       source_url: sourceUrl,
@@ -271,7 +413,19 @@ export async function createLeadsFromDirectory(
       cancel_reason: cancelReason,
       cancel_rule_id: cancelRuleId,
       created_by: user.id,
-    });
+    }).select("id, crm_status_id").single();
+
+    // Frisch eingefuegten Lead in den Index aufnehmen, damit spaetere Zeilen
+    // im selben Batch dagegen matchen.
+    if (newLead) {
+      addLeadToIndex(index, {
+        id: newLead.id,
+        website: domain,
+        company_name: row.company_name,
+        city: null,
+        crm_status_id: newLead.crm_status_id ?? null,
+      });
+    }
   }
 
   // Import-Log abschließen
@@ -280,6 +434,8 @@ export async function createLeadsFromDirectory(
     .update({
       imported_count: imported,
       skipped_count: filtered,
+      duplicate_count: duplicates,
+      updated_count: updated,
       status: "completed",
     })
     .eq("id", importLog?.id);
@@ -289,12 +445,12 @@ export async function createLeadsFromDirectory(
     action: "import.directory",
     entityType: "import_log",
     entityId: importLog?.id,
-    details: { source_url: sourceUrl, total: companies.length, imported, filtered },
+    details: { source_url: sourceUrl, total: companies.length, imported, filtered, duplicates, updated },
   });
 
   revalidatePath("/leads");
   revalidatePath("/import");
   revalidatePath("/");
 
-  return { success: true, imported, filtered };
+  return { success: true, imported, filtered, duplicates, updated };
 }

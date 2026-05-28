@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Sliders, Activity, Download, Archive, Coins, Briefcase, Clock, Plug } from "lucide-react";
+import { Users, Sliders, Activity, Download, Archive, Coins, Briefcase, Clock, Plug, Copy } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { aggregateEntries, getMonthRange } from "@/lib/zeit/reports";
 import { formatHours } from "@/lib/zeit/format";
@@ -12,6 +12,7 @@ const TILES = [
   { href: "/aktivitaet", label: "Audit-Log", desc: "Wer hat wann was geaendert", icon: Activity },
   { href: "/export", label: "Export", desc: "Daten-Export (CSV)", icon: Download },
   { href: "/einstellungen/aussortierte-leads", label: "Aussortierte Leads", desc: "Archivierte Leads ansehen / wiederherstellen", icon: Archive },
+  { href: "/admin/duplikate", label: "Duplikate bereinigen", desc: "Doppelt angelegte Firmen finden und zusammenfuehren", icon: Copy },
 ];
 
 function fmtMoney(cents: number): string {

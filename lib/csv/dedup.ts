@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 // ============================================================
 // Normalisierung für Fuzzy-Matching
@@ -145,6 +146,101 @@ export interface DuplicateMatch {
   archived: boolean;
 }
 
+interface ExistingLead {
+  id: string;
+  website: string | null;
+  company_name: string | null;
+  city: string | null;
+  crm_status_id: string | null;
+}
+
+/** Einmalig geladener Snapshot aller bestehenden Leads + archivierter Status.
+ *  Wird fuer Batch-Importe einmal gebaut und pro Lead gegen findDbDuplicateForLead geprueft,
+ *  statt die DB pro Zeile neu zu laden. */
+export interface ExistingLeadsIndex {
+  existingLeads: ExistingLead[];
+  existingWithDomain: (ExistingLead & { normalizedDomain: string })[];
+  archivedSet: Set<string>;
+}
+
+/** Laedt alle bestehenden Leads + archivierte CRM-Status genau einmal. */
+export async function loadExistingLeadsIndex(
+  supabase: SupabaseClient,
+): Promise<ExistingLeadsIndex> {
+  // IDs aller archivierten Status laden — fuer das Archived-Flag im Treffer.
+  const { data: archivedRows } = await supabase
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("is_archived", true);
+  const archivedSet = new Set((archivedRows ?? []).map((r) => r.id as string));
+
+  // Alle existierenden Leads laden (paginiert — PostgREST-Limit umgehen)
+  const leads = await fetchAllRows<ExistingLead>(
+    supabase,
+    "leads",
+    "id, website, company_name, city, crm_status_id",
+  );
+  const existingWithDomain = leads
+    .filter((l) => l.website)
+    .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.website!) }));
+
+  return { existingLeads: leads, existingWithDomain, archivedSet };
+}
+
+/** Fuegt einen frisch eingefuegten Lead dem In-Memory-Index hinzu, damit spaetere
+ *  Eintraege im selben Batch gegen ihn matchen koennen. */
+export function addLeadToIndex(index: ExistingLeadsIndex, lead: ExistingLead): void {
+  index.existingLeads.push(lead);
+  if (lead.website) {
+    index.existingWithDomain.push({ ...lead, normalizedDomain: normalizeDomain(lead.website) });
+  }
+}
+
+/** Prueft einen einzelnen Lead gegen den Index.
+ *  strict=true (Scrape/URL ohne Stadt): Treffer nur bei Domain-Match ODER exaktem
+ *  normalisiertem Namen — kein reiner Fuzzy-Match, um verschiedene Firmen nicht zu mergen. */
+export function findDbDuplicateForLead(
+  index: ExistingLeadsIndex,
+  lead: { company_name?: string | null; website?: string | null; city?: string | null },
+  opts?: { strict?: boolean },
+): DuplicateMatch | null {
+  const { existingLeads, existingWithDomain, archivedSet } = index;
+  const strict = opts?.strict ?? false;
+
+  const buildMatch = (l: { id: string; crm_status_id: string | null }): DuplicateMatch => ({
+    leadId: l.id,
+    archived: l.crm_status_id != null && archivedSet.has(l.crm_status_id),
+  });
+
+  // Domain-Match (Property website = nackte Domain)
+  if (lead.website) {
+    const d = normalizeDomain(lead.website);
+    const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
+    if (match) return buildMatch(match);
+  }
+
+  // Namens-Match
+  if (lead.company_name) {
+    const match = existingLeads.find((existing) => {
+      if (!existing.company_name) return false;
+      const sameCity = !lead.city || !existing.city ||
+        lead.city.toLowerCase() === existing.city.toLowerCase();
+      if (strict) {
+        // Ohne verlaessliche Stadt nur exakter Name nach Normalisierung.
+        if (normalizeName(lead.company_name!) !== normalizeName(existing.company_name)) return false;
+        // Widersprechende Domains schliessen einen Namens-Match aus
+        // (zwei gleichnamige Firmen mit unterschiedlicher Website sind verschieden).
+        if (lead.website && existing.website && !isDomainMatch(lead.website, existing.website)) return false;
+        return sameCity;
+      }
+      return sameCity && isFuzzyMatch(lead.company_name!, existing.company_name);
+    });
+    if (match) return buildMatch(match);
+  }
+
+  return null;
+}
+
 /** Prueft Duplikate gegen die bestehende DB (Fuzzy-Match auf Domain + Firmenname).
  *  Gibt pro CSV-Zeilen-Index zurueck: bestehende Lead-ID + ob der Lead aussortiert ist. */
 export async function findDbDuplicatesDetailed(
@@ -153,54 +249,12 @@ export async function findDbDuplicatesDetailed(
 ): Promise<Map<number, DuplicateMatch>> {
   const duplicates = new Map<number, DuplicateMatch>();
 
-  // IDs aller archivierten Status laden — fuer das Archived-Flag im Treffer.
-  const { data: archivedRows } = await supabase
-    .from("custom_lead_statuses")
-    .select("id")
-    .eq("is_archived", true);
-  const archivedSet = new Set((archivedRows ?? []).map((r) => r.id as string));
+  const index = await loadExistingLeadsIndex(supabase);
+  if (index.existingLeads.length === 0) return duplicates;
 
-  // Alle existierenden Leads laden (ID, Website, Name, Stadt, CRM-Status)
-  const { data: existingLeads } = await supabase
-    .from("leads")
-    .select("id, website, company_name, city, crm_status_id");
-
-  if (!existingLeads || existingLeads.length === 0) return duplicates;
-
-  const existingWithDomain = existingLeads
-    .filter((l) => l.website)
-    .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.website!) }));
-
-  function buildMatch(lead: { id: string; crm_status_id: string | null }): DuplicateMatch {
-    return {
-      leadId: lead.id,
-      archived: lead.crm_status_id != null && archivedSet.has(lead.crm_status_id),
-    };
-  }
-
-  rows.forEach((row, index) => {
-    // Domain-Match (CSV-Row-Property heißt jetzt website, Inhalt = nackte Domain)
-    if (row.website) {
-      const d = normalizeDomain(row.website);
-      const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
-      if (match) {
-        duplicates.set(index, buildMatch(match));
-        return;
-      }
-    }
-
-    // Fuzzy Name-Match
-    if (row.company_name) {
-      const match = existingLeads.find((existing) => {
-        if (!existing.company_name) return false;
-        const sameCity = !row.city || !existing.city ||
-          row.city.toLowerCase() === existing.city.toLowerCase();
-        return sameCity && isFuzzyMatch(row.company_name!, existing.company_name);
-      });
-      if (match) {
-        duplicates.set(index, buildMatch(match));
-      }
-    }
+  rows.forEach((row, i) => {
+    const match = findDbDuplicateForLead(index, row);
+    if (match) duplicates.set(i, match);
   });
 
   return duplicates;

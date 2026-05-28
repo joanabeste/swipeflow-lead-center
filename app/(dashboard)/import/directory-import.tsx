@@ -18,7 +18,7 @@ export function DirectoryImport() {
   const [discoverPending, startDiscover] = useTransition();
   const [importPending, startImport] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ imported: number; filtered: number } | null>(null);
+  const [result, setResult] = useState<{ imported: number; filtered: number; duplicates: number; updated: number } | null>(null);
 
   function handleDiscover(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +67,7 @@ export function DirectoryImport() {
         setError(res.error);
         return;
       }
-      setResult({ imported: res.imported, filtered: res.filtered });
+      setResult({ imported: res.imported, filtered: res.filtered, duplicates: res.duplicates, updated: res.updated });
       setPhase("result");
     });
   }
@@ -220,7 +220,7 @@ export function DirectoryImport() {
       {phase === "result" && result && (
         <div className="mt-4 space-y-3">
           <div className="rounded-md bg-green-50 p-4 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
-            <Check className="mb-1 inline h-4 w-4" /> Import abgeschlossen: {result.imported} importiert, {result.filtered} gefiltert/ausgeschlossen.
+            <Check className="mb-1 inline h-4 w-4" /> Import abgeschlossen: {result.imported} importiert, {result.updated} aktualisiert, {result.duplicates} Duplikate übersprungen, {result.filtered} gefiltert/ausgeschlossen.
           </div>
           <button
             onClick={reset}
