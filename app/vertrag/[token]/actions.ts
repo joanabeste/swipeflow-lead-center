@@ -10,6 +10,7 @@ import {
   uploadSignaturePng,
   getContractFileSignedUrl,
   downloadContractFile,
+  loadProviderSignatureForPdf,
 } from "@/lib/contracts/pdf";
 import { buildRenderInput, decryptIban } from "@/lib/contracts/render";
 import { renderContractHtml } from "@/lib/contracts/template";
@@ -183,10 +184,12 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
       signed_at: signedAt,
     };
     const creditor = await loadCreditor();
+    const providerSignature = await loadProviderSignatureForPdf();
     const input = buildRenderInput(updatedContract, (leadData as ContractLead | null) ?? null, {
       mode: "pdf",
       creditor,
       ibanPlain,
+      providerSignature,
       signature: {
         dataUrl: payload.signature_data_url,
         signedAt: new Date(signedAt).toLocaleDateString("de-DE"),

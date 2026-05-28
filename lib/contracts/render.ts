@@ -30,6 +30,8 @@ export function buildRenderInput(
     mode: "view" | "pdf";
     creditor: Creditor;
     signature?: { dataUrl: string; signedAt: string; signerName: string } | null;
+    /** Hinterlegte swipeflow-Unterschrift (data:URL), falls vorhanden. */
+    providerSignature?: { dataUrl: string } | null;
     /** Klartext-IBAN (z. B. direkt beim Signieren) → korrekt maskierte Anzeige. */
     ibanPlain?: string | null;
   },
@@ -68,6 +70,7 @@ export function buildRenderInput(
     mandateReference: mandateReference(contract.id),
     sepa,
     signature: opts.signature ?? null,
+    providerSignature: opts.providerSignature ?? null,
   };
 }
 

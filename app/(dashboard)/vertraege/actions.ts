@@ -6,10 +6,19 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { checkSection } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { sendContractLinkEmail, buildContractLink } from "@/lib/email/central";
-import { renderContractPdf, uploadContractPdf } from "@/lib/contracts/pdf";
+import {
+  renderContractPdf,
+  uploadContractPdf,
+  uploadProviderSignaturePng,
+  loadProviderSignatureForPdf,
+  getContractFileSignedUrl,
+} from "@/lib/contracts/pdf";
 import { buildRenderInput, decryptIban } from "@/lib/contracts/render";
-import { loadCreditor, saveCreditor } from "@/lib/contracts/settings";
-import { getContractFileSignedUrl } from "@/lib/contracts/pdf";
+import {
+  loadCreditor,
+  saveCreditor,
+  saveProviderSignaturePath,
+} from "@/lib/contracts/settings";
 import { TEMPLATE_VERSION } from "@/lib/contracts/template";
 import type { ContractRow, ContractLead, ContractEventType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
 
@@ -401,6 +410,23 @@ export async function updateCreditorSettings(input: CreditorInput): Promise<Resu
   return { success: true };
 }
 
+/** Hinterlegt die swipeflow-Unterschrift (PNG data:URL) fürs Vertrags-PDF. */
+export async function updateProviderSignature(input: { dataUrl: string }): Promise<Result> {
+  const ctx = await checkSection("can_vertraege");
+  if (!ctx) return { error: "Nicht berechtigt." };
+  const up = await uploadProviderSignaturePng(input.dataUrl);
+  if ("error" in up) return { error: up.error };
+  const res = await saveProviderSignaturePath(up.path, ctx.user.id);
+  if (res.error) return { error: `DB-Fehler: ${res.error}` };
+  // Bereits signierte Verträge neu generieren lassen: gecachtes PDF verwerfen,
+  // damit der nächste Download die neue Unterschrift enthält.
+  const db = createServiceClient();
+  await db.from("contracts").update({ pdf_path: null }).eq("status", "signed");
+  await logAudit({ userId: ctx.user.id, action: "contract.settings", entityType: "company_settings", entityId: "default" });
+  revalidatePath("/vertraege/einstellungen");
+  return { success: true };
+}
+
 /** Liefert eine signed URL zum PDF. Generiert das PDF nach, falls es fehlt. */
 export async function getContractPdfUrl(id: string): Promise<Result<{ url: string }>> {
   const ctx = await checkSection("can_vertraege");
@@ -417,7 +443,14 @@ export async function getContractPdfUrl(id: string): Promise<Result<{ url: strin
     const signature = contract.signature_path
       ? await buildSignatureForPdf(contract)
       : null;
-    const input = buildRenderInput(contract, lead, { mode: "pdf", creditor, signature, ibanPlain });
+    const providerSignature = await loadProviderSignatureForPdf();
+    const input = buildRenderInput(contract, lead, {
+      mode: "pdf",
+      creditor,
+      signature,
+      providerSignature,
+      ibanPlain,
+    });
     try {
       const buffer = await renderContractPdf(input);
       const up = await uploadContractPdf(id, buffer);

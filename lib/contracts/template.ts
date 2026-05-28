@@ -37,6 +37,8 @@ export interface ContractRenderInput {
 
   // Unterschrift (nur im pdf-Modus)
   signature?: { dataUrl: string; signedAt: string; signerName: string } | null;
+  // Hinterlegte swipeflow-Unterschrift (nur im pdf-Modus, falls vorhanden)
+  providerSignature?: { dataUrl: string } | null;
 }
 
 function esc(s: string): string {
@@ -210,7 +212,11 @@ function signatureBlock(input: ContractRenderInput): string {
           <div class="sign-cap">${esc(input.customerName)} (Auftraggeber)</div>
         </div>
         <div class="sign-box">
-          <div class="sign-img"></div>
+          <div class="sign-img">${
+            input.providerSignature
+              ? `<img src="${input.providerSignature.dataUrl}" alt="Unterschrift swipeflow" />`
+              : ""
+          }</div>
           <div class="sign-line">swipeflow GmbH</div>
           <div class="sign-cap">Dienstleister</div>
         </div>

@@ -49,6 +49,42 @@ export interface SaveCreditorInput {
   updatedBy: string | null;
 }
 
+/** Liest den Pfad der hinterlegten swipeflow-Unterschrift (oder null). */
+export async function loadProviderSignaturePath(): Promise<string | null> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("company_settings")
+    .select("provider_signature_path")
+    .eq("id", "default")
+    .maybeSingle();
+  if (error || !data) {
+    if (error) console.error("[loadProviderSignaturePath]", error);
+    return null;
+  }
+  const path = (data.provider_signature_path ?? "").trim();
+  return path.length > 0 ? path : null;
+}
+
+/** Speichert den Pfad der hinterlegten swipeflow-Unterschrift in der Singleton-Zeile. */
+export async function saveProviderSignaturePath(
+  path: string,
+  updatedBy: string | null,
+): Promise<{ error?: string }> {
+  const db = createServiceClient();
+  const { error } = await db.from("company_settings").upsert({
+    id: "default",
+    provider_signature_path: path,
+    provider_signature_updated_at: new Date().toISOString(),
+    updated_by: updatedBy,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.error("[saveProviderSignaturePath]", error);
+    return { error: error.message };
+  }
+  return {};
+}
+
 /** Speichert die Gläubigerdaten in der Singleton-Zeile. Leere Felder → null (Env-Fallback). */
 export async function saveCreditor(input: SaveCreditorInput): Promise<{ error?: string }> {
   const norm = (v: string) => {
