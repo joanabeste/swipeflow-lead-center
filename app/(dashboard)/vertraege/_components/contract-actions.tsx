@@ -83,6 +83,18 @@ export function ContractActions({
     router.refresh();
   }
 
+  async function cancel() {
+    if (
+      status === "signed" &&
+      !window.confirm(
+        "Diesen bereits unterschriebenen Vertrag wirklich stornieren? Der Vertrag gilt damit als aufgehoben.",
+      )
+    ) {
+      return;
+    }
+    run("cancel", () => cancelContract(id));
+  }
+
   async function remove() {
     if (!window.confirm("Diesen Vertrag endgültig löschen? Das kann nicht rückgängig gemacht werden.")) return;
     setError(null);
@@ -99,7 +111,7 @@ export function ContractActions({
   const canSend = status !== "signed" && status !== "cancelled";
   const isResend = (status === "sent" || status === "viewed") && !!link;
   const canExtend = expired && (status === "sent" || status === "viewed");
-  const canCancel = status !== "signed" && status !== "cancelled";
+  const canCancel = status !== "cancelled";
   const canDownload = status === "signed";
   const canDelete = status === "draft" || status === "cancelled";
 
@@ -132,7 +144,7 @@ export function ContractActions({
           </Button>
         )}
         {canCancel && (
-          <Button onClick={() => run("cancel", () => cancelContract(id))} busy={busy === "cancel"} variant="danger">
+          <Button onClick={cancel} busy={busy === "cancel"} variant="danger">
             <Ban className="h-4 w-4" /> Stornieren
           </Button>
         )}

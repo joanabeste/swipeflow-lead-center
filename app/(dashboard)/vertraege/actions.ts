@@ -346,7 +346,7 @@ export async function cancelContract(id: string): Promise<Result> {
   if (!ctx) return { error: "Nicht berechtigt." };
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
-  if (contract.status === "signed") return { error: "Unterschriebene Verträge können nicht storniert werden." };
+  if (contract.status === "cancelled") return { error: "Vertrag ist bereits storniert." };
 
   const db = createServiceClient();
   const { error } = await db.from("contracts").update({ status: "cancelled" }).eq("id", id);
