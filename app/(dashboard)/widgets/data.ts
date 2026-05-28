@@ -109,8 +109,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     // E-Mails 7 Tage: sent/failed pro Tag.
     db.from("email_messages").select("status, sent_at")
       .gte("sent_at", sevenDaysIso),
-    // Anrufe 90 Tage (für filterbares Trend-Widget).
-    db.from("lead_calls").select("direction, status, started_at")
+    // Anrufe 90 Tage (für filterbares Trend-Widget + Pro-Nutzer-Statistik).
+    db.from("lead_calls").select("created_by, direction, status, started_at")
       .gte("started_at", ninetyDaysAgoIso),
     // Abgeschlossene Deals der letzten 12 Monate (für Trend-Widget).
     db.from("deals").select("stage_id, amount_cents, actual_close_date")
@@ -318,6 +318,35 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   }
   const callsByDay90 = Object.entries(callsByDay90Buckets).map(([date, v]) => ({ date, ...v }));
 
+  // Team-Anrufe pro Nutzer: aus den 90-Tage-Calls je Nutzer in den Fenstern
+  // 7/30/90 Tage zaehlen (rollierend). Client schaltet zwischen den Fenstern um.
+  const cutoff7 = Date.now() - 7 * 24 * 3600_000;
+  const cutoff30 = Date.now() - 30 * 24 * 3600_000;
+  const teamCallAgg = new Map<string, { d7: number; d30: number; d90: number }>();
+  for (const c of (calls90d.data ?? []) as Array<{ created_by: string | null; started_at: string }>) {
+    if (!c.created_by) continue;
+    const t = new Date(c.started_at).getTime();
+    const cur = teamCallAgg.get(c.created_by) ?? { d7: 0, d30: 0, d90: 0 };
+    cur.d90++;
+    if (t >= cutoff30) cur.d30++;
+    if (t >= cutoff7) cur.d7++;
+    teamCallAgg.set(c.created_by, cur);
+  }
+  const teamCallUserIds = Array.from(teamCallAgg.keys());
+  const teamCallNames = new Map<string, string>();
+  if (teamCallUserIds.length > 0) {
+    const { data: tcProfiles } = await db
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", teamCallUserIds);
+    for (const p of (tcProfiles ?? []) as Array<{ id: string; name: string | null; email: string | null }>) {
+      teamCallNames.set(p.id, p.name ?? p.email ?? "Unbekannt");
+    }
+  }
+  const teamCallStats = teamCallUserIds
+    .map((id) => ({ userId: id, name: teamCallNames.get(id) ?? "Unbekannt", ...teamCallAgg.get(id)! }))
+    .sort((a, b) => b.d90 - a.d90);
+
   // Deal-Abschlüsse 12 Monate — monatliche Aggregation.
   const dealsByMonth12Buckets: Record<string, { won: number; lost: number; wonAmountCents: number; lostAmountCents: number }> = {};
   for (let i = 11; i >= 0; i--) {
@@ -407,6 +436,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     emailsSent7d,
     emailsFailed7d,
     callsByDay90,
+    teamCallStats,
     dealsByMonth12,
     openTodoItems,
     userId,

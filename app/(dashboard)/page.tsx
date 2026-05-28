@@ -12,6 +12,7 @@ import {
   MotivationalQuoteWidget, DealTrendsWidget, OpenTodosWidget,
 } from "./widgets/widgets";
 import { CallTrendsWidget } from "./widgets/call-trends-widget";
+import { TeamCallStatsWidget } from "./widgets/_widgets/team-call-stats-widget";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -74,6 +75,7 @@ function renderWidget(key: string, data: Awaited<ReturnType<typeof loadDashboard
     case "follow-up-reminder": return <FollowUpReminderWidget data={data} />;
     case "open-todos": return <OpenTodosWidget data={data} />;
     case "team-leaderboard": return <TeamLeaderboardWidget data={data} />;
+    case "team-call-stats": return <TeamCallStatsWidget data={data} />;
     case "deal-summary": return <DealSummaryWidget data={data} />;
     case "email-stats-7d": return <EmailStats7dWidget data={data} />;
     case "motivational-quote": return <MotivationalQuoteWidget />;

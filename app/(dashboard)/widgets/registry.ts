@@ -59,6 +59,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 45, defaultWidth: "full" },
   { key: "follow-up-reminder", label: "Überfällige Follow-Ups", description: "Todo-Leads ohne Kontakt seit > 7 Tagen", defaultVisible: false, defaultOrder: 29, defaultWidth: "half" },
   { key: "team-leaderboard", label: "Team-Leaderboard heute", description: "Anrufe pro Nutzer als Scoreboard", defaultVisible: false, defaultOrder: 33, defaultWidth: "half" },
+  { key: "team-call-stats", label: "Team — Anrufe pro Nutzer", description: "Anrufe je Nutzer + Team-Gesamt, umschaltbar 7/30/90 Tage", defaultVisible: true, defaultOrder: 34, defaultWidth: "half" },
   { key: "email-stats-7d", label: "E-Mail-Performance (7 Tage)", description: "Versand-Stats seit SMTP aktiv ist", defaultVisible: false, defaultOrder: 46, defaultWidth: "full" },
 ];
 
