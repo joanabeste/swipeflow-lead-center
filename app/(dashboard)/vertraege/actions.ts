@@ -175,9 +175,10 @@ function typeSpecificColumns(
   }
   if (type === "content") {
     const onsite = !!input.onsite_production;
-    const interval = onsite ? Math.round(input.onsite_interval_months ?? 3) : null;
-    if (onsite && (!interval || interval < 1)) {
-      return { error: "Bitte ein gültiges Vor-Ort-Intervall (Monate) angeben." };
+    // Leeres Intervall bei aktivierter Vor-Ort-Produktion = "nach Bedarf".
+    const interval = onsite && input.onsite_interval_months != null ? Math.round(input.onsite_interval_months) : null;
+    if (interval != null && interval < 1) {
+      return { error: "Ungültiges Vor-Ort-Intervall (Monate)." };
     }
     const minTerm = Math.round(input.min_term_months ?? 0);
     if (!Number.isFinite(minTerm) || minTerm < 0) return { error: "Ungültige Mindestlaufzeit." };

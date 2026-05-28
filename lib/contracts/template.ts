@@ -671,10 +671,16 @@ function onsiteSection(input: ContractRenderInput): string {
   if (!input.onsiteProduction) {
     return `<p>(1) Eine Vor-Ort-Content-Produktion ist in diesem Vertrag nicht enthalten.</p>`;
   }
-  const interval = input.onsiteIntervalMonths && input.onsiteIntervalMonths >= 1 ? input.onsiteIntervalMonths : 3;
-  const rhythmus = interval === 1 ? "monatlich" : `in der Regel alle ${interval} Monate`;
+  const interval = input.onsiteIntervalMonths;
+  // Bewusst vage formuliert — kein fest geschuldeter Rhythmus. Ein gesetztes
+  // Intervall erscheint nur als unverbindliche Orientierung.
+  const orientierung = interval && interval >= 1
+    ? interval === 1
+      ? " (in der Regel etwa monatlich)"
+      : ` (in der Regel etwa alle ${interval} Monate)`
+    : "";
   return `
-    <p>(1) Zusätzlich zur laufenden Betreuung erstellt die Agentur ${rhythmus} vor Ort beim Kunden neues Foto- und/oder Videomaterial für die zukünftige Content-Erstellung.</p>
+    <p>(1) Zusätzlich zur laufenden Betreuung erstellt die Agentur von Zeit zu Zeit – nach Bedarf und in Absprache mit dem Kunden${orientierung} – vor Ort neues Foto- und/oder Videomaterial für die zukünftige Content-Erstellung.</p>
     <p>(2) Dabei entstehen insbesondere:</p>
     <ul>
       <li>Fotoaufnahmen vor Ort,</li>
@@ -682,7 +688,7 @@ function onsiteSection(input: ContractRenderInput): string {
       <li>Team- und Alltagseinblicke,</li>
       <li>Sammlung neuer Inhalte für kommende Beiträge.</li>
     </ul>
-    <p>(3) Die Termine werden rechtzeitig zwischen den Parteien abgestimmt. Der Kunde stellt den Zugang und die erforderliche Mitwirkung sicher.</p>
+    <p>(3) Ein bestimmter Rhythmus oder eine Mindestanzahl an Vor-Ort-Terminen wird hierdurch nicht geschuldet. Die konkreten Termine werden rechtzeitig zwischen den Parteien abgestimmt; der Kunde stellt den Zugang und die erforderliche Mitwirkung sicher.</p>
   `;
 }
 

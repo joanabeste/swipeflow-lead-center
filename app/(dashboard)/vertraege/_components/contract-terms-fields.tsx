@@ -95,11 +95,14 @@ export function ContractTermsFields({
               {value.onsiteProduction && (
                 <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                   alle
-                  <input inputMode="numeric" value={value.onsiteIntervalMonths} onChange={(e) => set({ onsiteIntervalMonths: e.target.value })} className={`${inputCls} max-w-[64px]`} />
+                  <input inputMode="numeric" value={value.onsiteIntervalMonths} onChange={(e) => set({ onsiteIntervalMonths: e.target.value })} className={`${inputCls} max-w-[64px]`} placeholder="—" />
                   Monate
                 </span>
               )}
             </div>
+            {value.onsiteProduction && (
+              <p className="mt-1 text-[11px] text-gray-400">Leer lassen für „nach Bedarf“ (kein festes Intervall).</p>
+            )}
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Vertragsbeginn (optional)">
