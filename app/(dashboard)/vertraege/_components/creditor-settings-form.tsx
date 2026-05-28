@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { updateCreditorSettings, updateProviderSignature } from "../actions";
 import { Button } from "@/components/ui/button";
+import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
 import { Section, Field, inputCls } from "./contract-terms-fields";
 
 export function CreditorSettingsForm({
@@ -40,6 +41,37 @@ export function CreditorSettingsForm({
   const [sigBusy, setSigBusy] = useState(false);
   const [sigError, setSigError] = useState<string | null>(null);
   const [sigSaved, setSigSaved] = useState(false);
+  const padRef = useRef<SignaturePadHandle>(null);
+
+  async function saveSignatureDataUrl(dataUrl: string) {
+    setSigBusy(true);
+    const res = await updateProviderSignature({ dataUrl });
+    setSigBusy(false);
+    if ("error" in res) {
+      setSigError(res.error);
+      return false;
+    }
+    setSigSaved(true);
+    setTimeout(() => setSigSaved(false), 2500);
+    router.refresh();
+    return true;
+  }
+
+  async function saveDrawnSignature() {
+    setSigError(null);
+    setSigSaved(false);
+    if (padRef.current?.isEmpty()) {
+      setSigError("Bitte zuerst im Feld unterschreiben.");
+      return;
+    }
+    const dataUrl = padRef.current?.toDataUrl();
+    if (!dataUrl) {
+      setSigError("Unterschrift konnte nicht gelesen werden.");
+      return;
+    }
+    const ok = await saveSignatureDataUrl(dataUrl);
+    if (ok) padRef.current?.clear();
+  }
 
   async function onSignatureFile(file: File) {
     setSigError(null);
@@ -54,16 +86,7 @@ export function CreditorSettingsForm({
       reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     });
-    setSigBusy(true);
-    const res = await updateProviderSignature({ dataUrl });
-    setSigBusy(false);
-    if ("error" in res) {
-      setSigError(res.error);
-      return;
-    }
-    setSigSaved(true);
-    setTimeout(() => setSigSaved(false), 2500);
-    router.refresh();
+    await saveSignatureDataUrl(dataUrl);
   }
 
   return (
@@ -83,7 +106,15 @@ export function CreditorSettingsForm({
         ) : (
           <p className="text-xs text-gray-400">Noch keine Unterschrift hinterlegt.</p>
         )}
-        <Field label="Unterschrift (PNG) hochladen">
+        <Field label="Hier unterschreiben">
+          <SignaturePad ref={padRef} />
+          <div className="mt-2">
+            <Button onClick={saveDrawnSignature} busy={sigBusy} size="sm">
+              Unterschrift übernehmen
+            </Button>
+          </div>
+        </Field>
+        <Field label="Alternativ: Unterschrift (PNG) hochladen">
           <input
             type="file"
             accept="image/png"
