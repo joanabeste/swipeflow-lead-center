@@ -51,7 +51,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
   const [address, setAddress] = useState<AddressState>(EMPTY_ADDRESS);
   const [terms, setTerms] = useState<TermsState>(DEFAULT_TERMS);
 
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<"draft" | "create" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selected = useMemo(
@@ -82,7 +82,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
     setAddress(EMPTY_ADDRESS);
   }
 
-  async function submit() {
+  async function submit(target: "draft" | "create") {
     setError(null);
     if (mode === "pick" && !selectedId) {
       setError("Bitte einen Kunden auswählen oder „Neuer Kunde“ wählen.");
@@ -92,7 +92,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
       setError("Bitte einen Firmennamen für den neuen Kunden angeben.");
       return;
     }
-    setBusy(true);
+    setPending(target);
     const res = await createContract({
       lead_id: mode === "pick" ? selectedId : undefined,
       new_customer: mode === "new" ? { company_name: ncName, city: ncCity, email: ncEmail } : undefined,
@@ -103,12 +103,12 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
       payment_method: terms.paymentMethod,
       billing: address,
     });
-    setBusy(false);
     if ("error" in res) {
+      setPending(null);
       setError(res.error);
       return;
     }
-    router.push(`/vertraege/${res.id}`);
+    router.push(target === "draft" ? "/vertraege" : `/vertraege/${res.id}`);
   }
 
   return (
@@ -216,8 +216,22 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</p>}
 
-      <div className="flex justify-end">
-        <Button onClick={submit} busy={busy} size="md">
+      <div className="flex flex-wrap justify-end gap-3">
+        <Button
+          variant="secondary"
+          onClick={() => submit("draft")}
+          busy={pending === "draft"}
+          disabled={pending !== null}
+          size="md"
+        >
+          Als Entwurf speichern
+        </Button>
+        <Button
+          onClick={() => submit("create")}
+          busy={pending === "create"}
+          disabled={pending !== null}
+          size="md"
+        >
           Vertrag anlegen
         </Button>
       </div>
