@@ -1,3 +1,5 @@
+import { safeFetch } from "@/lib/net/safe-fetch";
+
 export interface FetchedPage {
   url: string;
   content: string;
@@ -208,10 +210,9 @@ export async function fetchCompanyPages(
     for (const kp of karrierePages) {
       // Hole Original-HTML noch mal, weil cleaned content keine href-Attribute hat
       try {
-        const r = await fetch(kp.url, {
+        const r = await safeFetch(kp.url, {
           headers: { "User-Agent": USER_AGENT },
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          redirect: "follow",
         });
         if (!r.ok) continue;
         const html = await r.text();
@@ -286,10 +287,9 @@ async function fetchPage(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    const res = await fetch(url, {
+    const res = await safeFetch(url, {
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
-      redirect: "follow",
     });
 
     clearTimeout(timeout);
@@ -345,10 +345,9 @@ async function fetchIframeContents(html: string, baseUrl: string): Promise<strin
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      const r = await fetch(src, {
+      const r = await safeFetch(src, {
         headers: { "User-Agent": USER_AGENT },
         signal: controller.signal,
-        redirect: "follow",
       });
       clearTimeout(timeout);
       if (!r.ok) continue;
