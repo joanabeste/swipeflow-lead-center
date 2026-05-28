@@ -303,18 +303,19 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // Anrufe 90 Tage — tägliche Aggregation in Berlin-Zeit. Ergibt 90 Einträge
   // mit direction-Breakdown; der Client filtert/aggregiert später auf
   // 7/30/90 Tage bzw. wöchentliche Bündel.
-  const callsByDay90Buckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
+  const callsByDay90Buckets: Record<string, { outbound: number; inbound: number; missed: number; byUser: Record<string, number> }> = {};
   for (let i = 89; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    callsByDay90Buckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0 };
+    callsByDay90Buckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0, byUser: {} };
   }
-  for (const c of (calls90d.data ?? []) as Array<{ direction: string; status: string; started_at: string }>) {
+  for (const c of (calls90d.data ?? []) as Array<{ created_by: string | null; direction: string; status: string; started_at: string }>) {
     const key = toBerlinDayKey(c.started_at);
     const bucket = callsByDay90Buckets[key];
     if (!bucket) continue;
     if (c.status === "missed") bucket.missed++;
     else if (c.direction === "inbound") bucket.inbound++;
     else bucket.outbound++;
+    if (c.created_by) bucket.byUser[c.created_by] = (bucket.byUser[c.created_by] ?? 0) + 1;
   }
   const callsByDay90 = Object.entries(callsByDay90Buckets).map(([date, v]) => ({ date, ...v }));
 
