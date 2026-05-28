@@ -19,14 +19,19 @@ export interface ContractListItem {
   company_name: string | null;
 }
 
-export async function loadContracts(): Promise<ContractListItem[]> {
+export async function loadContracts(opts?: { recurringOnly?: boolean }): Promise<ContractListItem[]> {
   const db = await createClient();
-  const { data, error } = await db
+  let query = db
     .from("contracts")
     .select(
       "id, type, status, setup_price_cents, monthly_maint_cents, sent_at, signed_at, expires_at, created_at, leads:lead_id(company_name)",
     )
     .order("created_at", { ascending: false });
+  // Wiederkehrend = aktive (unterschriebene) Verträge mit monatlichem Hosting/Wartungsanteil.
+  if (opts?.recurringOnly) {
+    query = query.gt("monthly_maint_cents", 0).eq("status", "signed");
+  }
+  const { data, error } = await query;
   if (error) {
     console.error("[loadContracts]", error);
     return [];
