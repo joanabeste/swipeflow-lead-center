@@ -33,6 +33,11 @@ export function PublicContractView({
   const [iban, setIban] = useState("");
   const [mandate, setMandate] = useState(false);
 
+  const [acceptContract, setAcceptContract] = useState(false);
+  const [acceptCosts, setAcceptCosts] = useState(false);
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [confirmData, setConfirmData] = useState(false);
+
   const sigRef = useRef<SignaturePadHandle>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +57,10 @@ export function PublicContractView({
       billing_city: city,
       billing_email: email,
       signature_data_url: sigData,
+      accept_contract: acceptContract,
+      accept_costs: acceptCosts,
+      accept_privacy: acceptPrivacy,
+      confirm_data_correct: confirmData,
     };
     if (paymentMethod === "sepa") {
       payload.sepa_account_holder = holder;
@@ -67,6 +76,13 @@ export function PublicContractView({
     }
     setDone(true);
   }
+
+  const allConsentsGiven =
+    acceptContract &&
+    acceptCosts &&
+    acceptPrivacy &&
+    confirmData &&
+    (paymentMethod !== "sepa" || mandate);
 
   if (done) {
     return (
@@ -144,6 +160,26 @@ export function PublicContractView({
           )}
 
           <fieldset className="space-y-3 border-t border-gray-100 pt-5">
+            <legend className="text-sm font-semibold text-gray-900">Bestätigungen</legend>
+            <Consent checked={acceptContract} onChange={setAcceptContract}>
+              Ich nehme den oben dargestellten Vertrag verbindlich an.
+            </Consent>
+            <Consent checked={acceptCosts} onChange={setAcceptCosts}>
+              Ich habe die im Vertrag genannten Kosten zur Kenntnis genommen und akzeptiere sie.
+            </Consent>
+            <Consent checked={acceptPrivacy} onChange={setAcceptPrivacy}>
+              Ich habe die{" "}
+              <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
+                Datenschutzerklärung
+              </a>{" "}
+              gelesen und stimme der Verarbeitung meiner Daten zu.
+            </Consent>
+            <Consent checked={confirmData} onChange={setConfirmData}>
+              Ich bestätige die Richtigkeit meiner Angaben.
+            </Consent>
+          </fieldset>
+
+          <fieldset className="space-y-3 border-t border-gray-100 pt-5">
             <legend className="text-sm font-semibold text-gray-900">Unterschrift</legend>
             <SignaturePad ref={sigRef} />
           </fieldset>
@@ -152,7 +188,7 @@ export function PublicContractView({
 
           <button
             onClick={submit}
-            disabled={busy}
+            disabled={busy || !allConsentsGiven}
             className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -165,6 +201,26 @@ export function PublicContractView({
 }
 
 const inp = "w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-gray-500 focus:outline-none";
+
+// Öffentliche Datenschutzerklärung — bei Bedarf anpassen.
+const PRIVACY_URL = "https://swipeflow.agency/datenschutz";
+
+function Consent({
+  checked,
+  onChange,
+  children,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex items-start gap-2 text-sm text-gray-600">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-0.5" />
+      <span>{children}</span>
+    </label>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -24,6 +24,10 @@ export interface SubmitPayload {
   sepa_iban?: string;
   mandate_accepted?: boolean;
   signature_data_url: string;
+  accept_contract?: boolean;
+  accept_costs?: boolean;
+  accept_privacy?: boolean;
+  confirm_data_correct?: boolean;
 }
 
 type Result = { success: true } | { error: string };
@@ -51,6 +55,16 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(req(payload.billing_email))) {
     return { error: "Bitte geben Sie eine gültige E-Mail-Adresse an." };
+  }
+
+  // Pflicht-Einwilligungen (Vertragsannahme, Kosten, Datenschutz, Richtigkeit)
+  if (
+    !payload.accept_contract ||
+    !payload.accept_costs ||
+    !payload.accept_privacy ||
+    !payload.confirm_data_correct
+  ) {
+    return { error: "Bitte bestätigen Sie alle Pflichtangaben." };
   }
 
   // SEPA-Validierung
@@ -115,7 +129,7 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
     return { error: "Dieser Vertrag wurde bereits unterschrieben." };
   }
 
-  // Event protokollieren (IP / User-Agent)
+  // Event protokollieren (IP / User-Agent + Einwilligungs-Nachweis).
   const hdrs = await headers();
   const ip = hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const ua = hdrs.get("user-agent") ?? null;
@@ -123,7 +137,18 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
     contract_id: contract.id,
     event: "signed",
     actor_user_id: null,
-    meta: { ip, user_agent: ua },
+    meta: {
+      ip,
+      user_agent: ua,
+      consents: {
+        contract: true,
+        costs: true,
+        privacy: true,
+        data_correct: true,
+        sepa_mandate: contract.payment_method === "sepa" ? true : null,
+        accepted_at: signedAt,
+      },
+    },
   });
 
   // PDF generieren (best-effort — Signatur ist bereits gespeichert).
