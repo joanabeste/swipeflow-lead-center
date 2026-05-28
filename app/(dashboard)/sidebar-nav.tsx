@@ -158,6 +158,7 @@ const vertraegeSection: Section = {
     { items: [
       { href: "/vertraege", label: "Uebersicht", icon: FileSignature },
       { href: "/vertraege/neu", label: "Neuer Vertrag", icon: FilePlus },
+      { href: "/vertraege/einstellungen", label: "Einstellungen", icon: Settings },
     ]},
   ],
 };

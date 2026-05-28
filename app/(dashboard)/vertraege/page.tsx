@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileSignature, Plus, Settings } from "lucide-react";
+import { FileSignature, Plus } from "lucide-react";
 import { loadContracts } from "@/lib/contracts/data";
 import { formatEuro } from "@/lib/contracts/format";
 import { buttonClasses } from "@/components/ui/button";
@@ -31,14 +31,9 @@ export default async function VertraegeListePage({ searchParams }: Props) {
             Kundenverträge erstellen, versenden und nachverfolgen
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/vertraege/einstellungen" className={buttonClasses("secondary", "sm")}>
-            <Settings className="h-4 w-4" /> Einstellungen
-          </Link>
-          <Link href="/vertraege/neu" className={buttonClasses("primary", "sm")}>
-            <Plus className="h-4 w-4" /> Neuer Vertrag
-          </Link>
-        </div>
+        <Link href="/vertraege/neu" className={buttonClasses("primary", "sm")}>
+          <Plus className="h-4 w-4" /> Neuer Vertrag
+        </Link>
       </div>
 
       <div className="flex gap-1 border-b border-gray-200 dark:border-[#2c2c2e]/50">
