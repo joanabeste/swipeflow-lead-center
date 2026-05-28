@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Pencil,
   FileSignature,
+  FilePlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SectionPermissions, UserRole } from "@/lib/types";
@@ -50,7 +51,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
-type SectionId = "vertrieb" | "fulfillment" | "zeit" | "learning" | "admin";
+type SectionId = "vertrieb" | "fulfillment" | "zeit" | "learning" | "vertraege" | "admin";
 
 interface Section {
   id: SectionId;
@@ -147,6 +148,20 @@ const learningSection: Section = {
   ],
 };
 
+const vertraegeSection: Section = {
+  id: "vertraege",
+  label: "Verträge",
+  icon: FileSignature,
+  defaultPath: "/admin/vertraege",
+  requires: "admin",
+  groups: [
+    { items: [
+      { href: "/admin/vertraege", label: "Uebersicht", icon: FileSignature },
+      { href: "/admin/vertraege/neu", label: "Neuer Vertrag", icon: FilePlus },
+    ]},
+  ],
+};
+
 const adminSection: Section = {
   id: "admin",
   label: "Admin",
@@ -158,7 +173,6 @@ const adminSection: Section = {
       { href: "/admin", label: "Uebersicht", icon: LayoutDashboard },
       { href: "/admin/team", label: "Team & Nutzer", icon: Users },
       { href: "/admin/provisionen", label: "Provisionen & Loehne", icon: Coins },
-      { href: "/admin/vertraege", label: "Vertraege", icon: FileSignature },
       { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
       { href: "/admin/einstellungen/integrationen", label: "Integrationen", icon: CheckSquare },
     ]},
@@ -175,7 +189,7 @@ const adminSection: Section = {
   ],
 };
 
-const ALL_SECTIONS: Section[] = [vertriebSection, fulfillmentSection, learningSection, zeitSection, adminSection];
+const ALL_SECTIONS: Section[] = [vertriebSection, fulfillmentSection, learningSection, zeitSection, vertraegeSection, adminSection];
 
 const SECTION_STORAGE_KEY = "lead-center:active-section";
 
@@ -215,7 +229,7 @@ export function SidebarNav({
     // (z.B. /einstellungen/standort, /einstellungen/anreicherung, etc.). So bleibt der
     // Switcher auf Admin, wenn der User in einem Sub-Setting ist.
     const adminContext =
-      pathname.startsWith("/admin") ||
+      (pathname.startsWith("/admin") && !pathname.startsWith("/admin/vertraege")) ||
       pathname.startsWith("/einstellungen") ||
       pathname.startsWith("/nutzer") ||
       pathname.startsWith("/zeit/admin") ||
@@ -259,6 +273,7 @@ export function SidebarNav({
     if (href === "/") return pathname === "/";
     if (href === "/zeit") return pathname === "/zeit";
     if (href === "/admin") return pathname === "/admin";
+    if (href === "/admin/vertraege") return pathname === "/admin/vertraege";
     return pathname.startsWith(href);
   }
 
