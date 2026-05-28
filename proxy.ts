@@ -24,6 +24,25 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: request.headers } });
   }
 
+  // ─── Öffentliche Vertrags-Route: Kunde unterschreibt ohne Login ───
+  if (request.nextUrl.pathname.startsWith("/vertrag/")) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
+  // ─── Extern aufgerufene API-Routes ohne Session-Cookie ────────────
+  // Vercel-Crons (Bearer CRON_SECRET) und der PhoneMondo-Webhook (HMAC) tragen
+  // kein Auth-Cookie. Ohne diese Ausnahme würde das Auth-Gate unten sie auf
+  // /login umleiten, bevor der Route-Handler seine eigene Prüfung erreicht.
+  // Die Routes authentifizieren sich selbst (CRON_SECRET / Signatur).
+  const apiPath = request.nextUrl.pathname;
+  if (
+    apiPath.startsWith("/api/cron/") ||
+    apiPath.startsWith("/api/phonemondo/") ||
+    apiPath === "/api/webex/sync-recordings"
+  ) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
   const response = NextResponse.next({
     request: { headers: request.headers },
   });

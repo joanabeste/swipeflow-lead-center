@@ -30,6 +30,7 @@ import {
   BookOpen,
   TrendingUp,
   Pencil,
+  FileSignature,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SectionPermissions, UserRole } from "@/lib/types";
@@ -157,6 +158,7 @@ const adminSection: Section = {
       { href: "/admin", label: "Uebersicht", icon: LayoutDashboard },
       { href: "/admin/team", label: "Team & Nutzer", icon: Users },
       { href: "/admin/provisionen", label: "Provisionen & Loehne", icon: Coins },
+      { href: "/admin/vertraege", label: "Vertraege", icon: FileSignature },
       { href: "/admin/einstellungen", label: "Globale Einstellungen", icon: Sliders },
       { href: "/admin/einstellungen/integrationen", label: "Integrationen", icon: CheckSquare },
     ]},

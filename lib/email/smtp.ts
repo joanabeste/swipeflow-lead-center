@@ -66,10 +66,16 @@ export async function verifySmtp(
   }
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 /** Sendet eine E-Mail. */
 export async function sendEmail(
   config: SmtpConfig,
-  mail: { to: string; subject: string; body: string },
+  mail: { to: string; subject: string; body: string; attachments?: EmailAttachment[] },
 ): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
   try {
     const transporter = createTransport(config);
@@ -78,6 +84,11 @@ export async function sendEmail(
       to: mail.to,
       subject: mail.subject,
       text: mail.body,
+      attachments: mail.attachments?.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.contentType,
+      })),
     });
     transporter.close();
     return { ok: true, messageId: info.messageId };
