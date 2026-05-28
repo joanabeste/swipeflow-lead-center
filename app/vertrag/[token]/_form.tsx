@@ -163,97 +163,156 @@ export function PublicContractView({
         <header className="text-center">
           <h1 className="text-lg font-semibold text-gray-900">swipeflow GmbH — Vertrag</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Bitte prüfen Sie den Vertrag, ergänzen Sie Ihre Daten und unterschreiben Sie unten.
+            {step === 1
+              ? "Schritt 1 von 2 — Bitte ergänzen Sie Ihre Daten."
+              : "Schritt 2 von 2 — Bitte prüfen Sie den Vertrag und unterschreiben Sie."}
           </p>
+          <StepDots step={step} />
         </header>
 
-        {/* Vertragstext (isoliert im iframe) */}
-        <div className="space-y-2">
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => {
-                const blob = new Blob([contractHtml], { type: "text/html" });
-                window.open(URL.createObjectURL(blob), "_blank");
-              }}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
-            >
-              <ExternalLink className="h-3.5 w-3.5" /> In neuem Tab öffnen
-            </button>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <iframe title="Vertrag" srcDoc={contractHtml} className="h-[80vh] w-full" />
-          </div>
-        </div>
-
-        {/* Formular */}
-        <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <fieldset className="space-y-4">
-            <legend className="text-sm font-semibold text-gray-900">Rechnungsanschrift</legend>
-            <Field label="Firma / Name *"><input className={inp} value={company} onChange={(e) => setCompany(e.target.value)} /></Field>
-            <Field label="Straße & Hausnummer *"><input className={inp} value={street} onChange={(e) => setStreet(e.target.value)} /></Field>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-1"><Field label="PLZ *"><input className={inp} value={zip} onChange={(e) => setZip(e.target.value)} /></Field></div>
-              <div className="col-span-2"><Field label="Ort *"><input className={inp} value={city} onChange={(e) => setCity(e.target.value)} /></Field></div>
-            </div>
-            <Field label="E-Mail *"><input type="email" className={inp} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-          </fieldset>
-
-          {paymentMethod === "sepa" && (
-            <fieldset className="space-y-4 border-t border-gray-100 pt-5">
-              <legend className="text-sm font-semibold text-gray-900">SEPA-Lastschriftmandat</legend>
-              <Field label="Kontoinhaber *"><input className={inp} value={holder} onChange={(e) => setHolder(e.target.value)} /></Field>
-              <Field label="IBAN *">
-                <input className={inp} value={iban} onChange={(e) => setIban(e.target.value)} placeholder="DE.. .. .. .." autoComplete="off" />
-              </Field>
-              <label className="flex items-start gap-2 text-sm text-gray-600">
-                <input type="checkbox" checked={mandate} onChange={(e) => setMandate(e.target.checked)} className="mt-0.5" />
-                <span>
-                  Ich ermächtige die swipeflow GmbH, Zahlungen von meinem Konto per SEPA-Lastschrift einzuziehen,
-                  und weise mein Kreditinstitut an, die Lastschriften einzulösen.
-                </span>
-              </label>
+        {step === 1 ? (
+          <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <fieldset className="space-y-4">
+              <legend className="text-sm font-semibold text-gray-900">Rechnungsanschrift</legend>
+              <Field label="Firma / Name *"><input className={inp} value={company} onChange={(e) => setCompany(e.target.value)} /></Field>
+              <Field label="Straße & Hausnummer *"><input className={inp} value={street} onChange={(e) => setStreet(e.target.value)} /></Field>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1"><Field label="PLZ *"><input className={inp} value={zip} onChange={(e) => setZip(e.target.value)} /></Field></div>
+                <div className="col-span-2"><Field label="Ort *"><input className={inp} value={city} onChange={(e) => setCity(e.target.value)} /></Field></div>
+              </div>
+              <Field label="E-Mail *"><input type="email" className={inp} value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
             </fieldset>
-          )}
 
-          <fieldset className="space-y-3 border-t border-gray-100 pt-5">
-            <legend className="text-sm font-semibold text-gray-900">Bestätigungen</legend>
-            <Consent checked={acceptContract} onChange={setAcceptContract}>
-              Ich nehme den oben dargestellten Vertrag verbindlich an.
-            </Consent>
-            <Consent checked={acceptCosts} onChange={setAcceptCosts}>
-              Ich habe die im Vertrag genannten Kosten zur Kenntnis genommen und akzeptiere sie.
-            </Consent>
-            <Consent checked={acceptPrivacy} onChange={setAcceptPrivacy}>
-              Ich habe die{" "}
-              <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
-                Datenschutzerklärung
-              </a>{" "}
-              gelesen und stimme der Verarbeitung meiner Daten zu.
-            </Consent>
-            <Consent checked={confirmData} onChange={setConfirmData}>
-              Ich bestätige die Richtigkeit meiner Angaben.
-            </Consent>
-          </fieldset>
+            {paymentMethod === "sepa" && (
+              <fieldset className="space-y-4 border-t border-gray-100 pt-5">
+                <legend className="text-sm font-semibold text-gray-900">Bankverbindung (SEPA)</legend>
+                <Field label="Kontoinhaber *"><input className={inp} value={holder} onChange={(e) => setHolder(e.target.value)} /></Field>
+                <Field label="IBAN *">
+                  <input className={inp} value={iban} onChange={(e) => setIban(e.target.value)} placeholder="DE.. .. .. .." autoComplete="off" />
+                </Field>
+              </fieldset>
+            )}
 
-          <fieldset className="space-y-3 border-t border-gray-100 pt-5">
-            <legend className="text-sm font-semibold text-gray-900">Unterschrift</legend>
-            <SignaturePad ref={sigRef} />
-          </fieldset>
+            {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+            <Button onClick={goToStep2} busy={busy} size="md" className="w-full">
+              Weiter <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Vertragstext mit den eingegebenen Daten (isoliert im iframe) */}
+            <div className="space-y-2">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([html], { type: "text/html" });
+                    window.open(URL.createObjectURL(blob), "_blank");
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" /> In neuem Tab öffnen
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+                <iframe title="Vertrag" srcDoc={html} className="h-[80vh] w-full" />
+              </div>
+            </div>
 
-          <button
-            onClick={submit}
-            disabled={busy || !allConsentsGiven}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            Vertrag rechtsverbindlich unterschreiben
-          </button>
-        </div>
+            <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+              {paymentMethod === "sepa" && (
+                <fieldset className="space-y-3">
+                  <legend className="text-sm font-semibold text-gray-900">SEPA-Lastschriftmandat</legend>
+                  <label className="flex items-start gap-2 text-sm text-gray-600">
+                    <input type="checkbox" checked={mandate} onChange={(e) => setMandate(e.target.checked)} className="mt-0.5" />
+                    <span>
+                      Ich ermächtige die swipeflow GmbH, Zahlungen von meinem Konto per SEPA-Lastschrift einzuziehen,
+                      und weise mein Kreditinstitut an, die Lastschriften einzulösen.
+                    </span>
+                  </label>
+                </fieldset>
+              )}
+
+              <fieldset className="space-y-3 border-t border-gray-100 pt-5">
+                <legend className="text-sm font-semibold text-gray-900">Bestätigungen</legend>
+                <Consent checked={acceptContractAndCosts} onChange={setAcceptContractAndCosts}>
+                  Ich nehme den oben dargestellten Vertrag verbindlich an und akzeptiere die genannten Kosten:{" "}
+                  {costText}
+                </Consent>
+                <Consent checked={acceptPrivacy} onChange={setAcceptPrivacy}>
+                  Ich habe die{" "}
+                  <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="font-medium text-gray-900 underline">
+                    Datenschutzerklärung
+                  </a>{" "}
+                  gelesen und stimme der Verarbeitung meiner Daten zu.
+                </Consent>
+                <Consent checked={confirmData} onChange={setConfirmData}>
+                  Ich bestätige die Richtigkeit meiner Angaben.
+                </Consent>
+              </fieldset>
+
+              <fieldset className="space-y-3 border-t border-gray-100 pt-5">
+                <legend className="text-sm font-semibold text-gray-900">Unterschrift</legend>
+                <SignaturePad ref={sigRef} />
+              </fieldset>
+
+              {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+              <div className="flex flex-col gap-2 sm:flex-row-reverse">
+                <button
+                  onClick={submit}
+                  disabled={busy || !allConsentsGiven}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
+                >
+                  {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Vertrag rechtsverbindlich unterschreiben
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setError(null); setStep(1); }}
+                  disabled={busy}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-200 disabled:opacity-50"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Zurück
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </main>
+  );
+}
+
+/** Baut den Kostentext für den Zustimmungspunkt (Einmal-/Ratenzahlung). */
+function buildCostText(costs: Costs): string {
+  const setup = formatEuro(costs.setupPriceCents);
+  const parts: string[] = [];
+  if (costs.paymentMode === "raten" && costs.installmentCount && costs.installmentCount >= 2) {
+    const { base, last } = splitInstallments(costs.setupPriceCents, costs.installmentCount);
+    const rate =
+      base === last
+        ? `${costs.installmentCount} × ${formatEuro(base)}`
+        : `${costs.installmentCount - 1} × ${formatEuro(base)} + letzte Rate ${formatEuro(last)}`;
+    parts.push(`Herstellung ${setup} netto (zahlbar in ${rate})`);
+  } else {
+    parts.push(`Herstellung ${setup} netto`);
+  }
+  if (costs.monthlyMaintCents > 0) {
+    parts.push(
+      `Wartung/Hosting ${formatEuro(costs.monthlyMaintCents)} netto/Monat (${formatEuro(costs.monthlyMaintCents * 12)} jährlich im Voraus)`,
+    );
+  }
+  return parts.join("; ") + ". Alle Preise zzgl. gesetzl. MwSt.";
+}
+
+function StepDots({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="mt-3 flex items-center justify-center gap-2">
+      <span className={`h-2 w-2 rounded-full ${step === 1 ? "bg-gray-900" : "bg-gray-300"}`} />
+      <span className={`h-2 w-2 rounded-full ${step === 2 ? "bg-gray-900" : "bg-gray-300"}`} />
+    </div>
   );
 }
 

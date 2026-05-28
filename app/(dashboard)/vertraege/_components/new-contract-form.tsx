@@ -85,7 +85,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
   async function submit() {
     setError(null);
     if (mode === "pick" && !selectedId) {
-      setError("Bitte einen Kunden auswählen oder „Neuer Kunde" wählen.");
+      setError("Bitte einen Kunden auswählen oder „Neuer Kunde“ wählen.");
       return;
     }
     if (mode === "new" && !ncName.trim()) {

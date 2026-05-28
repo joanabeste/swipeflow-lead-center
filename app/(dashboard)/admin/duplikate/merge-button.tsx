@@ -33,7 +33,7 @@ export function MergeAllButton({ disabled }: { disabled: boolean }) {
         <span className="text-sm text-gray-600 dark:text-gray-300">Wirklich alle zusammenführen?</span>
         <button
           onClick={run}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/90"
+          className="rounded-xl bg-primary px-3.5 py-2 text-sm font-medium text-gray-900 hover:bg-primary/90"
         >
           Ja, zusammenführen
         </button>
@@ -51,7 +51,7 @@ export function MergeAllButton({ disabled }: { disabled: boolean }) {
     <button
       onClick={() => setConfirming(true)}
       disabled={disabled || isPending}
-      className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+      className="inline-flex items-center gap-2 rounded-xl bg-primary px-3.5 py-2 text-sm font-medium text-gray-900 hover:bg-primary/90 disabled:opacity-50"
     >
       {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitMerge className="h-4 w-4" />}
       Alle zusammenführen
