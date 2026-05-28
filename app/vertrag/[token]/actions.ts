@@ -36,6 +36,8 @@ export interface SubmitPayload {
   accept_costs?: boolean;
   accept_privacy?: boolean;
   confirm_data_correct?: boolean;
+  accept_widerruf?: boolean;
+  request_early_start?: boolean;
 }
 
 type Result = { success: true } | { error: string };
@@ -65,12 +67,14 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
     return { error: "Bitte geben Sie eine gültige E-Mail-Adresse an." };
   }
 
-  // Pflicht-Einwilligungen (Vertragsannahme, Kosten, Datenschutz, Richtigkeit)
+  // Pflicht-Einwilligungen (Vertragsannahme, Kosten, Datenschutz, Richtigkeit,
+  // Kenntnisnahme der Widerrufsbelehrung).
   if (
     !payload.accept_contract ||
     !payload.accept_costs ||
     !payload.accept_privacy ||
-    !payload.confirm_data_correct
+    !payload.confirm_data_correct ||
+    !payload.accept_widerruf
   ) {
     return { error: "Bitte bestätigen Sie alle Pflichtangaben." };
   }
@@ -153,6 +157,8 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
         costs: true,
         privacy: true,
         data_correct: true,
+        widerruf_acknowledged: true,
+        early_start_requested: !!payload.request_early_start,
         sepa_mandate: contract.payment_method === "sepa" ? true : null,
         accepted_at: signedAt,
       },

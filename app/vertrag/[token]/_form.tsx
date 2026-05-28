@@ -53,6 +53,8 @@ export function PublicContractView({
   const [acceptContractAndCosts, setAcceptContractAndCosts] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [confirmData, setConfirmData] = useState(false);
+  const [acceptWiderruf, setAcceptWiderruf] = useState(false);
+  const [requestEarlyStart, setRequestEarlyStart] = useState(false);
 
   const sigRef = useRef<SignaturePadHandle>(null);
   const [busy, setBusy] = useState(false);
@@ -120,6 +122,7 @@ export function PublicContractView({
     if (!acceptContractAndCosts) missing.push("Vertrag & Kosten akzeptieren");
     if (!acceptPrivacy) missing.push("Datenschutz");
     if (!confirmData) missing.push("Richtigkeit der Angaben");
+    if (!acceptWiderruf) missing.push("Widerrufsbelehrung zur Kenntnis genommen");
     if (paymentMethod === "sepa" && !mandate) missing.push("SEPA-Mandat");
     if (missing.length > 0) {
       setError(`Bitte bestätigen Sie: ${missing.join(", ")}.`);
@@ -142,6 +145,8 @@ export function PublicContractView({
       accept_costs: acceptContractAndCosts,
       accept_privacy: acceptPrivacy,
       confirm_data_correct: confirmData,
+      accept_widerruf: acceptWiderruf,
+      request_early_start: requestEarlyStart,
     };
     if (paymentMethod === "sepa") {
       payload.sepa_account_holder = holder;
@@ -291,6 +296,24 @@ export function PublicContractView({
                 </Consent>
                 <Consent checked={confirmData} onChange={setConfirmData}>
                   Ich bestätige die Richtigkeit meiner Angaben.
+                </Consent>
+                <Consent checked={acceptWiderruf} onChange={setAcceptWiderruf}>
+                  Ich habe die im Vertrag enthaltene{" "}
+                  <strong className="font-medium text-gray-900">Widerrufsbelehrung</strong>{" "}
+                  (Teil III) zur Kenntnis genommen.
+                </Consent>
+              </fieldset>
+
+              <fieldset className="space-y-3 border-t border-gray-100 pt-5">
+                <legend className="text-sm font-semibold text-gray-900">
+                  Vorzeitiger Leistungsbeginn <span className="font-normal text-gray-400">(optional)</span>
+                </legend>
+                <Consent checked={requestEarlyStart} onChange={setRequestEarlyStart}>
+                  Ich verlange ausdrücklich, dass swipeflow mit der Ausführung der beauftragten
+                  Leistungen bereits vor Ablauf der 14-tägigen Widerrufsfrist beginnt. Mir ist
+                  bekannt, dass mein Widerrufsrecht bei vollständiger Vertragserfüllung erlischt
+                  und ich bei einem Widerruf nach Beginn der Leistung anteiligen Wertersatz für
+                  die bereits erbrachten Leistungen schulde.
                 </Consent>
               </fieldset>
 

@@ -7,7 +7,7 @@
 
 import { formatEuro, splitInstallments } from "./format";
 
-export const TEMPLATE_VERSION = "webdesign-v2";
+export const TEMPLATE_VERSION = "webdesign-v3";
 
 // Markenlogo (swipeflow „s") als Inline-SVG — muss inline sein, da das PDF via
 // Headless-Chromium aus reinem HTML (setContent, ohne Base-URL) gerendert wird.
@@ -81,8 +81,26 @@ function zahlungsbedingungen(input: ContractRenderInput): string {
     satz = `Die Vergütung für die Erstellung der Webseite ist mit Abnahme der Webseite in einer Summe fällig und wird ${methodWord}.`;
   }
 
-  const hostingZusatz = ` Die Wartungs- und Hostingpauschale wird unabhängig hiervon einmal jährlich im Voraus abgerechnet.`;
+  const hostingZusatz =
+    input.monthlyMaintCents > 0
+      ? ` Die Wartungs- und Hostingpauschale wird unabhängig hiervon einmal jährlich im Voraus abgerechnet.`
+      : "";
   return satz + hostingZusatz;
+}
+
+// § 3 Abs. 3: Wartungs-/Hostingvergütung. Zahlungsart folgt der vereinbarten
+// Methode (SEPA-Lastschrift vs. Rechnung) — sonst widerspräche der Text dem
+// SEPA-Mandat. Bei 0 € entfällt die Pauschale (deckungsgleich mit Kostenübersicht).
+function wartungHostingVerguetung(input: ContractRenderInput): string {
+  if (input.monthlyMaintCents <= 0) {
+    return `(3) Für Wartung und Hosting wird im Rahmen dieses Vertrags keine gesonderte monatliche Pauschale berechnet.`;
+  }
+  const betrag = formatEuro(input.monthlyMaintCents);
+  const method =
+    input.paymentMethod === "sepa"
+      ? "per SEPA-Lastschrift eingezogen"
+      : "per Rechnung gestellt";
+  return `(3) Der Auftraggeber zahlt für Wartung und Hosting eine monatliche Pauschale von ${betrag} netto. Die Abrechnung erfolgt einmal jährlich im Voraus und wird ${method}.`;
 }
 
 function kostenuebersicht(input: ContractRenderInput): string {
@@ -129,6 +147,11 @@ function sepaMandateSection(input: ContractRenderInput): string {
       Erstattung des belasteten Betrages verlangen. Es gelten dabei die mit meinem
       Kreditinstitut vereinbarten Bedingungen.
     </p>
+    <p>
+      Die Vorabankündigung (Pre-Notification) über Betrag und Fälligkeit eines Einzugs
+      erfolgt mit einer auf mindestens einen Tag verkürzten Frist, in der Regel mit der
+      jeweiligen Rechnungsstellung.
+    </p>
     <table class="kv">
       <tr><td>Zahlungsempfänger (Gläubiger)</td><td>${esc(input.creditor.name)}, ${esc(input.creditor.address)}</td></tr>
       <tr><td>Gläubiger-Identifikationsnummer</td><td>${blank(input.creditor.id, input.mode)}</td></tr>
@@ -136,6 +159,44 @@ function sepaMandateSection(input: ContractRenderInput): string {
       <tr><td>Kontoinhaber</td><td>${holder}</td></tr>
       <tr><td>IBAN</td><td>${iban}</td></tr>
     </table>
+  `;
+}
+
+// Widerrufsbelehrung (Fernabsatz, Dienstleistung) — gilt nur für Verbraucher
+// (§ 13 BGB). Über-inklusiv für alle Verträge gerendert und klar auf Verbraucher
+// eingegrenzt, sodass Unternehmer hieraus kein Widerrufsrecht ableiten.
+// HINWEIS: Vor dem Produktiveinsatz anwaltlich prüfen lassen.
+function widerrufSection(): string {
+  const email = (
+    process.env.CONTRACTS_WIDERRUF_EMAIL ||
+    process.env.CENTRAL_SMTP_FROM_EMAIL ||
+    ""
+  ).trim();
+  const kontakt = `swipeflow GmbH, Ringstraße 6, 32339 Espelkamp${email ? `, E-Mail: ${esc(email)}` : ""}`;
+  return `
+    <h2>Teil III – Widerrufsbelehrung für Verbraucher</h2>
+    <p class="muted">Die folgende Widerrufsbelehrung gilt nur, sofern Sie den Vertrag als Verbraucher im Sinne des § 13 BGB abschließen, also zu Zwecken, die überwiegend weder Ihrer gewerblichen noch Ihrer selbständigen beruflichen Tätigkeit zugerechnet werden können.</p>
+
+    <h3>Widerrufsrecht</h3>
+    <p>Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsschlusses.</p>
+    <p>Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (${kontakt}) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder eine E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das unten stehende Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.</p>
+    <p>Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.</p>
+
+    <h3>Folgen des Widerrufs</h3>
+    <p>Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.</p>
+    <p>Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.</p>
+
+    <h3>Muster-Widerrufsformular</h3>
+    <p class="muted">(Wenn Sie den Vertrag widerrufen wollen, füllen Sie bitte dieses Formular aus und senden Sie es zurück.)</p>
+    <div class="widerruf-form">
+      <p>An ${kontakt}:</p>
+      <p>Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung: Erstellung, Hosting und Wartung einer Webseite.</p>
+      <p>Bestellt am (*) / erhalten am (*): ____________________</p>
+      <p>Name des/der Verbraucher(s): ____________________</p>
+      <p>Anschrift des/der Verbraucher(s): ____________________</p>
+      <p>Datum und Unterschrift des/der Verbraucher(s) (nur bei Mitteilung auf Papier): ____________________</p>
+      <p class="muted">(*) Unzutreffendes streichen.</p>
+    </div>
   `;
 }
 
@@ -151,7 +212,7 @@ function signatureBlock(input: ContractRenderInput): string {
         <div class="sign-box">
           <div class="sign-img"></div>
           <div class="sign-line">swipeflow GmbH</div>
-          <div class="sign-cap">Anbieter</div>
+          <div class="sign-cap">Dienstleister</div>
         </div>
       </div>
     `;
@@ -166,7 +227,6 @@ function signatureBlock(input: ContractRenderInput): string {
 
 export function renderContractHtml(input: ContractRenderInput): string {
   const websitekosten = formatEuro(input.setupPriceCents);
-  const webhostingkosten = formatEuro(input.monthlyMaintCents);
 
   const body = `
     <div class="letterhead">
@@ -181,6 +241,7 @@ export function renderContractHtml(input: ContractRenderInput): string {
       Ringstraße 6<br />
       32339 Espelkamp
     </p>
+    <p>– im Folgenden „Dienstleister“ genannt –</p>
     <p>und</p>
     <p class="parties">
       <strong>${blank(input.customerName, input.mode)}</strong><br />
@@ -218,7 +279,7 @@ export function renderContractHtml(input: ContractRenderInput): string {
       <li>Behebung technischer Fehler,</li>
       <li>kleinere inhaltliche Änderungen auf der Webseite (z. B. Texte, Bilder, Öffnungszeiten, Ansprechpartner).</li>
     </ul>
-    <p>(3) Der Auftraggeber zahlt für Wartung und Hosting eine monatliche Pauschale von ${webhostingkosten} netto. Die Abrechnung erfolgt einmal jährlich im Voraus per Rechnung.</p>
+    <p>${wartungHostingVerguetung(input)}</p>
     <p>(4) Änderungen, die den Rahmen der laufenden Pflege übersteigen – insbesondere neue Unterseiten, strukturelle Anpassungen, Designänderungen oder zusätzliche Funktionen – werden nach Aufwand des Dienstleisters abgerechnet.</p>
     <p>(5) Kleine Änderungen sind solche, die innerhalb von 30 Minuten erledigt werden können. Mehrere kleine Änderungen können nach Ermessen des Dienstleisters zusammengefasst werden.</p>
     <p>(6) Der Dienstleister informiert den Auftraggeber vorab, falls eine gewünschte Änderung voraussichtlich über den Leistungsumfang der Wartung hinausgeht.</p>
@@ -227,7 +288,7 @@ export function renderContractHtml(input: ContractRenderInput): string {
     <p>(1) Die Vergütung für die Erstellung der Webseite beträgt ${websitekosten} netto.</p>
     <p>(2) ${zahlungsbedingungen(input)}</p>
     <p>(3) Zusatzleistungen, die nicht im Angebot enthalten sind, werden gesondert nach Aufwand berechnet.</p>
-    <p>(4) Rechnungen sind innerhalb von 14 Tagen nach Zugang ohne Abzug zahlbar.</p>
+    <p>(4) Rechnungen sind innerhalb von 14 Tagen nach Zugang ohne Abzug zahlbar${input.paymentMethod === "sepa" ? ", soweit der Rechnungsbetrag nicht per SEPA-Lastschrift eingezogen wird" : ""}.</p>
     <p>(5) Alle Preise verstehen sich zzgl. der jeweils geltenden gesetzlichen Mehrwertsteuer.</p>
 
     ${kostenuebersicht(input)}
@@ -318,6 +379,8 @@ export function renderContractHtml(input: ContractRenderInput): string {
     <p>(2) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
     <p>(3) Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Dienstleisters.</p>
 
+    ${widerrufSection()}
+
     ${sepaMandateSection(input)}
 
     <h2>Unterschrift</h2>
@@ -355,6 +418,8 @@ export function renderContractHtml(input: ContractRenderInput): string {
   table.costs { margin: 8px 0; }
   table.costs td { background: #faf6ee; }
   table.costs td:last-child { font-weight: 600; color: #020f13; }
+  .widerruf-form { margin: 10px 0; padding: 12px 14px; background: #f5f5f7; border-radius: 8px; font-size: 10.5pt; }
+  .widerruf-form p { margin: 8px 0; }
   .sign-note { margin: 12px 0; padding: 12px; background: #f5f5f7; border-radius: 8px; font-size: 10.5pt; }
   .sign-grid { display: flex; gap: 32px; margin-top: 16px; }
   .sign-box { flex: 1; }
