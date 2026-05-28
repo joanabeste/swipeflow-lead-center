@@ -4,8 +4,14 @@ import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { encryptSecret } from "@/lib/crypto/secrets";
 import { isValidIban, normalizeIban, ibanLast4 } from "@/lib/contracts/format";
-import { renderContractPdf, uploadContractPdf, uploadSignaturePng } from "@/lib/contracts/pdf";
-import { buildRenderInput } from "@/lib/contracts/render";
+import {
+  renderContractPdf,
+  uploadContractPdf,
+  uploadSignaturePng,
+  getContractFileSignedUrl,
+  downloadContractFile,
+} from "@/lib/contracts/pdf";
+import { buildRenderInput, decryptIban } from "@/lib/contracts/render";
 import { renderContractHtml } from "@/lib/contracts/template";
 import { loadCreditor } from "@/lib/contracts/settings";
 import {
@@ -269,4 +275,60 @@ export async function renderContractPreview(
     }),
   );
   return { html };
+}
+
+/** Lädt das Signatur-PNG aus dem Bucket und baut den Signatur-Block fürs PDF. */
+async function buildSignatureForPdf(
+  contract: ContractRow,
+): Promise<{ dataUrl: string; signedAt: string; signerName: string } | null> {
+  if (!contract.signature_path) return null;
+  const buf = await downloadContractFile(contract.signature_path);
+  if (!buf) return null;
+  return {
+    dataUrl: `data:image/png;base64,${buf.toString("base64")}`,
+    signedAt: contract.signed_at ? new Date(contract.signed_at).toLocaleDateString("de-DE") : "",
+    signerName: contract.sepa_account_holder || contract.billing_company || "",
+  };
+}
+
+/** Signed URL zum fertigen Vertrags-PDF für den Unterzeichner (Token = Zugriffsgeheimnis).
+ *  Generiert das PDF nach, falls es beim Signieren (best-effort) nicht erzeugt wurde. */
+export async function getSignedContractPdf(token: string): Promise<{ url: string } | { error: string }> {
+  const db = createServiceClient();
+  const { data, error } = await db.from("contracts").select("*").eq("token", token).maybeSingle();
+  if (error || !data) return { error: "Vertrag nicht gefunden." };
+  const contract = data as unknown as ContractRow;
+  if (contract.status !== "signed") return { error: "Der Vertrag ist noch nicht unterschrieben." };
+
+  let pdfPath = contract.pdf_path;
+  if (!pdfPath) {
+    const { data: leadData } = await db
+      .from("leads")
+      .select("id, company_name, street, zip, city, email")
+      .eq("id", contract.lead_id)
+      .maybeSingle();
+    const creditor = await loadCreditor();
+    const ibanPlain = decryptIban(contract);
+    const signature = await buildSignatureForPdf(contract);
+    const input = buildRenderInput(contract, (leadData as ContractLead | null) ?? null, {
+      mode: "pdf",
+      creditor,
+      ibanPlain,
+      signature,
+    });
+    try {
+      const buffer = await renderContractPdf(input);
+      const up = await uploadContractPdf(contract.id, buffer);
+      if ("error" in up) return { error: up.error };
+      pdfPath = up.path;
+      await db.from("contracts").update({ pdf_path: pdfPath }).eq("id", contract.id);
+    } catch (e) {
+      console.error("[getSignedContractPdf:render]", e);
+      return { error: "PDF konnte nicht erzeugt werden." };
+    }
+  }
+
+  const url = await getContractFileSignedUrl(pdfPath, 3600);
+  if (!url) return { error: "Download-Link konnte nicht erzeugt werden." };
+  return { url };
 }

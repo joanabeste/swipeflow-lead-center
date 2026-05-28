@@ -24,9 +24,11 @@ export function getCentralSmtpConfig(): SmtpConfig {
   };
 }
 
-/** Baut den absoluten Vertragslink aus APP_BASE_URL + Token. */
+/** Baut den absoluten, öffentlichen Kunden-Vertragslink (vertrag.swipeflow.de).
+ *  Fällt auf APP_BASE_URL zurück, falls keine eigene Public-Domain gesetzt ist. */
 export function buildContractLink(token: string): string {
-  const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
+  const base = (process.env.CONTRACT_PUBLIC_BASE_URL ?? process.env.APP_BASE_URL ?? "")
+    .replace(/\/+$/, "");
   return `${base}/vertrag/${token}`;
 }
 

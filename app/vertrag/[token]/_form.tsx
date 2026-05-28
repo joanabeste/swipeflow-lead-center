@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Loader2, Eraser, Check, ExternalLink, ArrowLeft, ArrowRight } from "lucide-react";
-import { submitSignature, renderContractPreview, type SubmitPayload } from "./actions";
+import { Loader2, Eraser, Check, ExternalLink, ArrowLeft, ArrowRight, Download } from "lucide-react";
+import { submitSignature, renderContractPreview, getSignedContractPdf, type SubmitPayload } from "./actions";
 import { formatEuro, splitInstallments, isValidIban } from "@/lib/contracts/format";
 import { Button } from "@/components/ui/button";
+import { SwipeflowLogo } from "@/app/(dashboard)/swipeflow-logo";
 
 interface Prefill {
   company: string;
@@ -57,8 +58,20 @@ export function PublicContractView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const costText = useMemo(() => buildCostText(costs), [costs]);
+
+  async function downloadPdf() {
+    setPdfBusy(true);
+    const res = await getSignedContractPdf(token);
+    setPdfBusy(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    window.open(res.url, "_blank");
+  }
 
   function step1Error(): string | null {
     if (!company.trim() || !street.trim() || !zip.trim() || !city.trim()) {
@@ -102,6 +115,16 @@ export function PublicContractView({
 
   async function submit() {
     setError(null);
+    // Konkretes Feedback, welche Pflichtangaben fehlen (statt nur deaktiviertem Button).
+    const missing: string[] = [];
+    if (!acceptContractAndCosts) missing.push("Vertrag & Kosten akzeptieren");
+    if (!acceptPrivacy) missing.push("Datenschutz");
+    if (!confirmData) missing.push("Richtigkeit der Angaben");
+    if (paymentMethod === "sepa" && !mandate) missing.push("SEPA-Mandat");
+    if (missing.length > 0) {
+      setError(`Bitte bestätigen Sie: ${missing.join(", ")}.`);
+      return;
+    }
     const sigData = sigRef.current?.toDataUrl();
     if (!sigData || sigRef.current?.isEmpty()) {
       setError("Bitte unterschreiben Sie im Unterschriftsfeld.");
@@ -135,24 +158,26 @@ export function PublicContractView({
     setDone(true);
   }
 
-  const allConsentsGiven =
-    acceptContractAndCosts &&
-    acceptPrivacy &&
-    confirmData &&
-    (paymentMethod !== "sepa" || mandate);
-
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
+      <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-6">
+        <SwipeflowLogo className="h-7 w-auto text-[#020f13]" />
         <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-            <Check className="h-6 w-6 text-green-600" />
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15">
+            <Check className="h-6 w-6 text-primary" />
           </div>
           <h1 className="text-xl font-semibold text-gray-900">Vielen Dank!</h1>
           <p className="mt-2 text-sm text-gray-500">
             Ihr Vertrag wurde erfolgreich unterschrieben. Sie erhalten in Kürze eine Bestätigung per E-Mail.
           </p>
+          <div className="mt-5">
+            <Button onClick={downloadPdf} busy={pdfBusy} size="md" className="w-full">
+              <Download className="h-4 w-4" /> Vertrag als PDF herunterladen
+            </Button>
+          </div>
+          {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
         </div>
+        <BrandFooter />
       </main>
     );
   }
@@ -160,9 +185,9 @@ export function PublicContractView({
   return (
     <main className="min-h-screen bg-gray-50 py-8">
       <div className="mx-auto max-w-3xl space-y-6 px-4">
-        <header className="text-center">
-          <h1 className="text-lg font-semibold text-gray-900">swipeflow GmbH — Vertrag</h1>
-          <p className="mt-1 text-sm text-gray-500">
+        <header className="flex flex-col items-center text-center">
+          <SwipeflowLogo className="h-8 w-auto text-[#020f13]" />
+          <p className="mt-3 text-sm text-gray-500">
             {step === 1
               ? "Schritt 1 von 2 — Bitte ergänzen Sie Ihre Daten."
               : "Schritt 2 von 2 — Bitte prüfen Sie den Vertrag und unterschreiben Sie."}
@@ -234,6 +259,23 @@ export function PublicContractView({
                 </fieldset>
               )}
 
+              <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kostenübersicht</p>
+                <dl className="mt-2 space-y-1 text-sm text-gray-700">
+                  <div className="flex justify-between gap-4">
+                    <dt>Einmalige Herstellung</dt>
+                    <dd className="font-medium text-gray-900">{formatEuro(costs.setupPriceCents)} netto</dd>
+                  </div>
+                  {costs.monthlyMaintCents > 0 && (
+                    <div className="flex justify-between gap-4">
+                      <dt>Wartung &amp; Hosting</dt>
+                      <dd className="font-medium text-gray-900">{formatEuro(costs.monthlyMaintCents)} netto / Monat</dd>
+                    </div>
+                  )}
+                </dl>
+                <p className="mt-2 text-[11px] text-gray-400">zzgl. gesetzl. MwSt.</p>
+              </div>
+
               <fieldset className="space-y-3 border-t border-gray-100 pt-5">
                 <legend className="text-sm font-semibold text-gray-900">Bestätigungen</legend>
                 <Consent checked={acceptContractAndCosts} onChange={setAcceptContractAndCosts}>
@@ -262,7 +304,7 @@ export function PublicContractView({
               <div className="flex flex-col gap-2 sm:flex-row-reverse">
                 <button
                   onClick={submit}
-                  disabled={busy || !allConsentsGiven}
+                  disabled={busy}
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:opacity-50"
                 >
                   {busy && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -280,6 +322,8 @@ export function PublicContractView({
             </div>
           </>
         )}
+
+        <BrandFooter />
       </div>
     </main>
   );
@@ -310,9 +354,22 @@ function buildCostText(costs: Costs): string {
 function StepDots({ step }: { step: 1 | 2 }) {
   return (
     <div className="mt-3 flex items-center justify-center gap-2">
-      <span className={`h-2 w-2 rounded-full ${step === 1 ? "bg-gray-900" : "bg-gray-300"}`} />
-      <span className={`h-2 w-2 rounded-full ${step === 2 ? "bg-gray-900" : "bg-gray-300"}`} />
+      <span className={`h-2 w-2 rounded-full ${step === 1 ? "bg-primary" : "bg-gray-300"}`} />
+      <span className={`h-2 w-2 rounded-full ${step === 2 ? "bg-primary" : "bg-gray-300"}`} />
     </div>
+  );
+}
+
+function BrandFooter() {
+  return (
+    <footer className="pt-2 text-center text-xs text-gray-400">
+      <p>swipeflow GmbH · Ringstraße 6 · 32339 Espelkamp</p>
+      <p className="mt-1">
+        <a href={PRIVACY_URL} target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 hover:underline">
+          Datenschutzerklärung
+        </a>
+      </p>
+    </footer>
   );
 }
 

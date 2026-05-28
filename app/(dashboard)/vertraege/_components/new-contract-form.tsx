@@ -20,7 +20,7 @@ import {
 
 const DEFAULT_TERMS: TermsState = {
   setupEur: "2000",
-  monthlyEur: "0",
+  monthlyEur: "50",
   paymentMode: "einmal",
   installments: "3",
   paymentMethod: "sepa",
