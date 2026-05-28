@@ -53,7 +53,6 @@ export function PublicContractView({
   const [acceptContractAndCosts, setAcceptContractAndCosts] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [confirmData, setConfirmData] = useState(false);
-  const [acceptWiderruf, setAcceptWiderruf] = useState(false);
   const [requestEarlyStart, setRequestEarlyStart] = useState(false);
 
   const sigRef = useRef<SignaturePadHandle>(null);
@@ -122,7 +121,7 @@ export function PublicContractView({
     if (!acceptContractAndCosts) missing.push("Vertrag & Kosten akzeptieren");
     if (!acceptPrivacy) missing.push("Datenschutz");
     if (!confirmData) missing.push("Richtigkeit der Angaben");
-    if (!acceptWiderruf) missing.push("Widerrufsbelehrung zur Kenntnis genommen");
+    if (!requestEarlyStart) missing.push("Vorzeitiger Leistungsbeginn");
     if (paymentMethod === "sepa" && !mandate) missing.push("SEPA-Mandat");
     if (missing.length > 0) {
       setError(`Bitte bestätigen Sie: ${missing.join(", ")}.`);
@@ -145,7 +144,6 @@ export function PublicContractView({
       accept_costs: acceptContractAndCosts,
       accept_privacy: acceptPrivacy,
       confirm_data_correct: confirmData,
-      accept_widerruf: acceptWiderruf,
       request_early_start: requestEarlyStart,
     };
     if (paymentMethod === "sepa") {
@@ -297,16 +295,11 @@ export function PublicContractView({
                 <Consent checked={confirmData} onChange={setConfirmData}>
                   Ich bestätige die Richtigkeit meiner Angaben.
                 </Consent>
-                <Consent checked={acceptWiderruf} onChange={setAcceptWiderruf}>
-                  Ich habe die im Vertrag enthaltene{" "}
-                  <strong className="font-medium text-gray-900">Widerrufsbelehrung</strong>{" "}
-                  (Teil III) zur Kenntnis genommen.
-                </Consent>
               </fieldset>
 
               <fieldset className="space-y-3 border-t border-gray-100 pt-5">
                 <legend className="text-sm font-semibold text-gray-900">
-                  Vorzeitiger Leistungsbeginn <span className="font-normal text-gray-400">(optional)</span>
+                  Vorzeitiger Leistungsbeginn
                 </legend>
                 <Consent checked={requestEarlyStart} onChange={setRequestEarlyStart}>
                   Ich verlange ausdrücklich, dass swipeflow mit der Ausführung der beauftragten

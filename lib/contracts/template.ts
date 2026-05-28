@@ -33,7 +33,7 @@ export interface ContractRenderInput {
   // SEPA-Mandatsreferenz (stabil pro Vertrag)
   mandateReference: string;
   // SEPA-Schuldner (vom Kunden ausgefüllt; im pdf-Modus gesetzt)
-  sepa?: { accountHolder: string; ibanMasked: string } | null;
+  sepa?: { accountHolder: string; ibanDisplay: string } | null;
 
   // Unterschrift (nur im pdf-Modus)
   signature?: { dataUrl: string; signedAt: string; signerName: string } | null;
@@ -134,7 +134,7 @@ function kostenuebersicht(input: ContractRenderInput): string {
 function sepaMandateSection(input: ContractRenderInput): string {
   if (input.paymentMethod !== "sepa") return "";
   const holder = blank(input.sepa?.accountHolder, input.mode);
-  const iban = blank(input.sepa?.ibanMasked, input.mode);
+  const iban = blank(input.sepa?.ibanDisplay, input.mode);
   return `
     <h2>SEPA-Lastschriftmandat</h2>
     <p>
@@ -205,6 +205,7 @@ function widerrufSection(): string {
 function signatureBlock(input: ContractRenderInput): string {
   if (input.mode === "pdf" && input.signature) {
     return `
+      <h2>Unterschrift</h2>
       <div class="sign-grid">
         <div class="sign-box">
           <div class="sign-img"><img src="${input.signature.dataUrl}" alt="Unterschrift" /></div>
@@ -223,12 +224,7 @@ function signatureBlock(input: ContractRenderInput): string {
       </div>
     `;
   }
-  return `
-    <div class="sign-note">
-      Mit dem Absenden des Formulars unterschreiben Sie diesen Vertrag rechtsverbindlich
-      in elektronischer Form (Annahme des Angebots).
-    </div>
-  `;
+  return "";
 }
 
 export function renderContractHtml(input: ContractRenderInput): string {
@@ -389,7 +385,6 @@ export function renderContractHtml(input: ContractRenderInput): string {
 
     ${sepaMandateSection(input)}
 
-    <h2>Unterschrift</h2>
     ${signatureBlock(input)}
   `;
 
@@ -407,11 +402,15 @@ export function renderContractHtml(input: ContractRenderInput): string {
     color: #1a1a1a; line-height: 1.5; font-size: 11pt; margin: 0;
   }
   .doc { max-width: 800px; margin: 0 auto; padding: 0; }
-  .letterhead { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 2px solid #d2a966; }
+  @media screen {
+    body { background: #f3f4f6; }
+    .doc { background: #fff; margin: 24px auto; padding: 48px 56px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  }
+  .letterhead { display: flex; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid #e5e7eb; }
   .letterhead svg { display: block; border-radius: 8px; }
   .letterhead .lh-name { font-size: 13pt; font-weight: 600; letter-spacing: 0.2px; color: #020f13; }
   h1 { font-size: 20pt; margin: 0 0 16px; }
-  h2 { font-size: 14pt; margin: 28px 0 8px; border-bottom: 2px solid #d2a966; padding-bottom: 4px; }
+  h2 { font-size: 14pt; margin: 28px 0 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
   h3 { font-size: 11.5pt; margin: 18px 0 4px; }
   p { margin: 6px 0; }
   p.muted { color: #777; font-size: 9.5pt; margin-top: 4px; }
@@ -422,11 +421,10 @@ export function renderContractHtml(input: ContractRenderInput): string {
   table.kv td { border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; font-size: 10.5pt; }
   table.kv td:first-child { width: 40%; color: #555; }
   table.costs { margin: 8px 0; }
-  table.costs td { background: #faf6ee; }
+  table.costs td { background: #f5f5f7; }
   table.costs td:last-child { font-weight: 600; color: #020f13; }
   .widerruf-form { margin: 10px 0; padding: 12px 14px; background: #f5f5f7; border-radius: 8px; font-size: 10.5pt; }
   .widerruf-form p { margin: 8px 0; }
-  .sign-note { margin: 12px 0; padding: 12px; background: #f5f5f7; border-radius: 8px; font-size: 10.5pt; }
   .sign-grid { display: flex; gap: 32px; margin-top: 16px; }
   .sign-box { flex: 1; }
   .sign-img { height: 80px; border-bottom: 1px solid #333; display: flex; align-items: flex-end; }

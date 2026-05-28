@@ -26,17 +26,13 @@ export function normalizeIban(raw: string): string {
   return raw.replace(/\s+/g, "").toUpperCase();
 }
 
-/** Maskiert eine IBAN für die Anzeige: DE12 •••• •••• •••• •••• 34 */
-export function maskIban(iban: string): string {
-  const clean = normalizeIban(iban);
-  if (clean.length < 8) return clean;
-  const first = clean.slice(0, 4);
-  const last = clean.slice(-4);
-  return `${first} •••• •••• ${last}`;
-}
-
 export function ibanLast4(iban: string): string {
   return normalizeIban(iban).slice(-4);
+}
+
+/** Formatiert eine IBAN lesbar in 4er-Gruppen: DE12 3456 7890 1234 5678 90 */
+export function formatIban(iban: string): string {
+  return normalizeIban(iban).replace(/(.{4})/g, "$1 ").trim();
 }
 
 /**

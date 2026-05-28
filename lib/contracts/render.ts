@@ -3,7 +3,7 @@
 // übergeben (siehe lib/contracts/settings.ts → loadCreditor()).
 
 import { decryptSecret } from "@/lib/crypto/secrets";
-import { maskIban } from "./format";
+import { formatIban } from "./format";
 import type { Creditor } from "./settings";
 import type { ContractRenderInput } from "./template";
 import type { ContractRow, ContractLead } from "./types";
@@ -32,7 +32,7 @@ export function buildRenderInput(
     signature?: { dataUrl: string; signedAt: string; signerName: string } | null;
     /** Hinterlegte swipeflow-Unterschrift (data:URL), falls vorhanden. */
     providerSignature?: { dataUrl: string } | null;
-    /** Klartext-IBAN (z. B. direkt beim Signieren) → korrekt maskierte Anzeige. */
+    /** Klartext-IBAN (z. B. direkt beim Signieren) → volle, lesbare Anzeige im Mandat. */
     ibanPlain?: string | null;
   },
 ): ContractRenderInput {
@@ -48,11 +48,13 @@ export function buildRenderInput(
   // (z. B. initialer View vor Eingabe) bleibt sepa null → leere Platzhalter.
   let sepa: ContractRenderInput["sepa"] = null;
   if (contract.payment_method === "sepa") {
-    const ibanMasked = opts.ibanPlain
-      ? maskIban(opts.ibanPlain)
+    // Klartext-IBAN (live eingegeben / beim Signieren entschlüsselt) → voll lesbar
+    // zur Verifikation; ohne Klartext nur maskierte Last4 aus dem gespeicherten Feld.
+    const ibanDisplay = opts.ibanPlain
+      ? formatIban(opts.ibanPlain)
       : maskedFromStored(contract);
-    if (contract.sepa_account_holder || ibanMasked) {
-      sepa = { accountHolder: contract.sepa_account_holder ?? "", ibanMasked };
+    if (contract.sepa_account_holder || ibanDisplay) {
+      sepa = { accountHolder: contract.sepa_account_holder ?? "", ibanDisplay };
     }
   }
 
