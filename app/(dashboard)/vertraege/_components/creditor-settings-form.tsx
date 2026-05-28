@@ -106,14 +106,19 @@ export function CreditorSettingsForm({
         ) : (
           <p className="text-xs text-gray-400">Noch keine Unterschrift hinterlegt.</p>
         )}
-        <Field label="Hier unterschreiben">
+        {/* Bewusst KEIN <label>/Field: ein label verknüpft sich mit seinem ersten
+            Button ("Löschen"), wodurch jeder Klick aufs Canvas die Zeichnung löscht. */}
+        <div className="block">
+          <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">
+            Hier unterschreiben
+          </span>
           <SignaturePad ref={padRef} />
           <div className="mt-2">
             <Button onClick={saveDrawnSignature} busy={sigBusy} size="sm">
               Unterschrift übernehmen
             </Button>
           </div>
-        </Field>
+        </div>
         <Field label="Alternativ: Unterschrift (PNG) hochladen">
           <input
             type="file"
