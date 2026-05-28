@@ -37,7 +37,7 @@ export function ContractRow({ c }: { c: ContractRowItem }) {
       </td>
       <td className="px-4 py-3 tabular-nums text-gray-700 dark:text-gray-200">{formatEuro(c.setup_price_cents)}</td>
       <td className="px-4 py-3 tabular-nums text-gray-700 dark:text-gray-200">{formatEuro(c.monthly_maint_cents)}</td>
-      <td className="px-4 py-3"><StatusBadge status={c.status} expired={expired} /></td>
+      <td className="px-4 py-3"><StatusBadge status={c.status} expired={expired} emailed={!!c.sent_at} /></td>
       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmtDate(c.sent_at)}</td>
       <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{fmtDate(c.signed_at)}</td>
     </tr>

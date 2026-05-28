@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
 import { buildRenderInput } from "@/lib/contracts/render";
+import { loadCreditor } from "@/lib/contracts/settings";
 import { renderContractHtml } from "@/lib/contracts/template";
 import { isExpired, type ContractRow, type ContractLead } from "@/lib/contracts/types";
 import { PublicContractView } from "./_form";
@@ -54,7 +55,8 @@ export default async function PublicContractPage({ params }: { params: Promise<{
     .maybeSingle();
   const lead = (leadData as ContractLead | null) ?? null;
 
-  const viewHtml = renderContractHtml(buildRenderInput(contract, lead, { mode: "view" }));
+  const creditor = await loadCreditor();
+  const viewHtml = renderContractHtml(buildRenderInput(contract, lead, { mode: "view", creditor }));
 
   const prefill = {
     company: contract.billing_company || lead?.company_name || "",
@@ -70,6 +72,12 @@ export default async function PublicContractPage({ params }: { params: Promise<{
       contractHtml={viewHtml}
       paymentMethod={contract.payment_method}
       prefill={prefill}
+      costs={{
+        setupPriceCents: contract.setup_price_cents,
+        monthlyMaintCents: contract.monthly_maint_cents,
+        paymentMode: contract.payment_mode,
+        installmentCount: contract.installment_count,
+      }}
     />
   );
 }

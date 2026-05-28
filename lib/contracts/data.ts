@@ -1,7 +1,7 @@
 // Daten-Loader für Verträge. Admin-seitig: createClient() (RLS).
 
 import { createClient } from "@/lib/supabase/server";
-import type { ContractRow, ContractLead, ContractEvent } from "./types";
+import type { ContractRow, ContractLead, ContractPickerLead, ContractEvent } from "./types";
 
 const CONTRACT_COLS =
   "id, lead_id, type, status, token, setup_price_cents, monthly_maint_cents, payment_mode, installment_count, payment_method, billing_company, billing_street, billing_zip, billing_city, billing_email, billing_country, sepa_account_holder, sepa_iban_encrypted, sepa_iban_last4, sepa_bic, signature_path, pdf_path, terms_snapshot, sent_at, viewed_at, signed_at, expires_at, created_by, created_at, updated_at";
@@ -79,17 +79,24 @@ export async function loadContractEvents(contractId: string): Promise<ContractEv
   return (data ?? []) as ContractEvent[];
 }
 
-/** Kunden (leads mit lifecycle_stage='customer') für den Vertrags-Picker. */
-export async function loadCustomersForPicker(): Promise<ContractLead[]> {
+/** Alle Leads/Kunden für den Vertrags-Picker (Suche über das ganze CRM).
+ *  Kunden zuerst, dann alphabetisch — Nicht-Kunden werden beim Anlegen befördert. */
+export async function loadLeadsForPicker(): Promise<ContractPickerLead[]> {
   const db = await createClient();
   const { data, error } = await db
     .from("leads")
-    .select("id, company_name, street, zip, city, email")
-    .eq("lifecycle_stage", "customer")
+    .select("id, company_name, street, zip, city, email, lifecycle_stage")
+    .is("deleted_at", null)
     .order("company_name", { ascending: true });
   if (error) {
-    console.error("[loadCustomersForPicker]", error);
+    console.error("[loadLeadsForPicker]", error);
     return [];
   }
-  return (data ?? []) as ContractLead[];
+  const rows = (data ?? []) as ContractPickerLead[];
+  // Kunden zuerst (stabil), Reihenfolge sonst alphabetisch wie geladen.
+  return rows.sort((a, b) => {
+    const ca = a.lifecycle_stage === "customer" ? 0 : 1;
+    const cb = b.lifecycle_stage === "customer" ? 0 : 1;
+    return ca - cb;
+  });
 }

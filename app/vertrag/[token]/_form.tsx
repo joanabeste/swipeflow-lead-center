@@ -1,8 +1,10 @@
 "use client";
 
-import { useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
-import { Loader2, Eraser, Check, ExternalLink } from "lucide-react";
-import { submitSignature, type SubmitPayload } from "./actions";
+import { useMemo, useRef, useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { Loader2, Eraser, Check, ExternalLink, ArrowLeft, ArrowRight } from "lucide-react";
+import { submitSignature, renderContractPreview, type SubmitPayload } from "./actions";
+import { formatEuro, splitInstallments, isValidIban } from "@/lib/contracts/format";
+import { Button } from "@/components/ui/button";
 
 interface Prefill {
   company: string;
@@ -12,17 +14,31 @@ interface Prefill {
   email: string;
 }
 
+interface Costs {
+  setupPriceCents: number;
+  monthlyMaintCents: number;
+  paymentMode: "einmal" | "raten";
+  installmentCount: number | null;
+}
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 export function PublicContractView({
   token,
   contractHtml,
   paymentMethod,
   prefill,
+  costs,
 }: {
   token: string;
   contractHtml: string;
   paymentMethod: "sepa" | "rechnung";
   prefill: Prefill;
+  costs: Costs;
 }) {
+  const [step, setStep] = useState<1 | 2>(1);
+  const [html, setHtml] = useState(contractHtml);
+
   const [company, setCompany] = useState(prefill.company);
   const [street, setStreet] = useState(prefill.street);
   const [zip, setZip] = useState(prefill.zip);
@@ -33,8 +49,7 @@ export function PublicContractView({
   const [iban, setIban] = useState("");
   const [mandate, setMandate] = useState(false);
 
-  const [acceptContract, setAcceptContract] = useState(false);
-  const [acceptCosts, setAcceptCosts] = useState(false);
+  const [acceptContractAndCosts, setAcceptContractAndCosts] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [confirmData, setConfirmData] = useState(false);
 
@@ -42,6 +57,48 @@ export function PublicContractView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const costText = useMemo(() => buildCostText(costs), [costs]);
+
+  function step1Error(): string | null {
+    if (!company.trim() || !street.trim() || !zip.trim() || !city.trim()) {
+      return "Bitte füllen Sie die vollständige Rechnungsanschrift aus.";
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      return "Bitte geben Sie eine gültige E-Mail-Adresse an.";
+    }
+    if (paymentMethod === "sepa") {
+      if (!holder.trim()) return "Bitte geben Sie den Kontoinhaber an.";
+      if (!isValidIban(iban)) return "Bitte geben Sie eine gültige IBAN an.";
+    }
+    return null;
+  }
+
+  async function goToStep2() {
+    const err = step1Error();
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError(null);
+    setBusy(true);
+    const res = await renderContractPreview(token, {
+      billing_company: company,
+      billing_street: street,
+      billing_zip: zip,
+      billing_city: city,
+      sepa_account_holder: paymentMethod === "sepa" ? holder : undefined,
+      sepa_iban: paymentMethod === "sepa" ? iban : undefined,
+    });
+    setBusy(false);
+    if ("error" in res) {
+      setError(res.error);
+      return;
+    }
+    setHtml(res.html);
+    setStep(2);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function submit() {
     setError(null);
@@ -57,8 +114,9 @@ export function PublicContractView({
       billing_city: city,
       billing_email: email,
       signature_data_url: sigData,
-      accept_contract: acceptContract,
-      accept_costs: acceptCosts,
+      // Ein Häkchen deckt Vertragsannahme UND Kostenakzeptanz ab.
+      accept_contract: acceptContractAndCosts,
+      accept_costs: acceptContractAndCosts,
       accept_privacy: acceptPrivacy,
       confirm_data_correct: confirmData,
     };
@@ -78,8 +136,7 @@ export function PublicContractView({
   }
 
   const allConsentsGiven =
-    acceptContract &&
-    acceptCosts &&
+    acceptContractAndCosts &&
     acceptPrivacy &&
     confirmData &&
     (paymentMethod !== "sepa" || mandate);

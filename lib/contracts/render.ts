@@ -1,18 +1,12 @@
 // Baut das ContractRenderInput aus einer Vertrags-Zeile + Lead. Server-only
-// (liest Gläubiger-Infos aus Env, entschlüsselt ggf. die IBAN).
+// (entschlüsselt ggf. die IBAN). Die Gläubigerdaten werden vom Aufrufer
+// übergeben (siehe lib/contracts/settings.ts → loadCreditor()).
 
 import { decryptSecret } from "@/lib/crypto/secrets";
 import { maskIban } from "./format";
+import type { Creditor } from "./settings";
 import type { ContractRenderInput } from "./template";
 import type { ContractRow, ContractLead } from "./types";
-
-export function getCreditor(): { id: string; name: string; address: string } {
-  return {
-    id: process.env.SEPA_CREDITOR_ID ?? "",
-    name: process.env.SEPA_CREDITOR_NAME ?? "swipeflow GmbH",
-    address: process.env.SEPA_CREDITOR_ADDRESS ?? "Ringstraße 6, 32339 Espelkamp",
-  };
-}
 
 /** Stabile, gut lesbare Mandatsreferenz pro Vertrag. */
 export function mandateReference(contractId: string): string {
@@ -34,6 +28,7 @@ export function buildRenderInput(
   lead: ContractLead | null,
   opts: {
     mode: "view" | "pdf";
+    creditor: Creditor;
     signature?: { dataUrl: string; signedAt: string; signerName: string } | null;
     /** Klartext-IBAN (z. B. direkt beim Signieren) → korrekt maskierte Anzeige. */
     ibanPlain?: string | null;
@@ -46,8 +41,11 @@ export function buildRenderInput(
     contract.billing_city ?? lead?.city ?? null,
   );
 
+  // SEPA-Block befüllen, sobald Daten vorliegen — unabhängig vom Modus, damit
+  // auch die Schritt-2-Vorschau (view) die eingegebenen Daten zeigt. Ohne Daten
+  // (z. B. initialer View vor Eingabe) bleibt sepa null → leere Platzhalter.
   let sepa: ContractRenderInput["sepa"] = null;
-  if (contract.payment_method === "sepa" && opts.mode === "pdf") {
+  if (contract.payment_method === "sepa") {
     const ibanMasked = opts.ibanPlain
       ? maskIban(opts.ibanPlain)
       : maskedFromStored(contract);
@@ -66,7 +64,7 @@ export function buildRenderInput(
     paymentMode: contract.payment_mode,
     installmentCount: contract.installment_count,
     paymentMethod: contract.payment_method,
-    creditor: getCreditor(),
+    creditor: opts.creditor,
     mandateReference: mandateReference(contract.id),
     sepa,
     signature: opts.signature ?? null,

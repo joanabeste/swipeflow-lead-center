@@ -36,7 +36,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <StatusBadge status={contract.status as ContractStatus} expired={expired} />
+              <StatusBadge status={contract.status as ContractStatus} expired={expired} emailed={!!contract.sent_at} />
               <span className="text-[11px] uppercase tracking-wider text-gray-400">{contract.type}</span>
             </div>
             <h1 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{customerName}</h1>
@@ -110,7 +110,9 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
             {events.map((e) => (
               <li key={e.id} className="flex items-start justify-between gap-3 text-sm">
                 <div>
-                  <p className="font-medium text-gray-800 dark:text-gray-100">{EVENT_LABELS[e.event] ?? e.event}</p>
+                  <p className="font-medium text-gray-800 dark:text-gray-100">
+                    {e.event === "sent" && e.meta?.channel === "link" ? "Link erstellt" : (EVENT_LABELS[e.event] ?? e.event)}
+                  </p>
                   {typeof e.meta?.email_error === "string" && (
                     <p className="text-[11px] text-red-500">E-Mail-Fehler: {e.meta.email_error}</p>
                   )}

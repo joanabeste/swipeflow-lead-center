@@ -62,6 +62,11 @@ export interface ContractLead {
   email: string | null;
 }
 
+/** Lead-Ausschnitt für den Kunden-Picker (inkl. Lifecycle für Kunde/Lead-Badge). */
+export interface ContractPickerLead extends ContractLead {
+  lifecycle_stage: string | null;
+}
+
 export interface ContractEvent {
   id: string;
   contract_id: string;

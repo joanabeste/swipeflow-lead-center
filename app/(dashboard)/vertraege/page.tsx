@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { FileSignature, Plus } from "lucide-react";
+import { FileSignature, Plus, Settings } from "lucide-react";
 import { loadContracts } from "@/lib/contracts/data";
+import { buttonClasses } from "@/components/ui/button";
 import { ContractRow } from "./_components/contract-row";
 
 export default async function VertraegeListePage() {
@@ -15,12 +16,14 @@ export default async function VertraegeListePage() {
             Kundenverträge erstellen, versenden und nachverfolgen
           </p>
         </div>
-        <Link
-          href="/vertraege/neu"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-primary/90"
-        >
-          <Plus className="h-4 w-4" /> Neuer Vertrag
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/vertraege/einstellungen" className={buttonClasses("secondary", "sm")}>
+            <Settings className="h-4 w-4" /> Einstellungen
+          </Link>
+          <Link href="/vertraege/neu" className={buttonClasses("primary", "sm")}>
+            <Plus className="h-4 w-4" /> Neuer Vertrag
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">

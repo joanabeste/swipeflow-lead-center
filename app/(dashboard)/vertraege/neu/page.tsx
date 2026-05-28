@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { loadCustomersForPicker } from "@/lib/contracts/data";
+import { loadLeadsForPicker } from "@/lib/contracts/data";
 import { NewContractForm } from "../_components/new-contract-form";
 
 export default async function NeuerVertragPage() {
-  const customers = await loadCustomersForPicker();
+  const customers = await loadLeadsForPicker();
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

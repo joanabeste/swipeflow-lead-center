@@ -6,6 +6,8 @@ import { encryptSecret } from "@/lib/crypto/secrets";
 import { isValidIban, normalizeIban, ibanLast4 } from "@/lib/contracts/format";
 import { renderContractPdf, uploadContractPdf, uploadSignaturePng } from "@/lib/contracts/pdf";
 import { buildRenderInput } from "@/lib/contracts/render";
+import { renderContractHtml } from "@/lib/contracts/template";
+import { loadCreditor } from "@/lib/contracts/settings";
 import {
   sendContractSignedCustomerEmail,
   sendContractSignedNotifyEmail,
@@ -168,8 +170,10 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
       sepa_account_holder: contract.payment_method === "sepa" ? req(payload.sepa_account_holder) : null,
       signed_at: signedAt,
     };
+    const creditor = await loadCreditor();
     const input = buildRenderInput(updatedContract, (leadData as ContractLead | null) ?? null, {
       mode: "pdf",
+      creditor,
       ibanPlain,
       signature: {
         dataUrl: payload.signature_data_url,
@@ -209,4 +213,60 @@ export async function submitSignature(token: string, payload: SubmitPayload): Pr
   }
 
   return { success: true };
+}
+
+export interface PreviewInput {
+  billing_company: string;
+  billing_street: string;
+  billing_zip: string;
+  billing_city: string;
+  sepa_account_holder?: string;
+  sepa_iban?: string;
+}
+
+/** Rendert den Vertrag (view) mit den in Schritt 1 eingegebenen Daten —
+ *  damit der Kunde in Schritt 2 genau seine Angaben im Vertrag sieht. */
+export async function renderContractPreview(
+  token: string,
+  input: PreviewInput,
+): Promise<{ html: string } | { error: string }> {
+  const db = createServiceClient();
+  const { data, error } = await db.from("contracts").select("*").eq("token", token).maybeSingle();
+  if (error || !data) return { error: "Vertrag nicht gefunden." };
+  const contract = data as unknown as ContractRow;
+  if (contract.status !== "sent" && contract.status !== "viewed") {
+    return { error: "Dieser Vertrag kann nicht angezeigt werden." };
+  }
+
+  const req = (v: string | undefined) => (v ?? "").trim();
+  const { data: leadData } = await db
+    .from("leads")
+    .select("id, company_name, street, zip, city, email")
+    .eq("id", contract.lead_id)
+    .maybeSingle();
+
+  const merged: ContractRow = {
+    ...contract,
+    billing_company: req(input.billing_company) || contract.billing_company,
+    billing_street: req(input.billing_street) || contract.billing_street,
+    billing_zip: req(input.billing_zip) || contract.billing_zip,
+    billing_city: req(input.billing_city) || contract.billing_city,
+    sepa_account_holder:
+      contract.payment_method === "sepa" ? req(input.sepa_account_holder) || null : null,
+  };
+
+  const ibanPlain =
+    contract.payment_method === "sepa" && req(input.sepa_iban)
+      ? normalizeIban(input.sepa_iban as string)
+      : null;
+
+  const creditor = await loadCreditor();
+  const html = renderContractHtml(
+    buildRenderInput(merged, (leadData as ContractLead | null) ?? null, {
+      mode: "view",
+      creditor,
+      ibanPlain,
+    }),
+  );
+  return { html };
 }

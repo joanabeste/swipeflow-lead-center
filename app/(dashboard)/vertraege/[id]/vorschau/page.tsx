@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { loadContract } from "@/lib/contracts/data";
 import { buildRenderInput } from "@/lib/contracts/render";
+import { loadCreditor } from "@/lib/contracts/settings";
 import { renderContractHtml } from "@/lib/contracts/template";
 
 export default async function VertragVorschauPage({ params }: { params: Promise<{ id: string }> }) {
@@ -11,7 +12,8 @@ export default async function VertragVorschauPage({ params }: { params: Promise<
   if (!loaded) notFound();
   const { contract, lead } = loaded;
 
-  const html = renderContractHtml(buildRenderInput(contract, lead, { mode: "view" }));
+  const creditor = await loadCreditor();
+  const html = renderContractHtml(buildRenderInput(contract, lead, { mode: "view", creditor }));
 
   return (
     <div className="mx-auto max-w-4xl space-y-4">

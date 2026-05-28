@@ -8,11 +8,29 @@ const STYLES: Record<ContractStatus, string> = {
   cancelled: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
 };
 
-export function StatusBadge({ status, expired }: { status: ContractStatus; expired?: boolean }) {
+const LINK_ACTIVE_STYLE = "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300";
+
+export function StatusBadge({
+  status,
+  expired,
+  emailed,
+}: {
+  status: ContractStatus;
+  expired?: boolean;
+  emailed?: boolean;
+}) {
   if (expired && (status === "sent" || status === "viewed")) {
     return (
       <span className="inline-flex rounded-full bg-red-100 px-2.5 py-0.5 text-[11px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-300">
         Abgelaufen
+      </span>
+    );
+  }
+  // Link erstellt, aber nie per E-Mail versendet → "Link aktiv" statt irreführend "Gesendet".
+  if (status === "sent" && !emailed) {
+    return (
+      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${LINK_ACTIVE_STYLE}`}>
+        Link aktiv
       </span>
     );
   }

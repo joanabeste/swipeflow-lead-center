@@ -7,7 +7,8 @@ import { checkSection } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { sendContractLinkEmail, buildContractLink } from "@/lib/email/central";
 import { renderContractPdf, uploadContractPdf } from "@/lib/contracts/pdf";
-import { buildRenderInput, decryptIban, getCreditor } from "@/lib/contracts/render";
+import { buildRenderInput, decryptIban } from "@/lib/contracts/render";
+import { loadCreditor, saveCreditor } from "@/lib/contracts/settings";
 import { getContractFileSignedUrl } from "@/lib/contracts/pdf";
 import { TEMPLATE_VERSION } from "@/lib/contracts/template";
 import type { ContractRow, ContractLead, ContractEventType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
@@ -32,7 +33,7 @@ async function writeEvent(
 }
 
 /** Friert die Konditionen beim Aktivieren des Links/Versand ein. */
-function buildTermsSnapshot(contract: ContractRow): Record<string, unknown> {
+function buildTermsSnapshot(contract: ContractRow, creditorId: string): Record<string, unknown> {
   return {
     template_version: TEMPLATE_VERSION,
     setup_price_cents: contract.setup_price_cents,
@@ -40,7 +41,7 @@ function buildTermsSnapshot(contract: ContractRow): Record<string, unknown> {
     payment_mode: contract.payment_mode,
     installment_count: contract.installment_count,
     payment_method: contract.payment_method,
-    creditor_id: getCreditor().id,
+    creditor_id: creditorId,
     frozen_at: new Date().toISOString(),
   };
 }
@@ -120,6 +121,15 @@ export async function createContract(input: CreateContractInput): Promise<Result
       return { error: `Kunde konnte nicht angelegt werden: ${leadErr.message}` };
     }
     leadId = leadData.id as string;
+  } else {
+    // Aus dem CRM gewählter Lead, der noch kein Kunde ist → zum Kunden befördern.
+    // neq stellt sicher, dass became_customer_at bestehender Kunden nicht überschrieben wird.
+    const { error: promoteErr } = await db
+      .from("leads")
+      .update({ lifecycle_stage: "customer", became_customer_at: new Date().toISOString() })
+      .eq("id", leadId)
+      .neq("lifecycle_stage", "customer");
+    if (promoteErr) console.error("[createContract:promote]", promoteErr);
   }
 
   const { data, error } = await db
@@ -226,6 +236,7 @@ export async function sendContract(id: string): Promise<Result> {
   const isResend = !!contract.token && (contract.status === "sent" || contract.status === "viewed");
   const token = contract.token ?? crypto.randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + LINK_VALID_DAYS * 86_400_000);
+  const creditor = await loadCreditor();
 
   const db = createServiceClient();
   const { error: updErr } = await db
@@ -235,7 +246,7 @@ export async function sendContract(id: string): Promise<Result> {
       status: "sent",
       sent_at: new Date().toISOString(),
       expires_at: expiresAt.toISOString(),
-      terms_snapshot: buildTermsSnapshot(contract),
+      terms_snapshot: buildTermsSnapshot(contract, creditor.id),
     })
     .eq("id", id);
   if (updErr) {
@@ -282,9 +293,11 @@ export async function createContractLink(id: string): Promise<Result<{ link: str
   // Verträge behalten Status/Snapshot, nur die Gültigkeit wird verlängert.
   const update: Record<string, unknown> = { token, expires_at: expiresAt.toISOString() };
   if (contract.status === "draft") {
+    const creditor = await loadCreditor();
     update.status = "sent";
-    update.sent_at = new Date().toISOString();
-    update.terms_snapshot = buildTermsSnapshot(contract);
+    // sent_at bleibt bewusst leer — es kennzeichnet ausschließlich echten E-Mail-Versand.
+    // Reine Link-Verträge erscheinen dadurch als "Link aktiv" statt "Gesendet".
+    update.terms_snapshot = buildTermsSnapshot(contract, creditor.id);
   }
 
   const db = createServiceClient();
@@ -336,6 +349,58 @@ export async function cancelContract(id: string): Promise<Result> {
   return { success: true };
 }
 
+/** Löscht einen Vertrag endgültig — nur für Entwürfe oder stornierte Verträge.
+ *  Entfernt zugehörige Storage-Dateien; contract_events folgen per CASCADE. */
+export async function deleteContract(id: string): Promise<Result> {
+  const ctx = await checkSection("can_vertraege");
+  if (!ctx) return { error: "Nicht berechtigt." };
+  const contract = await loadRow(id);
+  if (!contract) return { error: "Vertrag nicht gefunden." };
+  if (contract.status !== "draft" && contract.status !== "cancelled") {
+    return { error: "Nur Entwürfe oder stornierte Verträge können gelöscht werden." };
+  }
+
+  const db = createServiceClient();
+
+  // Storage-Dateien (Signatur/PDF) entfernen, falls vorhanden — best effort.
+  const paths = [contract.signature_path, contract.pdf_path].filter((p): p is string => !!p);
+  if (paths.length > 0) {
+    const { error: rmErr } = await db.storage.from("contracts").remove(paths);
+    if (rmErr) console.error("[deleteContract:storage]", rmErr);
+  }
+
+  const { error } = await db.from("contracts").delete().eq("id", id);
+  if (error) {
+    console.error("[deleteContract]", error);
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+  await logAudit({ userId: ctx.user.id, action: "contract.delete", entityType: "contract", entityId: id });
+  revalidatePath("/vertraege");
+  return { success: true };
+}
+
+export interface CreditorInput {
+  id: string;
+  name: string;
+  address: string;
+}
+
+/** Speichert die eigenen SEPA-Gläubigerdaten (Verträge → Einstellungen). */
+export async function updateCreditorSettings(input: CreditorInput): Promise<Result> {
+  const ctx = await checkSection("can_vertraege");
+  if (!ctx) return { error: "Nicht berechtigt." };
+  const res = await saveCreditor({
+    id: input.id,
+    name: input.name,
+    address: input.address,
+    updatedBy: ctx.user.id,
+  });
+  if (res.error) return { error: `DB-Fehler: ${res.error}` };
+  await logAudit({ userId: ctx.user.id, action: "contract.settings", entityType: "company_settings", entityId: "default" });
+  revalidatePath("/vertraege/einstellungen");
+  return { success: true };
+}
+
 /** Liefert eine signed URL zum PDF. Generiert das PDF nach, falls es fehlt. */
 export async function getContractPdfUrl(id: string): Promise<Result<{ url: string }>> {
   const ctx = await checkSection("can_vertraege");
@@ -348,10 +413,11 @@ export async function getContractPdfUrl(id: string): Promise<Result<{ url: strin
   if (!pdfPath) {
     const lead = await loadLead(contract.lead_id);
     const ibanPlain = decryptIban(contract);
+    const creditor = await loadCreditor();
     const signature = contract.signature_path
       ? await buildSignatureForPdf(contract)
       : null;
-    const input = buildRenderInput(contract, lead, { mode: "pdf", signature, ibanPlain });
+    const input = buildRenderInput(contract, lead, { mode: "pdf", creditor, signature, ibanPlain });
     try {
       const buffer = await renderContractPdf(input);
       const up = await uploadContractPdf(id, buffer);
