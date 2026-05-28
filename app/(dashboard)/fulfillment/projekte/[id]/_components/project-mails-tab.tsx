@@ -34,6 +34,7 @@ export function ProjectMailsTab({
 
   useEffect(() => {
     if (!selected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([]);
       return;
     }

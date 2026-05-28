@@ -65,9 +65,9 @@ export function SettingsPanel({
     );
   }
   if (mode.kind === "module") {
-    const module = modules.find((m) => m.id === mode.moduleId);
-    if (!module) return null;
-    return <ModuleSettings module={module} onChange={onModuleChange} />;
+    const mod = modules.find((m) => m.id === mode.moduleId);
+    if (!mod) return null;
+    return <ModuleSettings module={mod} onChange={onModuleChange} />;
   }
   return (
     <CourseSettings

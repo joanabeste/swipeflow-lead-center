@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck — One-off CLI: braucht `pg`+`@types/pg` als devDeps, die erst vor
 // dem Migrationslauf installiert werden. Aus dem App-Typecheck ausgeklammert.
 /**

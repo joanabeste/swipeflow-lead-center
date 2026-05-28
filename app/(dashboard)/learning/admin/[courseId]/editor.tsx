@@ -37,6 +37,7 @@ export function CourseEditor(props: Props) {
   const courseSave = useAutosave(800);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (activeLessonId === null) setLessonSaveState(null);
   }, [activeLessonId]);
 

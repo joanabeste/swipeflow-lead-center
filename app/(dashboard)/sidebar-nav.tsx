@@ -220,6 +220,7 @@ export function SidebarNav({
       pathname === "/aktivitaet" ||
       pathname === "/export";
     if (adminContext && visibleSections.some((s) => s.id === "admin")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveSection("admin");
       return;
     }

@@ -131,7 +131,7 @@ export function ImapSettingsCard({ imap, hasSmtp }: { imap: UserImapRecord | nul
               className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
             />
             <p className="mt-1 text-xs text-gray-500">
-              Heißt je nach Provider „Sent", „Gesendet" oder „INBOX.Sent". Wird über „Testen" auf vorhandene Folder geprüft.
+              Heißt je nach Provider &bdquo;Sent&ldquo;, &bdquo;Gesendet&ldquo; oder &bdquo;INBOX.Sent&ldquo;. Wird über &bdquo;Testen&ldquo; auf vorhandene Folder geprüft.
             </p>
           </div>
         </div>

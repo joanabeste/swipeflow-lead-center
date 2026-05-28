@@ -31,8 +31,8 @@ export function ClickupListMapper({ projects }: { projects: Project[] }) {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
     loadLists();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function save(projectId: string) {

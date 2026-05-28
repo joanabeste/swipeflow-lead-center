@@ -73,7 +73,7 @@ export function ProjectsTable({ projects }: { projects: Row[] }) {
           </p>
           {!query && (
             <p className="mt-1 text-xs text-gray-500">
-              Lege ein Projekt direkt im Kunden-Profil an (Tab „Projekte").
+              Lege ein Projekt direkt im Kunden-Profil an (Tab &bdquo;Projekte&ldquo;).
             </p>
           )}
         </div>

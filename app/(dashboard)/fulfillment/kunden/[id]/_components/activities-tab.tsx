@@ -105,6 +105,7 @@ export function ActivitiesTab({
 
   useEffect(() => {
     if (selection?.kind !== "thread") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([]);
       return;
     }
@@ -319,7 +320,7 @@ export function ActivitiesTab({
               {clusters.length === 0 && suggestions.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-xs text-gray-400 dark:border-[#2c2c2e]/60">
                   <Inbox className="mx-auto mb-2 h-5 w-5 text-gray-300" />
-                  Noch keine Mails für diesen Kunden. „Synchronisieren" startet einen IMAP-Pull.
+                  Noch keine Mails für diesen Kunden. &bdquo;Synchronisieren&ldquo; startet einen IMAP-Pull.
                 </p>
               ) : (
                 clusters.map((cluster) => (

@@ -26,6 +26,7 @@ export function ImageBlock({ lessonId, block, onChange }: Props) {
   useEffect(() => {
     let cancelled = false;
     if (!block.storagePath) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSignedUrl(null);
       return;
     }

@@ -33,6 +33,7 @@ export function WonDealDialog({ deal, onClose }: Props) {
   });
 
   // Bei jedem neuen Deal Formular zurücksetzen.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!deal) return;
     setProjectName(deal.title);
@@ -42,6 +43,7 @@ export function WonDealDialog({ deal, onClose }: Props) {
     setContactOpen(false);
     setContact({ first_name: "", last_name: "", salutation: "sie", role: "", email: "", phone: "" });
   }, [deal]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   if (!deal) return null;
 
@@ -106,7 +108,7 @@ export function WonDealDialog({ deal, onClose }: Props) {
           {hasLead ? (
             <>Kunde: <span className="font-medium text-gray-900 dark:text-gray-100">{companyDisplay}</span></>
           ) : (
-            <>Es wird ein neuer Kunde <span className="font-medium text-gray-900 dark:text-gray-100">„{companyDisplay}"</span> angelegt.</>
+            <>Es wird ein neuer Kunde <span className="font-medium text-gray-900 dark:text-gray-100">&bdquo;{companyDisplay}&ldquo;</span> angelegt.</>
           )}
         </div>
 

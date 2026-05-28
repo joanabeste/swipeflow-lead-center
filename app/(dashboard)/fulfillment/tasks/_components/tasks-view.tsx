@@ -145,7 +145,7 @@ export function TasksView({ tasks }: { tasks: Task[] }) {
             {tasks.length === 0 ? "Keine Tasks." : "Keine Treffer fuer den Filter."}
           </p>
           {tasks.length === 0 && (
-            <p className="mt-1 text-xs text-gray-500">Verknuepfe ein Projekt mit einer ClickUp-Liste und ziehe die Tasks via „Sync".</p>
+            <p className="mt-1 text-xs text-gray-500">Verknuepfe ein Projekt mit einer ClickUp-Liste und ziehe die Tasks via &bdquo;Sync&ldquo;.</p>
           )}
         </div>
       ) : (

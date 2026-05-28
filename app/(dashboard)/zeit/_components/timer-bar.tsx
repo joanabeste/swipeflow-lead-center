@@ -26,6 +26,7 @@ export function TimerBar({ running }: Props) {
 
   useEffect(() => {
     if (!running) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPauseToastShown(false);
       return;
     }

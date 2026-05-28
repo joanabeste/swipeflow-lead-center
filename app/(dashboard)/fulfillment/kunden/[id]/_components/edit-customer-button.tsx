@@ -69,7 +69,7 @@ function EditCustomerDialog({ customer, onClose }: { customer: CustomerInitial; 
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold">Kunde bearbeiten</h2>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Stammdaten anpassen. Kontakte separat unter „Kontakte".</p>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Stammdaten anpassen. Kontakte separat unter &bdquo;Kontakte&ldquo;.</p>
           </div>
           <button type="button" onClick={onClose} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5">
             <X className="h-4 w-4" />
