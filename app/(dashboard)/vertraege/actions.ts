@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/server";
-import { checkAdmin } from "@/lib/auth";
+import { checkSection } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { sendContractLinkEmail, buildContractLink } from "@/lib/email/central";
 import { renderContractPdf, uploadContractPdf } from "@/lib/contracts/pdf";
@@ -31,6 +31,45 @@ async function writeEvent(
   });
 }
 
+/** Friert die Konditionen beim Aktivieren des Links/Versand ein. */
+function buildTermsSnapshot(contract: ContractRow): Record<string, unknown> {
+  return {
+    template_version: TEMPLATE_VERSION,
+    setup_price_cents: contract.setup_price_cents,
+    monthly_maint_cents: contract.monthly_maint_cents,
+    payment_mode: contract.payment_mode,
+    installment_count: contract.installment_count,
+    payment_method: contract.payment_method,
+    creditor_id: getCreditor().id,
+    frozen_at: new Date().toISOString(),
+  };
+}
+
+export interface BillingInput {
+  company?: string;
+  street?: string;
+  zip?: string;
+  city?: string;
+  email?: string;
+  country?: string;
+}
+
+/** Wandelt das Adress-Formular in DB-Spalten (leer → null). */
+function normBilling(b: BillingInput | undefined) {
+  const t = (v: string | undefined) => {
+    const s = (v ?? "").trim();
+    return s.length > 0 ? s : null;
+  };
+  return {
+    billing_company: t(b?.company),
+    billing_street: t(b?.street),
+    billing_zip: t(b?.zip),
+    billing_city: t(b?.city),
+    billing_email: t(b?.email),
+    billing_country: t(b?.country),
+  };
+}
+
 export interface CreateContractInput {
   lead_id?: string;
   /** Alternativ zu lead_id: neuen Kunden anlegen. */
@@ -41,10 +80,11 @@ export interface CreateContractInput {
   payment_mode: PaymentMode;
   installment_count?: number | null;
   payment_method: PaymentMethod;
+  billing?: BillingInput;
 }
 
 export async function createContract(input: CreateContractInput): Promise<Result<{ id: string }>> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   if (!Number.isFinite(input.setup_price_cents) || input.setup_price_cents < 0) {
     return { error: "Ungültiger Herstellungspreis." };
@@ -93,6 +133,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
       payment_mode: input.payment_mode,
       installment_count: input.payment_mode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      ...normBilling(input.billing),
       created_by: ctx.user.id,
     })
     .select("id")
@@ -105,7 +146,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
   const id = data.id as string;
   await writeEvent(id, "created", ctx.user.id);
   await logAudit({ userId: ctx.user.id, action: "contract.create", entityType: "contract", entityId: id });
-  revalidatePath("/admin/vertraege");
+  revalidatePath("/vertraege");
   return { success: true, id };
 }
 
@@ -115,10 +156,11 @@ export interface UpdateDraftInput {
   payment_mode: PaymentMode;
   installment_count?: number | null;
   payment_method: PaymentMethod;
+  billing?: BillingInput;
 }
 
 export async function updateContractDraft(id: string, input: UpdateDraftInput): Promise<Result> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   if (!Number.isFinite(input.setup_price_cents) || input.setup_price_cents < 0) {
     return { error: "Ungültiger Herstellungspreis." };
@@ -140,14 +182,15 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
       payment_mode: input.payment_mode,
       installment_count: input.payment_mode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      ...normBilling(input.billing),
     })
     .eq("id", id);
   if (error) {
     console.error("[updateContractDraft]", error);
     return { error: `DB-Fehler: ${error.message}` };
   }
-  revalidatePath(`/admin/vertraege/${id}`);
-  revalidatePath("/admin/vertraege");
+  revalidatePath(`/vertraege/${id}`);
+  revalidatePath("/vertraege");
   return { success: true };
 }
 
@@ -168,7 +211,7 @@ async function loadLead(leadId: string): Promise<ContractLead | null> {
 }
 
 export async function sendContract(id: string): Promise<Result> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
 
   const contract = await loadRow(id);
@@ -192,16 +235,7 @@ export async function sendContract(id: string): Promise<Result> {
       status: "sent",
       sent_at: new Date().toISOString(),
       expires_at: expiresAt.toISOString(),
-      terms_snapshot: {
-        template_version: TEMPLATE_VERSION,
-        setup_price_cents: contract.setup_price_cents,
-        monthly_maint_cents: contract.monthly_maint_cents,
-        payment_mode: contract.payment_mode,
-        installment_count: contract.installment_count,
-        payment_method: contract.payment_method,
-        creditor_id: getCreditor().id,
-        frozen_at: new Date().toISOString(),
-      },
+      terms_snapshot: buildTermsSnapshot(contract),
     })
     .eq("id", id);
   if (updErr) {
@@ -219,19 +253,56 @@ export async function sendContract(id: string): Promise<Result> {
   if (!mail.ok) {
     // Token/Status stehen bereits — Link kann manuell geteilt werden. Fehler melden.
     await writeEvent(id, isResend ? "resent" : "sent", ctx.user.id, { email_error: mail.error, to });
-    revalidatePath(`/admin/vertraege/${id}`);
+    revalidatePath(`/vertraege/${id}`);
     return { error: `Vertrag vorbereitet, aber E-Mail fehlgeschlagen: ${mail.error}` };
   }
 
   await writeEvent(id, isResend ? "resent" : "sent", ctx.user.id, { to });
   await logAudit({ userId: ctx.user.id, action: "contract.send", entityType: "contract", entityId: id });
-  revalidatePath(`/admin/vertraege/${id}`);
-  revalidatePath("/admin/vertraege");
+  revalidatePath(`/vertraege/${id}`);
+  revalidatePath("/vertraege");
   return { success: true };
 }
 
+/** Erzeugt/aktiviert den Signier-Link OHNE E-Mail-Versand — zum manuellen Teilen.
+ *  Anders als sendContract braucht es keine hinterlegte E-Mail. */
+export async function createContractLink(id: string): Promise<Result<{ link: string }>> {
+  const ctx = await checkSection("can_vertraege");
+  if (!ctx) return { error: "Nicht berechtigt." };
+
+  const contract = await loadRow(id);
+  if (!contract) return { error: "Vertrag nicht gefunden." };
+  if (contract.status === "signed") return { error: "Vertrag ist bereits unterschrieben." };
+  if (contract.status === "cancelled") return { error: "Vertrag ist storniert." };
+
+  const token = contract.token ?? crypto.randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + LINK_VALID_DAYS * 86_400_000);
+
+  // Entwurf → aktivieren (Status + Snapshot einfrieren). Bereits gesendete
+  // Verträge behalten Status/Snapshot, nur die Gültigkeit wird verlängert.
+  const update: Record<string, unknown> = { token, expires_at: expiresAt.toISOString() };
+  if (contract.status === "draft") {
+    update.status = "sent";
+    update.sent_at = new Date().toISOString();
+    update.terms_snapshot = buildTermsSnapshot(contract);
+  }
+
+  const db = createServiceClient();
+  const { error: updErr } = await db.from("contracts").update(update).eq("id", id);
+  if (updErr) {
+    console.error("[createContractLink:update]", updErr);
+    return { error: `DB-Fehler: ${updErr.message}` };
+  }
+
+  await writeEvent(id, "sent", ctx.user.id, { channel: "link" });
+  await logAudit({ userId: ctx.user.id, action: "contract.link", entityType: "contract", entityId: id });
+  revalidatePath(`/vertraege/${id}`);
+  revalidatePath("/vertraege");
+  return { success: true, link: buildContractLink(token) };
+}
+
 export async function extendContract(id: string): Promise<Result> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
@@ -244,12 +315,12 @@ export async function extendContract(id: string): Promise<Result> {
   const { error } = await db.from("contracts").update({ expires_at: expiresAt.toISOString() }).eq("id", id);
   if (error) return { error: `DB-Fehler: ${error.message}` };
   await writeEvent(id, "extended", ctx.user.id, { until: expiresAt.toISOString() });
-  revalidatePath(`/admin/vertraege/${id}`);
+  revalidatePath(`/vertraege/${id}`);
   return { success: true };
 }
 
 export async function cancelContract(id: string): Promise<Result> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
@@ -260,14 +331,14 @@ export async function cancelContract(id: string): Promise<Result> {
   if (error) return { error: `DB-Fehler: ${error.message}` };
   await writeEvent(id, "cancelled", ctx.user.id);
   await logAudit({ userId: ctx.user.id, action: "contract.cancel", entityType: "contract", entityId: id });
-  revalidatePath(`/admin/vertraege/${id}`);
-  revalidatePath("/admin/vertraege");
+  revalidatePath(`/vertraege/${id}`);
+  revalidatePath("/vertraege");
   return { success: true };
 }
 
 /** Liefert eine signed URL zum PDF. Generiert das PDF nach, falls es fehlt. */
 export async function getContractPdfUrl(id: string): Promise<Result<{ url: string }>> {
-  const ctx = await checkAdmin();
+  const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };

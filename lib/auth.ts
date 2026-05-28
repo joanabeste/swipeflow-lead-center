@@ -70,6 +70,14 @@ export async function checkAdmin(): Promise<AuthContext | null> {
   return ctx;
 }
 
+/** Server-Action: prueft Sektion-Permission ohne redirect. Admins immer ok. */
+export async function checkSection(section: keyof SectionPermissions): Promise<AuthContext | null> {
+  const ctx = await getAuthContext();
+  if (!ctx) return null;
+  if (!permissionsFromProfile(ctx.profile)[section]) return null;
+  return ctx;
+}
+
 /** Layout/Page: erzwingt Editor-Rechte fuer den Learning-Bereich.
  *  Admins oder User mit can_learning_edit. Andere landen auf /learning bzw. /. */
 export async function requireLearningEditor(): Promise<AuthContext> {

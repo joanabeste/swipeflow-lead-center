@@ -32,7 +32,7 @@ export default async function DashboardLayout({
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("service_mode, role, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_learning_edit")
+      .select("service_mode, role, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_learning_edit, can_vertraege")
       .eq("id", user.id)
       .single();
     if (profile?.service_mode) serviceMode = profile.service_mode as ServiceMode;
@@ -44,6 +44,7 @@ export default async function DashboardLayout({
         can_fulfillment: profile.can_fulfillment,
         can_zeit: profile.can_zeit,
         can_learning: profile.can_learning,
+        can_vertraege: profile.can_vertraege,
       });
       learningEditor = role === "admin" || profile.can_learning_edit === true;
     }

@@ -28,7 +28,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <Link href="/admin/vertraege" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
+      <Link href="/vertraege" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
         <ArrowLeft className="h-4 w-4" /> Zurück zur Übersicht
       </Link>
 
@@ -48,14 +48,14 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
           <div className="flex flex-col items-end gap-2">
             <div className="flex flex-wrap justify-end gap-2">
               <Link
-                href={`/admin/vertraege/${contract.id}/vorschau`}
+                href={`/vertraege/${contract.id}/vorschau`}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/15"
               >
                 <Eye className="h-4 w-4" /> Vorschau
               </Link>
               {contract.status === "draft" && (
                 <Link
-                  href={`/admin/vertraege/${contract.id}/bearbeiten`}
+                  href={`/vertraege/${contract.id}/bearbeiten`}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/15"
                 >
                   <Pencil className="h-4 w-4" /> Bearbeiten

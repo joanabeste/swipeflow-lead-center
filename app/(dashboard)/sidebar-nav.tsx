@@ -152,12 +152,12 @@ const vertraegeSection: Section = {
   id: "vertraege",
   label: "Verträge",
   icon: FileSignature,
-  defaultPath: "/admin/vertraege",
-  requires: "admin",
+  defaultPath: "/vertraege",
+  requires: "can_vertraege",
   groups: [
     { items: [
-      { href: "/admin/vertraege", label: "Uebersicht", icon: FileSignature },
-      { href: "/admin/vertraege/neu", label: "Neuer Vertrag", icon: FilePlus },
+      { href: "/vertraege", label: "Uebersicht", icon: FileSignature },
+      { href: "/vertraege/neu", label: "Neuer Vertrag", icon: FilePlus },
     ]},
   ],
 };
@@ -229,7 +229,7 @@ export function SidebarNav({
     // (z.B. /einstellungen/standort, /einstellungen/anreicherung, etc.). So bleibt der
     // Switcher auf Admin, wenn der User in einem Sub-Setting ist.
     const adminContext =
-      (pathname.startsWith("/admin") && !pathname.startsWith("/admin/vertraege")) ||
+      pathname.startsWith("/admin") ||
       pathname.startsWith("/einstellungen") ||
       pathname.startsWith("/nutzer") ||
       pathname.startsWith("/zeit/admin") ||
@@ -273,7 +273,7 @@ export function SidebarNav({
     if (href === "/") return pathname === "/";
     if (href === "/zeit") return pathname === "/zeit";
     if (href === "/admin") return pathname === "/admin";
-    if (href === "/admin/vertraege") return pathname === "/admin/vertraege";
+    if (href === "/vertraege") return pathname === "/vertraege";
     return pathname.startsWith(href);
   }
 

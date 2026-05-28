@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Plus, Trash2, KeyRound, Check, Loader2 } from "lucide-react";
+import { Plus, Trash2, KeyRound, Check, Loader2, Lock } from "lucide-react";
 import type { Profile } from "@/lib/types";
 import { createUser, updateUser, deleteUser, resetPassword } from "./actions";
 import { PasswordInput } from "@/components/password-input";
@@ -17,6 +17,33 @@ const roleLabels: Record<string, string> = {
   sales: "Vertrieb",
   viewer: "Betrachter",
   employee: "Mitarbeiter",
+};
+
+type PermField =
+  | "can_vertrieb"
+  | "can_fulfillment"
+  | "can_zeit"
+  | "can_learning"
+  | "can_learning_edit"
+  | "can_vertraege";
+
+/** Reihenfolge + Labels der Berechtigungs-Spalten (DRY für Header und Zeilen). */
+const PERMISSIONS: { field: PermField; label: string; title: string }[] = [
+  { field: "can_vertrieb", label: "Vertrieb", title: "Vertrieb" },
+  { field: "can_fulfillment", label: "Fulfillment", title: "Fulfillment" },
+  { field: "can_zeit", label: "Zeit", title: "Zeit & Lohn" },
+  { field: "can_learning", label: "Learning", title: "Learning ansehen" },
+  { field: "can_learning_edit", label: "L-Edit", title: "Learning bearbeiten" },
+  { field: "can_vertraege", label: "Verträge", title: "Verträge — Vertragsverwaltung" },
+];
+
+const FIELD_LABELS: Record<PermField, string> = {
+  can_vertrieb: "Vertrieb",
+  can_fulfillment: "Fulfillment",
+  can_zeit: "Zeit & Lohn",
+  can_learning: "Learning",
+  can_learning_edit: "Learning-Bearbeitung",
+  can_vertraege: "Verträge",
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -112,17 +139,31 @@ export function UserManager({ profiles, currentUserId }: Props) {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-[#2c2c2e]">
           <thead className="bg-gray-50 dark:bg-[#232325]">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Rolle</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Vertrieb">Vert.</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Fulfillment">Fulf.</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Zeit & Lohn">Zeit</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Learning ansehen">Learn</th>
-              <th className="px-4 py-3 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400" title="Learning bearbeiten">L-Edit</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Erstellt</th>
-              <th className="px-4 py-3" />
+              <th rowSpan={2} className="px-4 py-3 text-left align-bottom text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Name</th>
+              <th rowSpan={2} className="px-4 py-3 text-left align-bottom text-xs font-medium uppercase text-gray-500 dark:text-gray-400">E-Mail</th>
+              <th rowSpan={2} className="px-4 py-3 text-left align-bottom text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Rolle</th>
+              <th
+                colSpan={PERMISSIONS.length}
+                className="border-x border-gray-200 px-4 pt-3 pb-1 text-center text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:border-[#2c2c2e] dark:text-gray-500"
+              >
+                Berechtigungen
+              </th>
+              <th rowSpan={2} className="px-4 py-3 text-left align-bottom text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Status</th>
+              <th rowSpan={2} className="px-4 py-3 text-left align-bottom text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Erstellt</th>
+              <th rowSpan={2} className="px-4 py-3" />
+            </tr>
+            <tr>
+              {PERMISSIONS.map((p, i) => (
+                <th
+                  key={p.field}
+                  title={p.title}
+                  className={`px-3 pb-2 text-center text-[11px] font-medium text-gray-500 dark:text-gray-400 ${
+                    i === 0 ? "border-l border-gray-200 dark:border-[#2c2c2e]" : ""
+                  } ${i === PERMISSIONS.length - 1 ? "border-r border-gray-200 dark:border-[#2c2c2e]" : ""}`}
+                >
+                  {p.label}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-[#2c2c2e]">
@@ -149,46 +190,21 @@ export function UserManager({ profiles, currentUserId }: Props) {
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-3 text-center">
-                  <PermissionCheckbox
-                    profile={profile}
-                    field="can_vertrieb"
-                    disabled={profile.role === "admin" || profile.id === currentUserId}
-                    onSave={applyUpdate}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <PermissionCheckbox
-                    profile={profile}
-                    field="can_fulfillment"
-                    disabled={profile.role === "admin" || profile.id === currentUserId}
-                    onSave={applyUpdate}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <PermissionCheckbox
-                    profile={profile}
-                    field="can_zeit"
-                    disabled={profile.role === "admin" || profile.id === currentUserId}
-                    onSave={applyUpdate}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <PermissionCheckbox
-                    profile={profile}
-                    field="can_learning"
-                    disabled={profile.role === "admin" || profile.id === currentUserId}
-                    onSave={applyUpdate}
-                  />
-                </td>
-                <td className="px-4 py-3 text-center">
-                  <PermissionCheckbox
-                    profile={profile}
-                    field="can_learning_edit"
-                    disabled={profile.role === "admin" || profile.id === currentUserId}
-                    onSave={applyUpdate}
-                  />
-                </td>
+                {PERMISSIONS.map((p, i) => (
+                  <td
+                    key={p.field}
+                    className={`px-3 py-3 text-center ${
+                      i === 0 ? "border-l border-gray-100 dark:border-[#2c2c2e]/60" : ""
+                    } ${i === PERMISSIONS.length - 1 ? "border-r border-gray-100 dark:border-[#2c2c2e]/60" : ""}`}
+                  >
+                    <PermissionCheckbox
+                      profile={profile}
+                      field={p.field}
+                      disabled={profile.role === "admin" || profile.id === currentUserId}
+                      onSave={applyUpdate}
+                    />
+                  </td>
+                ))}
                 <td className="px-4 py-3 text-sm">
                   <select
                     defaultValue={profile.status}
@@ -201,7 +217,7 @@ export function UserManager({ profiles, currentUserId }: Props) {
                   </select>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                  {new Date(profile.created_at).toLocaleDateString("de-DE")}
+                  {profile.created_at ? new Date(profile.created_at).toLocaleDateString("de-DE") : "—"}
                 </td>
                 <td className="flex gap-2 px-4 py-3">
                   <button
@@ -267,21 +283,29 @@ function PermissionCheckbox({
   onSave,
 }: {
   profile: Profile;
-  field: "can_vertrieb" | "can_fulfillment" | "can_zeit" | "can_learning" | "can_learning_edit";
+  field: PermField;
   disabled?: boolean;
   onSave: (profileId: string, updates: Parameters<typeof updateUser>[1], label: string) => Promise<void>;
 }) {
-  // Admins haben implizit alles — UI zeigt das als "haken+disabled".
-  const initial = profile.role === "admin"
-    ? true
-    : (profile[field] ?? (field === "can_zeit" ? true : (field === "can_vertrieb" || field === "can_fulfillment") ? profile.role !== "employee" : false));
-  const FIELD_LABELS: Record<typeof field, string> = {
-    can_vertrieb: "Vertrieb",
-    can_fulfillment: "Fulfillment",
-    can_zeit: "Zeit & Lohn",
-    can_learning: "Learning",
-    can_learning_edit: "Learning-Bearbeitung",
-  };
+  // Admins haben implizit alles — UI zeigt das als gesperrtes Schloss statt einer
+  // ausgegrauten Checkbox, damit erkennbar ist, dass das bewusst nicht änderbar ist.
+  if (profile.role === "admin") {
+    return (
+      <span
+        className="inline-flex h-5 w-5 items-center justify-center rounded text-primary/70"
+        title="Admins haben immer Zugriff"
+      >
+        <Lock className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  const initial =
+    profile[field] ??
+    (field === "can_zeit"
+      ? true
+      : field === "can_vertrieb" || field === "can_fulfillment"
+        ? profile.role !== "employee"
+        : false);
   return (
     <input
       type="checkbox"
@@ -289,7 +313,6 @@ function PermissionCheckbox({
       disabled={disabled}
       onChange={(e) => onSave(profile.id, { [field]: e.target.checked }, `${FIELD_LABELS[field]} ${e.target.checked ? "aktiviert" : "deaktiviert"}.`)}
       className="h-4 w-4 accent-primary disabled:opacity-50"
-      title={disabled && profile.role === "admin" ? "Admins haben immer Zugriff" : ""}
     />
   );
 }

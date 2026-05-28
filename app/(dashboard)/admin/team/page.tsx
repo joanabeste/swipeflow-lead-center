@@ -23,7 +23,7 @@ export default async function AdminTeamPage() {
   // Alle aktiven Profile.
   const { data: profileData } = await db
     .from("profiles")
-    .select("id, name, email, role, status, hourly_wage_cents, wage_currency, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, hours_sat, hours_sun, can_vertrieb, can_fulfillment, can_zeit, break_mode")
+    .select("id, name, email, role, status, hourly_wage_cents, wage_currency, hours_mon, hours_tue, hours_wed, hours_thu, hours_fri, hours_sat, hours_sun, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_learning_edit, can_vertraege, break_mode, created_at")
     .order("name", { ascending: true });
   const profiles = (profileData ?? []) as Profile[];
 
@@ -143,9 +143,11 @@ export default async function AdminTeamPage() {
                 </td>
                 <td className="px-4 py-3 text-xs uppercase tracking-wider text-gray-500">{p.role}</td>
                 <td className="px-4 py-3 text-center text-[10px] font-mono">
-                  <span className={perms.can_vertrieb ? "text-primary" : "text-gray-300"}>V</span>{" · "}
-                  <span className={perms.can_fulfillment ? "text-primary" : "text-gray-300"}>F</span>{" · "}
-                  <span className={perms.can_zeit ? "text-primary" : "text-gray-300"}>Z</span>
+                  <span className={perms.can_vertrieb ? "text-primary" : "text-gray-300"} title="Vertrieb">V</span>{" · "}
+                  <span className={perms.can_fulfillment ? "text-primary" : "text-gray-300"} title="Fulfillment">F</span>{" · "}
+                  <span className={perms.can_zeit ? "text-primary" : "text-gray-300"} title="Zeit & Lohn">Z</span>{" · "}
+                  <span className={perms.can_learning ? "text-primary" : "text-gray-300"} title="Learning">L</span>{" · "}
+                  <span className={perms.can_vertraege ? "text-primary" : "text-gray-300"} title="Verträge">Vt</span>
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-gray-600 dark:text-gray-300">
                   {p.hourly_wage_cents ? `${fmtMoney(p.hourly_wage_cents)}/h` : <span className="text-gray-300">—</span>}
@@ -167,7 +169,7 @@ export default async function AdminTeamPage() {
       </div>
 
       <p className="text-[11px] text-gray-400">
-        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit & Lohn. Admins haben implizit alle.
+        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit & Lohn · L=Learning · Vt=Verträge. Admins haben implizit alle.
       </p>
 
       <section id="nutzer-verwalten" className="scroll-mt-20">

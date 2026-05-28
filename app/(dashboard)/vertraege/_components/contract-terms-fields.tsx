@@ -76,6 +76,65 @@ export function ContractTermsFields({
   );
 }
 
+export interface AddressState {
+  company: string;
+  street: string;
+  zip: string;
+  city: string;
+  email: string;
+  country: string;
+}
+
+export const EMPTY_ADDRESS: AddressState = {
+  company: "",
+  street: "",
+  zip: "",
+  city: "",
+  email: "",
+  country: "",
+};
+
+export function ContractAddressFields({
+  value,
+  onChange,
+}: {
+  value: AddressState;
+  onChange: (next: AddressState) => void;
+}) {
+  const set = (patch: Partial<AddressState>) => onChange({ ...value, ...patch });
+  return (
+    <Section title="Anschrift (optional)">
+      <p className="-mt-2 text-xs text-gray-400">
+        Wenn bekannt, hier vorab eintragen — der Kunde sieht die Felder beim Signieren vorausgefüllt.
+      </p>
+      <Field label="Firma">
+        <input value={value.company} onChange={(e) => set({ company: e.target.value })} className={inputCls} />
+      </Field>
+      <Field label="Straße & Nr.">
+        <input value={value.street} onChange={(e) => set({ street: e.target.value })} className={inputCls} />
+      </Field>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="PLZ">
+          <input value={value.zip} onChange={(e) => set({ zip: e.target.value })} className={inputCls} />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Stadt">
+            <input value={value.city} onChange={(e) => set({ city: e.target.value })} className={inputCls} />
+          </Field>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Land">
+          <input value={value.country} onChange={(e) => set({ country: e.target.value })} className={inputCls} />
+        </Field>
+        <Field label="E-Mail (für Versand)">
+          <input type="email" value={value.email} onChange={(e) => set({ email: e.target.value })} className={inputCls} />
+        </Field>
+      </div>
+    </Section>
+  );
+}
+
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
@@ -112,7 +171,7 @@ export function Toggle({
       disabled={disabled}
       className={`rounded-xl px-4 py-2 text-sm font-medium transition disabled:opacity-40 ${
         active
-          ? "bg-primary text-white"
+          ? "bg-primary text-gray-900"
           : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/15"
       }`}
     >

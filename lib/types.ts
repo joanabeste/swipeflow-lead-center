@@ -39,6 +39,8 @@ export interface Profile {
   // Learning-Modul (Migration 085). Admins haben implizit beides.
   can_learning?: boolean | null;
   can_learning_edit?: boolean | null;
+  // Verträge-Modul (Migration 103). Restriktiver Default (false), Admins immer Zugriff.
+  can_vertraege?: boolean | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,20 +51,22 @@ export interface SectionPermissions {
   can_fulfillment: boolean;
   can_zeit: boolean;
   can_learning: boolean;
+  can_vertraege: boolean;
 }
 
-/** Permissions aus dem Profile ableiten, mit Defensiv-Defaults wenn Migration 075/085 fehlt. */
+/** Permissions aus dem Profile ableiten, mit Defensiv-Defaults wenn Migration 075/085/103 fehlt. */
 export function permissionsFromProfile(
-  profile: Pick<Profile, "role" | "can_vertrieb" | "can_fulfillment" | "can_zeit" | "can_learning">,
+  profile: Pick<Profile, "role" | "can_vertrieb" | "can_fulfillment" | "can_zeit" | "can_learning" | "can_vertraege">,
 ): SectionPermissions {
   if (profile.role === "admin")
-    return { can_vertrieb: true, can_fulfillment: true, can_zeit: true, can_learning: true };
+    return { can_vertrieb: true, can_fulfillment: true, can_zeit: true, can_learning: true, can_vertraege: true };
   if (profile.role === "employee") {
     return {
       can_vertrieb: profile.can_vertrieb ?? false,
       can_fulfillment: profile.can_fulfillment ?? false,
       can_zeit: profile.can_zeit ?? true,
       can_learning: profile.can_learning ?? false,
+      can_vertraege: profile.can_vertraege ?? false,
     };
   }
   // sales / viewer
@@ -71,6 +75,7 @@ export function permissionsFromProfile(
     can_fulfillment: profile.can_fulfillment ?? true,
     can_zeit: profile.can_zeit ?? true,
     can_learning: profile.can_learning ?? false,
+    can_vertraege: profile.can_vertraege ?? false,
   };
 }
 

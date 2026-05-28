@@ -118,5 +118,5 @@ export async function sendContractSignedNotifyEmail(opts: {
 /** Baut die absolute Admin-URL zur Vertrags-Detailseite. */
 export function buildContractAdminUrl(contractId: string): string {
   const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
-  return `${base}/admin/vertraege/${contractId}`;
+  return `${base}/vertraege/${contractId}`;
 }

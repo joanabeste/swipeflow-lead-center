@@ -16,8 +16,8 @@ export default async function VertraegeListePage() {
           </p>
         </div>
         <Link
-          href="/admin/vertraege/neu"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary/90"
+          href="/vertraege/neu"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 transition hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" /> Neuer Vertrag
         </Link>
@@ -28,7 +28,7 @@ export default async function VertraegeListePage() {
           <div className="flex flex-col items-center gap-3 p-12 text-center">
             <FileSignature className="h-8 w-8 text-gray-300" />
             <p className="text-sm text-gray-500 dark:text-gray-400">Noch keine Verträge angelegt.</p>
-            <Link href="/admin/vertraege/neu" className="text-sm font-medium text-primary hover:underline">
+            <Link href="/vertraege/neu" className="text-sm font-medium text-primary hover:underline">
               Ersten Vertrag erstellen →
             </Link>
           </div>

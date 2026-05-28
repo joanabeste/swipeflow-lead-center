@@ -69,6 +69,7 @@ export async function updateUser(
     can_zeit?: boolean;
     can_learning?: boolean;
     can_learning_edit?: boolean;
+    can_vertraege?: boolean;
   },
 ) {
   const ctx = await checkAdmin();

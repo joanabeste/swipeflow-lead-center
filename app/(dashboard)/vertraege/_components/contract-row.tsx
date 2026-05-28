@@ -23,7 +23,7 @@ function fmtDate(iso: string | null): string {
 
 export function ContractRow({ c }: { c: ContractRowItem }) {
   const router = useRouter();
-  const href = `/admin/vertraege/${c.id}`;
+  const href = `/vertraege/${c.id}`;
   const expired = isExpired({ expires_at: c.expires_at, status: c.status });
 
   return (
