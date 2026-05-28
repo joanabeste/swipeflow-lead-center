@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { checkAdmin } from "@/lib/auth";
+import { encryptSecret } from "@/lib/crypto/secrets";
 import type { EnrichmentConfig, ServiceMode, WebdevStrictness, LeadVertical } from "@/lib/types";
 import { generateScoringSuggestion, type ReviewOutcome } from "@/lib/learning/scoring-reviewer";
 import {
@@ -730,6 +731,33 @@ export async function setUserPhonemondoExtension(userId: string, extension: stri
     entityType: "profile",
     entityId: userId,
     details: { extension: value },
+  });
+
+  revalidatePath("/einstellungen");
+  return { success: true };
+}
+
+export async function setUserPhonemondoApiToken(userId: string, token: string | null) {
+  const check = await ensureAdmin();
+  if ("error" in check) return { error: check.error };
+
+  const db = createServiceClient();
+  // Leer → NULL (Team-Token greift). Sonst verschluesselt ablegen.
+  const trimmed = token?.trim() || null;
+  const value = trimmed ? encryptSecret(trimmed) : null;
+  const { error } = await db
+    .from("profiles")
+    .update({ phonemondo_api_token: value, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+
+  await logAudit({
+    userId: check.user.id,
+    action: "phonemondo.api_token_set",
+    entityType: "profile",
+    entityId: userId,
+    // Klartext-Token niemals loggen — nur, ob gesetzt oder geleert.
+    details: { has_token: !!value },
   });
 
   revalidatePath("/einstellungen");

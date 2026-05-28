@@ -28,6 +28,8 @@ export interface TriggerCallInput {
   target: string;
   /** Durchwahl/Extension des anrufenden Nutzers */
   extension: string;
+  /** Optional: pro-Nutzer-API-Token; fehlt → Env-Fallback (Team-Token) */
+  apiToken?: string;
   /** Optional: Metadaten, die an den Webhook zurückkommen können */
   metadata?: Record<string, unknown>;
 }

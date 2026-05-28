@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { triggerCall, isPhoneMondoConfigured } from "@/lib/phonemondo/client";
+import { decryptSecret } from "@/lib/crypto/secrets";
 import { dialWebexCall } from "@/lib/webex/calling";
 import { getWebexCredentials } from "@/lib/webex/auth";
 import { normalizePhone, normalizeEmail, normalizeUrl, extractDomain } from "@/lib/csv/normalizer";
@@ -125,6 +126,50 @@ export async function updateLeadAssignedTo(leadId: string, assignedTo: string | 
 
   revalidatePath("/crm");
   revalidatePath(`/crm/${leadId}`);
+  return { success: true };
+}
+
+/**
+ * Weist mehrere ausgewaehlte Leads gemeinsam einer Person zu (oder entfernt die
+ * Zuordnung mit assignedTo=null). Wird aus der Bulk-Aktionsleiste im CRM gerufen.
+ */
+export async function bulkAssignLeads(ids: string[], assignedTo: string | null) {
+  const user = await currentUser();
+  if (!user) return { error: "Nicht angemeldet." };
+  if (ids.length === 0) return { success: true };
+  const db = createServiceClient();
+
+  const { data: before } = await db
+    .from("leads")
+    .select("id, assigned_to")
+    .in("id", ids);
+  const oldById = new Map(
+    (before ?? []).map((r) => [r.id as string, (r.assigned_to as string | null) ?? null]),
+  );
+
+  const { error } = await db
+    .from("leads")
+    .update({ assigned_to: assignedTo, updated_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) {
+    console.error("[bulkAssignLeads] failed:", error);
+    if (/column.*assigned_to.*does not exist/i.test(error.message)) {
+      return { error: "Spalte assigned_to fehlt — Migration 067 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  for (const id of ids) {
+    await logAudit({
+      userId: user.id,
+      action: "lead.assigned_to_changed",
+      entityType: "lead",
+      entityId: id,
+      details: { old: oldById.get(id) ?? null, new: assignedTo },
+    });
+  }
+
+  revalidatePath("/crm");
   return { success: true };
 }
 
@@ -494,7 +539,7 @@ async function startCallPhoneMondo(input: {
   const db = createServiceClient();
   const { data: profile } = await db
     .from("profiles")
-    .select("phonemondo_extension")
+    .select("phonemondo_extension, phonemondo_api_token")
     .eq("id", input.userId)
     .single();
   const extension = profile?.phonemondo_extension?.trim();
@@ -502,11 +547,22 @@ async function startCallPhoneMondo(input: {
     return { error: "Keine PhoneMondo-Durchwahl in deinem Profil hinterlegt." };
   }
 
+  // Eigener Token hat Vorrang; fehlt er, faellt triggerCall auf den Team-Token zurueck.
+  let apiToken: string | undefined;
+  if (profile?.phonemondo_api_token) {
+    try {
+      apiToken = decryptSecret(profile.phonemondo_api_token);
+    } catch {
+      return { error: "Dein PhoneMondo-Token konnte nicht entschluesselt werden — bitte in den Einstellungen neu hinterlegen." };
+    }
+  }
+
   let mondoCallId: string | null = null;
   try {
     const res = await triggerCall({
       target: input.phoneNumber,
       extension,
+      apiToken,
       metadata: { leadId: input.leadId, userId: input.userId },
     });
     mondoCallId = res.callId;

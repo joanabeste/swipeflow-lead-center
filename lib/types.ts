@@ -15,6 +15,8 @@ export interface Profile {
   lead_table_columns: string[] | null;
   dashboard_widgets: string[] | null;
   phonemondo_extension: string | null;
+  /** Verschluesselter pro-Nutzer-PhoneMondo-Token (nur server-seitig entschluesseln; NULL = Team-Token). */
+  phonemondo_api_token?: string | null;
   // Zeit-Modul (Migration 062). Optional, weil Migration zum Zeitpunkt der UI-Verifikation
   // noch nicht zwingend ausgefuehrt ist — Defaults werden in lib/zeit/profile.ts ergaenzt.
   hours_mon?: number | null;

@@ -23,6 +23,12 @@ export default async function PhonemondoPage() {
     baseUrl: process.env.PHONEMONDO_API_BASE_URL ?? "https://www.phonemondo.com/api",
   };
 
+  // Verschluesselten Token nie an den Client geben — nur ein "gesetzt"-Flag.
+  const managerProfiles = ((profiles as Profile[]) ?? []).map(({ phonemondo_api_token, ...p }) => ({
+    ...p,
+    hasPhonemondoToken: !!phonemondo_api_token,
+  }));
+
   return (
     <div>
       <PageHeader
@@ -33,7 +39,7 @@ export default async function PhonemondoPage() {
       />
       <PhonemondoManager
         status={status}
-        profiles={(profiles as Profile[]) ?? []}
+        profiles={managerProfiles}
         webhookUrl={webhookUrl}
       />
     </div>

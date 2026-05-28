@@ -26,7 +26,8 @@ export function isPhoneMondoConfigured(): boolean {
  * auf die dokumentierte Form bringen.
  */
 export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallResult> {
-  const token = process.env.PHONEMONDO_API_TOKEN;
+  // Pro-Nutzer-Token hat Vorrang, sonst Team-Token aus der Env.
+  const token = input.apiToken ?? process.env.PHONEMONDO_API_TOKEN;
   if (!token) {
     throw new Error(
       "PhoneMondo nicht konfiguriert. Setze PHONEMONDO_API_TOKEN in den Umgebungsvariablen.",
@@ -126,8 +127,8 @@ export async function triggerCall(input: TriggerCallInput): Promise<TriggerCallR
  * der User wählt eine aus, und ihre uid wird in profiles.phonemondo_extension
  * gespeichert.
  */
-export async function listMySources(): Promise<PhonemondoSource[]> {
-  const token = process.env.PHONEMONDO_API_TOKEN;
+export async function listMySources(apiToken?: string): Promise<PhonemondoSource[]> {
+  const token = apiToken ?? process.env.PHONEMONDO_API_TOKEN;
   if (!token) throw new Error("PhoneMondo nicht konfiguriert (PHONEMONDO_API_TOKEN fehlt).");
   const baseUrl = (process.env.PHONEMONDO_API_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   const url = `${baseUrl}/sources/mine`;
