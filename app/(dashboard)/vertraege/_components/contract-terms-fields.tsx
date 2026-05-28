@@ -12,9 +12,31 @@ export interface TermsState {
   // Recruiting
   jobTitle: string;
   campaignStart: string;
+  campaignDays: string;
   campaignEnd: string;
   adBudgetEur: string;
   applicantGuarantee: boolean;
+  // Content (campaignStart wird als Vertragsbeginn wiederverwendet)
+  contentPlatforms: string;
+  postsPerWeek: string;
+  onsiteProduction: boolean;
+  onsiteIntervalMonths: string;
+  minTermMonths: string;
+  noticeWeeks: string;
+}
+
+function addDays(iso: string, days: number): string {
+  if (!iso || !Number.isFinite(days)) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDateDe(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
 export const inputCls =
@@ -31,6 +53,12 @@ export function ContractTermsFields({
 }) {
   const set = (patch: Partial<TermsState>) => onChange({ ...value, ...patch });
 
+  const setCampaign = (patch: Partial<Pick<TermsState, "campaignStart" | "campaignDays">>) => {
+    const start = patch.campaignStart ?? value.campaignStart;
+    const days = patch.campaignDays ?? value.campaignDays;
+    set({ ...patch, campaignEnd: addDays(start, Number(days)) });
+  };
+
   const setupCents = parseEuroToCents(value.setupEur);
   const monthlyCents = parseEuroToCents(value.monthlyEur);
   const yearlyCents = monthlyCents * 12;
@@ -38,20 +66,67 @@ export function ContractTermsFields({
   const showRatePreview = value.paymentMode === "raten" && count >= 2 && setupCents > 0;
   const { base, last } = showRatePreview ? splitInstallments(setupCents, count) : { base: 0, last: 0 };
   const isRecruiting = type === "recruiting";
+  const isContent = type === "content";
 
   return (
     <>
-      {isRecruiting ? (
+      {isContent ? (
+        <Section title="Content-Paket">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Monatlicher Betrag (€ netto)">
+              <input inputMode="decimal" value={value.monthlyEur} onChange={(e) => set({ monthlyEur: e.target.value })} className={inputCls} />
+            </Field>
+            <Field label="Einmalige Einrichtungsgebühr (€ netto, optional)">
+              <input inputMode="decimal" value={value.setupEur} onChange={(e) => set({ setupEur: e.target.value })} className={inputCls} />
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Plattformen">
+              <input value={value.contentPlatforms} onChange={(e) => set({ contentPlatforms: e.target.value })} className={inputCls} placeholder="Instagram und Facebook" />
+            </Field>
+            <Field label="Beiträge pro Woche">
+              <input inputMode="numeric" value={value.postsPerWeek} onChange={(e) => set({ postsPerWeek: e.target.value })} className={`${inputCls} max-w-[120px]`} />
+            </Field>
+          </div>
+          <Field label="Vor-Ort-Content-Produktion">
+            <div className="flex items-center gap-2">
+              <Toggle active={value.onsiteProduction} onClick={() => set({ onsiteProduction: true })}>Mit Vor-Ort</Toggle>
+              <Toggle active={!value.onsiteProduction} onClick={() => set({ onsiteProduction: false })}>Ohne</Toggle>
+              {value.onsiteProduction && (
+                <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  alle
+                  <input inputMode="numeric" value={value.onsiteIntervalMonths} onChange={(e) => set({ onsiteIntervalMonths: e.target.value })} className={`${inputCls} max-w-[64px]`} />
+                  Monate
+                </span>
+              )}
+            </div>
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Field label="Vertragsbeginn (optional)">
+              <input type="date" value={value.campaignStart} onChange={(e) => set({ campaignStart: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert`} />
+            </Field>
+            <Field label="Mindestlaufzeit (Monate)">
+              <input inputMode="numeric" value={value.minTermMonths} onChange={(e) => set({ minTermMonths: e.target.value })} className={inputCls} />
+            </Field>
+            <Field label="Kündigungsfrist (Wochen)">
+              <input inputMode="numeric" value={value.noticeWeeks} onChange={(e) => set({ noticeWeeks: e.target.value })} className={inputCls} />
+            </Field>
+          </div>
+        </Section>
+      ) : isRecruiting ? (
         <Section title="Kampagne">
           <Field label="Jobtitel">
             <input value={value.jobTitle} onChange={(e) => set({ jobTitle: e.target.value })} className={inputCls} placeholder="z. B. Steuerberater*in" />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Laufzeit von">
-              <input type="date" value={value.campaignStart} onChange={(e) => set({ campaignStart: e.target.value })} className={inputCls} />
+            <Field label="Startzeitpunkt">
+              <input type="date" value={value.campaignStart} onChange={(e) => setCampaign({ campaignStart: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert`} />
             </Field>
-            <Field label="Laufzeit bis">
-              <input type="date" value={value.campaignEnd} onChange={(e) => set({ campaignEnd: e.target.value })} className={inputCls} />
+            <Field label="Laufzeit (Tage)">
+              <input inputMode="numeric" value={value.campaignDays} onChange={(e) => setCampaign({ campaignDays: e.target.value })} className={inputCls} />
+              {value.campaignEnd && (
+                <p className="mt-1 text-[11px] text-gray-400">Ende: {formatDateDe(value.campaignEnd)}</p>
+              )}
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -86,7 +161,7 @@ export function ContractTermsFields({
       )}
 
       <Section title="Zahlung">
-        {!isRecruiting && (
+        {!isRecruiting && !isContent && (
           <>
             <Field label="Zahlungsart (gilt nur für die Erstellung — Wartung wird immer jährlich abgerechnet)">
               <div className="flex gap-2">
@@ -116,6 +191,9 @@ export function ContractTermsFields({
         </Field>
         {isRecruiting && (
           <p className="text-[11px] text-gray-400">Zahlung erfolgt vor Kampagnenstart in einer Summe.</p>
+        )}
+        {isContent && (
+          <p className="text-[11px] text-gray-400">Die monatliche Pauschale wird monatlich abgerechnet.</p>
         )}
       </Section>
     </>

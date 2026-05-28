@@ -12,6 +12,15 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
   const { contract, lead } = loaded;
   if (contract.status !== "draft") redirect(`/vertraege/${id}`);
 
+  const campaignDays =
+    contract.campaign_start && contract.campaign_end
+      ? Math.round(
+          (new Date(`${contract.campaign_end}T00:00:00`).getTime() -
+            new Date(`${contract.campaign_start}T00:00:00`).getTime()) /
+            86_400_000,
+        )
+      : 30;
+
   const initial: TermsState = {
     setupEur: String(contract.setup_price_cents / 100),
     monthlyEur: String(contract.monthly_maint_cents / 100),
@@ -20,9 +29,16 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
     paymentMethod: contract.payment_method,
     jobTitle: contract.job_title ?? "",
     campaignStart: contract.campaign_start ?? "",
+    campaignDays: String(campaignDays),
     campaignEnd: contract.campaign_end ?? "",
     adBudgetEur: String(contract.ad_budget_cents / 100),
     applicantGuarantee: contract.applicant_guarantee,
+    contentPlatforms: contract.content_platforms ?? "",
+    postsPerWeek: contract.posts_per_week != null ? String(contract.posts_per_week) : "",
+    onsiteProduction: contract.onsite_production,
+    onsiteIntervalMonths: contract.onsite_interval_months != null ? String(contract.onsite_interval_months) : "3",
+    minTermMonths: String(contract.min_term_months),
+    noticeWeeks: String(contract.notice_period_weeks),
   };
 
   const initialAddress: AddressState = {

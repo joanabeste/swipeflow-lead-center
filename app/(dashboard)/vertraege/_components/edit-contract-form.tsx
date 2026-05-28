@@ -39,6 +39,12 @@ export function EditContractForm({
       campaign_start: terms.campaignStart || null,
       campaign_end: terms.campaignEnd || null,
       applicant_guarantee: terms.applicantGuarantee,
+      content_platforms: terms.contentPlatforms || null,
+      posts_per_week: terms.postsPerWeek ? Number(terms.postsPerWeek) : null,
+      onsite_production: terms.onsiteProduction,
+      onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
+      min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,
+      notice_period_weeks: terms.noticeWeeks ? Number(terms.noticeWeeks) : 4,
       billing: address,
     });
     setBusy(false);

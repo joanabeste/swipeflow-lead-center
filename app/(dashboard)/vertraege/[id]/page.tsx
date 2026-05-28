@@ -88,6 +88,20 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
               <Row label="Bewerbergarantie" value={contract.applicant_guarantee ? "Ja" : "Nein"} />
               <Row label="Zahlungsmethode" value={PAYMENT_METHOD_LABEL[contract.payment_method]} />
             </>
+          ) : contract.type === "content" ? (
+            <>
+              <Row label="Monatlicher Betrag" value={`${formatEuro(contract.monthly_maint_cents)} netto / Monat`} />
+              {contract.setup_price_cents > 0 && (
+                <Row label="Einrichtungsgebühr" value={`${formatEuro(contract.setup_price_cents)} netto`} />
+              )}
+              <Row label="Plattformen" value={contract.content_platforms || "Instagram und Facebook"} />
+              <Row label="Frequenz" value={contract.posts_per_week ? `${contract.posts_per_week} Beitrag/Woche` : "nach Absprache"} />
+              <Row label="Vor-Ort-Produktion" value={contract.onsite_production ? `alle ${contract.onsite_interval_months ?? 3} Monate` : "Nein"} />
+              <Row label="Vertragsbeginn" value={fmtDate(contract.campaign_start)} />
+              <Row label="Mindestlaufzeit" value={contract.min_term_months > 0 ? `${contract.min_term_months} Monate` : "keine"} />
+              <Row label="Kündigungsfrist" value={`${contract.notice_period_weeks} Wochen`} />
+              <Row label="Zahlungsmethode" value={PAYMENT_METHOD_LABEL[contract.payment_method]} />
+            </>
           ) : (
             <>
               <Row label="Herstellungspreis" value={`${formatEuro(contract.setup_price_cents)} netto`} />

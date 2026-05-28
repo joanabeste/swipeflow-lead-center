@@ -27,15 +27,29 @@ const DEFAULT_TERMS: TermsState = {
   paymentMethod: "sepa",
   jobTitle: "",
   campaignStart: "",
+  campaignDays: "30",
   campaignEnd: "",
   adBudgetEur: "1200",
   applicantGuarantee: false,
+  contentPlatforms: "Instagram und Facebook",
+  postsPerWeek: "1",
+  onsiteProduction: false,
+  onsiteIntervalMonths: "3",
+  minTermMonths: "0",
+  noticeWeeks: "4",
 };
 
 const RECRUITING_DEFAULT_TERMS: TermsState = {
   ...DEFAULT_TERMS,
   setupEur: "2500",
   monthlyEur: "0",
+  paymentMethod: "rechnung",
+};
+
+const CONTENT_DEFAULT_TERMS: TermsState = {
+  ...DEFAULT_TERMS,
+  setupEur: "0",
+  monthlyEur: "600",
   paymentMethod: "rechnung",
 };
 
@@ -70,7 +84,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
 
   function chooseType(t: ContractType) {
     setContractType(t);
-    setTerms(t === "recruiting" ? RECRUITING_DEFAULT_TERMS : DEFAULT_TERMS);
+    setTerms(t === "recruiting" ? RECRUITING_DEFAULT_TERMS : t === "content" ? CONTENT_DEFAULT_TERMS : DEFAULT_TERMS);
   }
 
   const selected = useMemo(
@@ -126,6 +140,12 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
       campaign_start: terms.campaignStart || null,
       campaign_end: terms.campaignEnd || null,
       applicant_guarantee: terms.applicantGuarantee,
+      content_platforms: terms.contentPlatforms || null,
+      posts_per_week: terms.postsPerWeek ? Number(terms.postsPerWeek) : null,
+      onsite_production: terms.onsiteProduction,
+      onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
+      min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,
+      notice_period_weeks: terms.noticeWeeks ? Number(terms.noticeWeeks) : 4,
       billing: address,
     });
     if ("error" in res) {
@@ -139,9 +159,10 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
   return (
     <div className="space-y-6">
       <Section title="Vertragstyp">
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Toggle active={contractType === "webdesign"} onClick={() => chooseType("webdesign")}>Webdesign</Toggle>
           <Toggle active={contractType === "recruiting"} onClick={() => chooseType("recruiting")}>Social Recruiting</Toggle>
+          <Toggle active={contractType === "content"} onClick={() => chooseType("content")}>Social Media Content</Toggle>
         </div>
       </Section>
 

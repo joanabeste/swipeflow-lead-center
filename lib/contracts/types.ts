@@ -1,5 +1,5 @@
 export type ContractStatus = "draft" | "sent" | "viewed" | "signed" | "cancelled";
-export type ContractType = "webdesign" | "recruiting";
+export type ContractType = "webdesign" | "recruiting" | "content";
 export type PaymentMode = "einmal" | "raten";
 export type PaymentMethod = "sepa" | "rechnung";
 
@@ -27,11 +27,20 @@ export interface ContractRow {
   payment_method: PaymentMethod;
 
   // Social-Recruiting-Felder (nur bei type='recruiting' befüllt)
+  // campaign_start wird bei type='content' als Vertragsbeginn wiederverwendet.
   job_title: string | null;
   campaign_start: string | null;
   campaign_end: string | null;
   ad_budget_cents: number;
   applicant_guarantee: boolean;
+
+  // Social-Media-Content-Felder (nur bei type='content' befüllt)
+  content_platforms: string | null;
+  posts_per_week: number | null;
+  onsite_production: boolean;
+  onsite_interval_months: number | null;
+  min_term_months: number;
+  notice_period_weeks: number;
 
   billing_company: string | null;
   billing_street: string | null;
@@ -86,6 +95,7 @@ export interface ContractEvent {
 export const CONTRACT_TYPE_LABELS: Record<ContractType, string> = {
   webdesign: "Webdesign",
   recruiting: "Social Recruiting",
+  content: "Social Media Content",
 };
 
 export const STATUS_LABELS: Record<ContractStatus, string> = {

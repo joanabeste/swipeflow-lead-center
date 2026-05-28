@@ -9,11 +9,14 @@ import { formatEuro, splitInstallments } from "./format";
 import type { ContractType } from "./types";
 
 export const TEMPLATE_VERSION = "webdesign-v3";
-export const RECRUITING_TEMPLATE_VERSION = "recruiting-v1";
+export const RECRUITING_TEMPLATE_VERSION = "recruiting-v2";
+export const CONTENT_TEMPLATE_VERSION = "content-v1";
 
 /** Eingefrorene Template-Version pro Vertragstyp (für terms_snapshot). */
 export function templateVersion(type: ContractType): string {
-  return type === "recruiting" ? RECRUITING_TEMPLATE_VERSION : TEMPLATE_VERSION;
+  if (type === "recruiting") return RECRUITING_TEMPLATE_VERSION;
+  if (type === "content") return CONTENT_TEMPLATE_VERSION;
+  return TEMPLATE_VERSION;
 }
 
 // Markenlogo (swipeflow „s") als Inline-SVG — muss inline sein, da das PDF via
@@ -41,9 +44,17 @@ export interface ContractRenderInput {
   // Social-Recruiting-Felder (nur bei type='recruiting')
   adBudgetCents: number;
   jobTitle: string;
-  campaignStart: string; // ISO-Datum oder ""
+  campaignStart: string; // ISO-Datum oder ""; bei type='content' = Vertragsbeginn
   campaignEnd: string; // ISO-Datum oder ""
   applicantGuarantee: boolean;
+
+  // Social-Media-Content-Felder (nur bei type='content')
+  contentPlatforms: string;
+  postsPerWeek: number | null;
+  onsiteProduction: boolean;
+  onsiteIntervalMonths: number | null;
+  minTermMonths: number;
+  noticePeriodWeeks: number;
 
   // SEPA-Gläubiger (aus Env)
   creditor: { id: string; name: string; address: string };
@@ -86,6 +97,19 @@ function subprocessorListItems(): string {
   return [
     "Hetzner Online GmbH, Industriestr. 25, 91710 Gunzenhausen, Deutschland — Hosting und Server-Infrastruktur.",
     "Mittwald CM Service GmbH &amp; Co. KG, Königsberger Straße 4–6, 32339 Espelkamp, Deutschland — Hosting und Server-Infrastruktur.",
+  ]
+    .map((entry) => `<li>${entry}</li>`)
+    .join("");
+}
+
+// Beim Recruiting fließen Bewerber-Personendaten über die Landeseite
+// (Perspective) und die Werbeplattform (Meta) — beide werden im AVV namentlich
+// als Sub-Auftragsverarbeiter benannt, damit die Zustimmung des Verantwortlichen
+// direkt im Vertrag eingeholt ist (Art. 28 Abs. 2 DSGVO).
+function recruitingSubprocessorListItems(): string {
+  return [
+    "Perspective Software GmbH, Müggelstraße 22, 10247 Berlin, Deutschland — Erstellung und Bereitstellung der Landeseite (Landing Page) sowie Erfassung von Bewerberanfragen.",
+    "Meta Platforms Ireland Ltd., 4 Grand Canal Square, Grand Canal Harbour, Dublin 2, Irland — Schaltung der Werbekampagne und Erfassung von Bewerberanfragen über Facebook und Instagram.",
   ]
     .map((entry) => `<li>${entry}</li>`)
     .join("");
@@ -161,10 +185,14 @@ function sepaMandateSection(input: ContractRenderInput): string {
   if (input.paymentMethod !== "sepa") return "";
   const holder = blank(input.sepa?.accountHolder, input.mode);
   const iban = blank(input.sepa?.ibanDisplay, input.mode);
-  const zweck =
-    input.type === "recruiting"
-      ? "Es handelt sich um die Zahlung der Agenturleistung und des Werbebudgets aus diesem Vertrag."
-      : "Es handelt sich um wiederkehrende Zahlungen (Wartung/Hosting) sowie ggf. die Zahlung(en) für die Erstellung der Webseite.";
+  let zweck: string;
+  if (input.type === "recruiting") {
+    zweck = "Es handelt sich um die Zahlung der Agenturleistung und des Werbebudgets aus diesem Vertrag.";
+  } else if (input.type === "content") {
+    zweck = "Es handelt sich um die wiederkehrende Zahlung der monatlichen Vergütung für die Social-Media-Betreuung sowie ggf. eine einmalige Einrichtungsgebühr.";
+  } else {
+    zweck = "Es handelt sich um wiederkehrende Zahlungen (Wartung/Hosting) sowie ggf. die Zahlung(en) für die Erstellung der Webseite.";
+  }
   return `
     <h2>SEPA-Lastschriftmandat</h2>
     <p>
@@ -233,8 +261,8 @@ function widerrufSection(): string {
 
 function signatureBlock(input: ContractRenderInput): string {
   if (input.mode === "pdf" && input.signature) {
-    const customerRole = input.type === "recruiting" ? "Kunde" : "Auftraggeber";
-    const providerRole = input.type === "recruiting" ? "Agentur" : "Dienstleister";
+    const customerRole = input.type === "webdesign" ? "Auftraggeber" : "Kunde";
+    const providerRole = input.type === "webdesign" ? "Dienstleister" : "Agentur";
     return `
       <h2>Unterschrift</h2>
       <div class="sign-grid">
@@ -605,7 +633,9 @@ function recruitingBody(input: ContractRenderInput): string {
 
     <h3>6. Einsatz von Subunternehmern</h3>
     <p>6.1 Der Auftragsverarbeiter darf nur mit vorheriger schriftlicher Zustimmung des Verantwortlichen Subunternehmer einsetzen.</p>
-    <p>6.2 Der Auftragsverarbeiter stellt sicher, dass Subunternehmer ebenfalls zur Einhaltung der datenschutzrechtlichen Bestimmungen verpflichtet werden.</p>
+    <p>6.2 Der Verantwortliche stimmt dem Einsatz folgender Subunternehmer zu:</p>
+    <ul>${recruitingSubprocessorListItems()}</ul>
+    <p>6.3 Der Auftragsverarbeiter stellt sicher, dass Subunternehmer ebenfalls zur Einhaltung der datenschutzrechtlichen Bestimmungen verpflichtet werden.</p>
 
     <h3>7. Technische und organisatorische Maßnahmen (TOMs), Haftung &amp; Gewährleistung</h3>
     <p>7.1 Der Auftragsverarbeiter verpflichtet sich, geeignete technische und organisatorische Maßnahmen zu ergreifen, um die Vertraulichkeit, Integrität, Verfügbarkeit und Belastbarkeit der Systeme und Dienste zu gewährleisten.</p>
@@ -628,9 +658,224 @@ function recruitingBody(input: ContractRenderInput): string {
   `;
 }
 
+// § 1: Posting-Frequenz mit Spielraum-Formulierung.
+function contentFrequenz(input: ContractRenderInput): string {
+  const n = input.postsPerWeek;
+  if (!n || n < 1) return "in der Regel nach individueller Absprache";
+  return `in der Regel ${n} ${n === 1 ? "Beitrag" : "Beiträge"} pro Woche`;
+}
+
+// § 3: Vor-Ort-Content-Produktion — optional; bei Deaktivierung stabile
+// Negativ-Klausel, damit die §-Nummerierung unverändert bleibt.
+function onsiteSection(input: ContractRenderInput): string {
+  if (!input.onsiteProduction) {
+    return `<p>(1) Eine Vor-Ort-Content-Produktion ist in diesem Vertrag nicht enthalten.</p>`;
+  }
+  const interval = input.onsiteIntervalMonths && input.onsiteIntervalMonths >= 1 ? input.onsiteIntervalMonths : 3;
+  const rhythmus = interval === 1 ? "monatlich" : `in der Regel alle ${interval} Monate`;
+  return `
+    <p>(1) Zusätzlich zur laufenden Betreuung erstellt die Agentur ${rhythmus} vor Ort beim Kunden neues Foto- und/oder Videomaterial für die zukünftige Content-Erstellung.</p>
+    <p>(2) Dabei entstehen insbesondere:</p>
+    <ul>
+      <li>Fotoaufnahmen vor Ort,</li>
+      <li>Videoaufnahmen für zukünftigen Content,</li>
+      <li>Team- und Alltagseinblicke,</li>
+      <li>Sammlung neuer Inhalte für kommende Beiträge.</li>
+    </ul>
+    <p>(3) Die Termine werden rechtzeitig zwischen den Parteien abgestimmt. Der Kunde stellt den Zugang und die erforderliche Mitwirkung sicher.</p>
+  `;
+}
+
+// § 5: Vergütung — monatliche Pauschale + optionale Einrichtungsgebühr.
+function contentVerguetung(input: ContractRenderInput): string {
+  const method = input.paymentMethod === "sepa" ? "per SEPA-Lastschrift eingezogen" : "per Rechnung gestellt";
+  const monatlich = formatEuro(input.monthlyMaintCents);
+  const hasSetup = input.setupPriceCents > 0;
+  let n = 1;
+  let out = `<p>(${n++}) Der Kunde zahlt für die Social-Media-Betreuung eine monatliche Pauschale von ${monatlich} netto. Die Abrechnung erfolgt monatlich und wird ${method}.</p>`;
+  if (hasSetup) {
+    out += `<p>(${n++}) Zusätzlich wird eine einmalige Einrichtungsgebühr von ${formatEuro(input.setupPriceCents)} netto für das Onboarding und die Ersteinrichtung berechnet, fällig mit Vertragsbeginn.</p>`;
+  }
+  out += `<p>(${n++}) Leistungen, die über den vereinbarten Umfang hinausgehen (z. B. zusätzliche Beiträge, Kampagnen, Werbebudgets), werden gesondert nach Aufwand abgerechnet.</p>`;
+  out += `<p>(${n++}) Alle Preise verstehen sich zzgl. der jeweils geltenden gesetzlichen Mehrwertsteuer.</p>`;
+  return out;
+}
+
+function contentKostenuebersicht(input: ContractRenderInput): string {
+  const setupRow =
+    input.setupPriceCents > 0
+      ? `<tr><td>Einmalige Einrichtungsgebühr</td><td>${formatEuro(input.setupPriceCents)} netto</td></tr>`
+      : "";
+  const method = input.paymentMethod === "sepa" ? "SEPA-Lastschrift" : "Rechnung";
+  return `
+    <h3>Kostenübersicht</h3>
+    <table class="kv costs">
+      <tr><td>Monatliche Betreuungspauschale</td><td>${formatEuro(input.monthlyMaintCents)} netto / Monat</td></tr>
+      ${setupRow}
+      <tr><td>Zahlungsart</td><td>${method}</td></tr>
+    </table>
+    <p class="muted">Alle Preise verstehen sich zzgl. der jeweils geltenden gesetzlichen Mehrwertsteuer.</p>
+  `;
+}
+
+// § 6: Laufzeit & Kündigung — unbefristet, mit Mindestlaufzeit & Kündigungsfrist.
+function contentLaufzeit(input: ContractRenderInput): string {
+  const beginn = input.campaignStart && input.campaignStart.trim()
+    ? `am ${blankDate(input.campaignStart, input.mode)}`
+    : "mit Unterzeichnung dieses Vertrages";
+  const weeks = input.noticePeriodWeeks >= 1 ? input.noticePeriodWeeks : 4;
+  const hasMin = input.minTermMonths > 0;
+  const kuendigung = hasMin
+    ? `mit einer Frist von ${weeks} Wochen zum Monatsende in Textform gekündigt werden, frühestens jedoch zum Ablauf der Mindestlaufzeit`
+    : `jederzeit mit einer Frist von ${weeks} Wochen zum Monatsende in Textform gekündigt werden`;
+  let n = 1;
+  let out = `<p>(${n++}) Der Vertrag beginnt ${beginn} und wird auf unbestimmte Zeit geschlossen.</p>`;
+  if (hasMin) {
+    out += `<p>(${n++}) Es gilt eine Mindestlaufzeit von ${input.minTermMonths} Monaten.</p>`;
+  }
+  out += `<p>(${n++}) Der Vertrag kann von beiden Parteien ${kuendigung}.</p>`;
+  out += `<p>(${n++}) Das Recht zur außerordentlichen Kündigung aus wichtigem Grund bleibt unberührt.</p>`;
+  return out;
+}
+
+function contentBody(input: ContractRenderInput): string {
+  const platforms = input.contentPlatforms && input.contentPlatforms.trim() ? esc(input.contentPlatforms) : "Instagram und Facebook";
+
+  return `
+    <div class="letterhead">
+      ${LOGO_SVG}
+      <div class="lh-name">swipeflow GmbH</div>
+    </div>
+
+    <h1>Vertrag über Social-Media-Betreuung</h1>
+
+    <p>zwischen</p>
+    <p class="parties">
+      <strong>${blank(input.customerName, input.mode)}</strong><br />
+      ${blank(input.street, input.mode)}<br />
+      ${blank(input.plzCity, input.mode)}
+    </p>
+    <p>– im Folgenden „Kunde“ genannt –</p>
+    <p>und</p>
+    <p class="parties">
+      <strong>swipeflow GmbH</strong><br />
+      Ringstraße 6<br />
+      32339 Espelkamp
+    </p>
+    <p>– im Folgenden „Agentur“ genannt –</p>
+    <p>wird folgender Vertrag über die laufende Social-Media-Betreuung samt Auftragsverarbeitungsvertrag geschlossen:</p>
+
+    <h2>Teil I – Dienstleistungsvertrag (Social-Media-Betreuung)</h2>
+
+    <h3>§ 1 Vertragsgegenstand</h3>
+    <p>(1) Die Agentur übernimmt für den Kunden die laufende Betreuung seiner Social-Media-Kanäle auf den folgenden Plattformen: ${platforms}.</p>
+    <p>(2) Die Agentur erstellt ${contentFrequenz(input)} individuell gestaltete Beiträge, abgestimmt auf den Kunden, dessen Zielgruppe sowie dessen bestehenden Außenauftritt.</p>
+    <p>(3) Der konkrete Leistungsumfang ergibt sich aus § 2. Die Parteien stimmen Inhalte und Themen laufend ab; die Agentur ist in der konkreten redaktionellen und gestalterischen Umsetzung im Rahmen dieses Vertrags frei.</p>
+
+    <h3>§ 2 Leistungsumfang</h3>
+    <p>Die Betreuung umfasst in der Regel insbesondere:</p>
+    <ul>
+      <li>Erstellung der vereinbarten Social-Media-Beiträge,</li>
+      <li>Betreuung der vereinbarten Plattformen (${platforms}),</li>
+      <li>Gestaltung passender Grafiken und Inhalte,</li>
+      <li>Erstellung von Texten, Captions und Hashtags,</li>
+      <li>Content-Planung und Abstimmung mit dem Kunden,</li>
+      <li>themenbezogene Beiträge passend zum Unternehmen des Kunden (z. B. saisonale Themen, Aktionen, Team- und Alltagseinblicke).</li>
+    </ul>
+    <p>Die Aufzählung ist beispielhaft. Inhalte, Themen und Formate können im beiderseitigen Einvernehmen an die Bedürfnisse des Kunden angepasst werden.</p>
+
+    <h3>§ 3 Vor-Ort-Content-Produktion</h3>
+    ${onsiteSection(input)}
+
+    <h3>§ 4 Freigabe und Abnahme</h3>
+    <p>(1) Die Agentur plant die Inhalte im Voraus und legt sie dem Kunden rechtzeitig vor der geplanten Veröffentlichung zur Freigabe vor.</p>
+    <p>(2) Inhalte werden erst nach Freigabe durch den Kunden veröffentlicht. Die Freigabe kann in Textform (z. B. per E-Mail oder über ein vereinbartes Planungstool) erfolgen.</p>
+    <p>(3) Äußert sich der Kunde nicht innerhalb einer angemessenen Frist von in der Regel zwei Werktagen nach Vorlage, gilt der jeweilige Inhalt als freigegeben, sofern die Agentur hierauf bei der Vorlage hingewiesen hat.</p>
+    <p>(4) Der Kunde ist für die inhaltliche Richtigkeit und rechtliche Zulässigkeit der von ihm freigegebenen Inhalte verantwortlich.</p>
+
+    <h3>§ 5 Vergütung und Zahlungsbedingungen</h3>
+    ${contentVerguetung(input)}
+
+    ${contentKostenuebersicht(input)}
+
+    <h3>§ 6 Laufzeit und Kündigung</h3>
+    ${contentLaufzeit(input)}
+
+    <h3>§ 7 Mitwirkungspflichten des Kunden</h3>
+    <p>(1) Der Kunde stellt der Agentur alle für die Betreuung erforderlichen Informationen, Materialien und Zugänge (z. B. zu den Social-Media-Konten) rechtzeitig zur Verfügung.</p>
+    <p>(2) Der Kunde sichert zu, dass die von ihm bereitgestellten Materialien frei von Rechten Dritter sind und keine Gesetze verletzen.</p>
+    <p>(3) Der Kunde benennt einen Ansprechpartner für Abstimmungen und Freigaben.</p>
+
+    <h3>§ 8 Nutzungsrechte</h3>
+    <p>(1) Nach vollständiger Zahlung der jeweils fälligen Vergütung erhält der Kunde ein einfaches, zeitlich und räumlich unbeschränktes Nutzungsrecht an den für ihn erstellten und veröffentlichten Inhalten.</p>
+    <p>(2) Die Agentur darf die erstellten Inhalte als Referenz nennen, sofern der Kunde dem nicht ausdrücklich widerspricht.</p>
+
+    <h3>§ 9 Datenschutz und Auftragsverarbeitung</h3>
+    <p>(1) Die Agentur verarbeitet personenbezogene Daten ausschließlich im Auftrag und nach Weisung des Kunden gemäß Art. 28 DSGVO.</p>
+    <p>(2) Die Bestimmungen zur Auftragsverarbeitung sind integraler Bestandteil dieses Vertrags (Teil II).</p>
+
+    <h3>§ 10 Haftung</h3>
+    <p>(1) Die Agentur haftet nur für Vorsatz und grobe Fahrlässigkeit.</p>
+    <p>(2) Für vom Kunden freigegebene oder bereitgestellte Inhalte übernimmt die Agentur keine Haftung.</p>
+    <p>(3) Im Übrigen gelten die gesetzlichen Haftungsregelungen.</p>
+
+    <h3>§ 11 Schlussbestimmungen</h3>
+    <p>(1) Änderungen und Ergänzungen dieses Vertrags bedürfen der Textform.</p>
+    <p>(2) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
+    <p>(3) Es gilt deutsches Recht. Gerichtsstand ist – soweit zulässig – der Sitz der Agentur.</p>
+
+    <h2>Teil II – Auftragsverarbeitungsvertrag (AV-Vertrag) gemäß Art. 28 DSGVO</h2>
+
+    <h3>§ 1 Gegenstand und Dauer</h3>
+    <p>(1) Die Agentur verarbeitet personenbezogene Daten im Auftrag des Kunden im Zusammenhang mit der Betreuung der Social-Media-Kanäle.</p>
+    <p>(2) Die Verarbeitung erfolgt ausschließlich auf Grundlage dieses Vertrags und der Weisungen des Kunden.</p>
+    <p>(3) Die Laufzeit dieses Teils richtet sich nach der Dauer des Dienstleistungsvertrags.</p>
+
+    <h3>§ 2 Art und Zweck der Verarbeitung</h3>
+    <ul>
+      <li>Zweck: Erstellung, Planung, Veröffentlichung und Betreuung von Social-Media-Inhalten.</li>
+      <li>Art der Verarbeitung: Erhebung, Speicherung, Bearbeitung, Übermittlung und Löschung von Daten.</li>
+      <li>Betroffene Personen: Mitarbeiter des Kunden, abgebildete Personen, Follower und Interagierende der Kanäle.</li>
+      <li>Datenarten: Kontaktdaten, Bild- und Videoaufnahmen, Kommentar- und Nachrichteninhalte, Interaktionsdaten.</li>
+    </ul>
+
+    <h3>§ 3 Rechte und Pflichten des Kunden</h3>
+    <p>(1) Der Kunde bleibt Verantwortlicher im Sinne des Art. 4 Nr. 7 DSGVO.</p>
+    <p>(2) Der Kunde ist für die Rechtmäßigkeit der Datenverarbeitung verantwortlich, insbesondere für erforderliche Einwilligungen abgebildeter Personen.</p>
+    <p>(3) Weisungen an die Agentur erfolgen in Textform.</p>
+
+    <h3>§ 4 Pflichten der Agentur</h3>
+    <p>(1) Die Agentur verarbeitet personenbezogene Daten ausschließlich gemäß Weisung des Kunden.</p>
+    <p>(2) Die Agentur gewährleistet Vertraulichkeit durch verpflichtete Mitarbeiter.</p>
+    <p>(3) Die Agentur trifft angemessene technische und organisatorische Maßnahmen (TOMs) gemäß Art. 32 DSGVO.</p>
+    <p>(4) Die Agentur unterstützt den Kunden bei der Erfüllung von Betroffenenrechten (Art. 15–22 DSGVO) sowie Meldepflichten (Art. 33 und 34 DSGVO).</p>
+    <p>(5) Nach Beendigung des Vertrags löscht die Agentur alle personenbezogenen Daten, sofern keine gesetzlichen Aufbewahrungspflichten bestehen.</p>
+
+    <h3>§ 5 Subunternehmer</h3>
+    <p>(1) Der Kunde stimmt dem Einsatz der zur Leistungserbringung erforderlichen Dienste zu, insbesondere der Social-Media-Plattformen der Meta Platforms Ireland Ltd. (Instagram, Facebook) sowie eingesetzter Planungs- und Gestaltungstools.</p>
+    <p>(2) Die Agentur informiert den Kunden über beabsichtigte Änderungen in Bezug auf weitere Subunternehmer und bleibt für die Einhaltung der Datenschutzpflichten verantwortlich.</p>
+
+    <h3>§ 6 Kontrollrechte</h3>
+    <p>(1) Der Kunde ist berechtigt, die Einhaltung der DSGVO und dieses Vertrags bei der Agentur zu kontrollieren.</p>
+    <p>(2) Die Agentur stellt auf Anfrage Nachweise über die getroffenen TOMs zur Verfügung.</p>
+
+    <h3>§ 7 Schlussbestimmungen</h3>
+    <p>(1) Änderungen und Ergänzungen dieses Teils bedürfen der Textform.</p>
+    <p>(2) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
+    <p>(3) Es gilt deutsches Recht. Gerichtsstand ist der Sitz der Agentur.</p>
+
+    ${sepaMandateSection(input)}
+
+    ${signatureBlock(input)}
+  `;
+}
+
 export function renderContractHtml(input: ContractRenderInput): string {
   if (input.type === "recruiting") {
     return wrapDocument("Agentur- und Auftragsverarbeitungsvertrag", recruitingBody(input));
+  }
+  if (input.type === "content") {
+    return wrapDocument("Vertrag über Social-Media-Betreuung", contentBody(input));
   }
   return wrapDocument("Dienstleistungs- und Auftragsverarbeitungsvertrag", webdesignBody(input));
 }

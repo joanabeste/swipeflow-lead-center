@@ -43,6 +43,9 @@ export function PublicContractView({
   costs: Costs;
 }) {
   const isRecruiting = contractType === "recruiting";
+  const isContent = contractType === "content";
+  // Widerruf/Early-Start gilt nur für Webdesign (B2C). Recruiting & Content = B2B.
+  const requiresEarlyStart = contractType === "webdesign";
   const [step, setStep] = useState<1 | 2>(1);
   const [html, setHtml] = useState(contractHtml);
 
@@ -67,7 +70,7 @@ export function PublicContractView({
   const [done, setDone] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
 
-  const costText = useMemo(() => buildCostText(costs, isRecruiting), [costs, isRecruiting]);
+  const costText = useMemo(() => buildCostText(costs, contractType), [costs, contractType]);
 
   async function downloadPdf() {
     setPdfBusy(true);
@@ -127,7 +130,7 @@ export function PublicContractView({
     if (!acceptContractAndCosts) missing.push("Vertrag & Kosten akzeptieren");
     if (!acceptPrivacy) missing.push("Datenschutz");
     if (!confirmData) missing.push("Richtigkeit der Angaben");
-    if (!isRecruiting && !requestEarlyStart) missing.push("Vorzeitiger Leistungsbeginn");
+    if (requiresEarlyStart && !requestEarlyStart) missing.push("Vorzeitiger Leistungsbeginn");
     if (paymentMethod === "sepa" && !mandate) missing.push("SEPA-Mandat");
     if (missing.length > 0) {
       setError(`Bitte bestätigen Sie: ${missing.join(", ")}.`);
@@ -150,8 +153,8 @@ export function PublicContractView({
       accept_costs: acceptContractAndCosts,
       accept_privacy: acceptPrivacy,
       confirm_data_correct: confirmData,
-      // Recruiting: kein Widerruf/Early-Start (reine B2B-Annahme).
-      request_early_start: isRecruiting ? true : requestEarlyStart,
+      // Recruiting & Content: kein Widerruf/Early-Start (reine B2B-Annahme).
+      request_early_start: requiresEarlyStart ? requestEarlyStart : true,
     };
     if (paymentMethod === "sepa") {
       payload.sepa_account_holder = holder;
@@ -272,7 +275,20 @@ export function PublicContractView({
               <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kostenübersicht</p>
                 <dl className="mt-2 space-y-1 text-sm text-gray-700">
-                  {isRecruiting ? (
+                  {isContent ? (
+                    <>
+                      <div className="flex justify-between gap-4">
+                        <dt>Monatliche Betreuung</dt>
+                        <dd className="font-medium text-gray-900">{formatEuro(costs.monthlyMaintCents)} netto / Monat</dd>
+                      </div>
+                      {costs.setupPriceCents > 0 && (
+                        <div className="flex justify-between gap-4">
+                          <dt>Einmalige Einrichtung</dt>
+                          <dd className="font-medium text-gray-900">{formatEuro(costs.setupPriceCents)} netto</dd>
+                        </div>
+                      )}
+                    </>
+                  ) : isRecruiting ? (
                     <>
                       <div className="flex justify-between gap-4">
                         <dt>Agenturleistung</dt>
@@ -319,7 +335,7 @@ export function PublicContractView({
                 </Consent>
               </fieldset>
 
-              {!isRecruiting && (
+              {requiresEarlyStart && (
                 <fieldset className="space-y-3 border-t border-gray-100 pt-5">
                   <legend className="text-sm font-semibold text-gray-900">
                     Vorzeitiger Leistungsbeginn
@@ -370,9 +386,14 @@ export function PublicContractView({
 }
 
 /** Baut den Kostentext für den Zustimmungspunkt (Einmal-/Ratenzahlung). */
-function buildCostText(costs: Costs, isRecruiting: boolean): string {
+function buildCostText(costs: Costs, type: ContractType): string {
   const setup = formatEuro(costs.setupPriceCents);
-  if (isRecruiting) {
+  if (type === "content") {
+    const base = `Monatliche Betreuung ${formatEuro(costs.monthlyMaintCents)} netto/Monat`;
+    const withSetup = costs.setupPriceCents > 0 ? `${base}; einmalige Einrichtung ${setup} netto` : base;
+    return `${withSetup}. Alle Preise zzgl. gesetzl. MwSt.`;
+  }
+  if (type === "recruiting") {
     return `Agenturleistung ${setup} netto; Werbebudget ${formatEuro(costs.adBudgetCents)} netto. Alle Preise zzgl. gesetzl. MwSt.`;
   }
   const parts: string[] = [];

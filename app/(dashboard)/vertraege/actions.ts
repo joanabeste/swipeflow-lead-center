@@ -56,6 +56,12 @@ function buildTermsSnapshot(contract: ContractRow, creditorId: string): Record<s
     campaign_start: contract.campaign_start,
     campaign_end: contract.campaign_end,
     applicant_guarantee: contract.applicant_guarantee,
+    content_platforms: contract.content_platforms,
+    posts_per_week: contract.posts_per_week,
+    onsite_production: contract.onsite_production,
+    onsite_interval_months: contract.onsite_interval_months,
+    min_term_months: contract.min_term_months,
+    notice_period_weeks: contract.notice_period_weeks,
     creditor_id: creditorId,
     frozen_at: new Date().toISOString(),
   };
@@ -86,16 +92,24 @@ function normBilling(b: BillingInput | undefined) {
   };
 }
 
-/** Recruiting-spezifische Felder, geteilt von Create/Update. */
-export interface RecruitingInput {
+/** Typ-spezifische Felder (Recruiting + Content), geteilt von Create/Update. */
+export interface TypeSpecificInput {
+  // Recruiting
   ad_budget_cents?: number;
   job_title?: string | null;
   campaign_start?: string | null;
   campaign_end?: string | null;
   applicant_guarantee?: boolean;
+  // Content (campaign_start wird als Vertragsbeginn wiederverwendet)
+  content_platforms?: string | null;
+  posts_per_week?: number | null;
+  onsite_production?: boolean;
+  onsite_interval_months?: number | null;
+  min_term_months?: number;
+  notice_period_weeks?: number;
 }
 
-export interface CreateContractInput extends RecruitingInput {
+export interface CreateContractInput extends TypeSpecificInput {
   lead_id?: string;
   /** Alternativ zu lead_id: neuen Kunden anlegen. */
   new_customer?: { company_name: string; city?: string; email?: string };
@@ -108,37 +122,80 @@ export interface CreateContractInput extends RecruitingInput {
   billing?: BillingInput;
 }
 
-interface RecruitingColumns {
+interface TypeColumns {
   job_title: string | null;
   campaign_start: string | null;
   campaign_end: string | null;
   ad_budget_cents: number;
   applicant_guarantee: boolean;
+  content_platforms: string | null;
+  posts_per_week: number | null;
+  onsite_production: boolean;
+  onsite_interval_months: number | null;
+  min_term_months: number;
+  notice_period_weeks: number;
 }
 
-/** Validiert Recruiting-Pflichtfelder und baut die DB-Spalten.
- *  Erzwingt monthly_maint_cents=0 und payment_mode='einmal' für Recruiting. */
-function recruitingColumns(
+const NEUTRAL_TYPE_COLUMNS: TypeColumns = {
+  job_title: null,
+  campaign_start: null,
+  campaign_end: null,
+  ad_budget_cents: 0,
+  applicant_guarantee: false,
+  content_platforms: null,
+  posts_per_week: null,
+  onsite_production: false,
+  onsite_interval_months: null,
+  min_term_months: 0,
+  notice_period_weeks: 4,
+};
+
+/** Validiert typ-spezifische Pflichtfelder und baut die DB-Spalten.
+ *  Für den jeweils nicht zutreffenden Typ werden Neutralwerte gesetzt. */
+function typeSpecificColumns(
   type: ContractType,
-  input: RecruitingInput,
-): { error: string } | RecruitingColumns {
-  if (type !== "recruiting") {
-    return { job_title: null, campaign_start: null, campaign_end: null, ad_budget_cents: 0, applicant_guarantee: false };
+  input: TypeSpecificInput,
+): { error: string } | TypeColumns {
+  if (type === "recruiting") {
+    const jobTitle = (input.job_title ?? "").trim();
+    if (!jobTitle) return { error: "Bitte einen Jobtitel angeben." };
+    if (!input.campaign_start || !input.campaign_end) {
+      return { error: "Bitte Start- und Enddatum der Kampagne angeben." };
+    }
+    const budget = Math.round(input.ad_budget_cents ?? 0);
+    if (!Number.isFinite(budget) || budget < 0) return { error: "Ungültiges Werbebudget." };
+    return {
+      ...NEUTRAL_TYPE_COLUMNS,
+      job_title: jobTitle,
+      campaign_start: input.campaign_start,
+      campaign_end: input.campaign_end,
+      ad_budget_cents: budget,
+      applicant_guarantee: !!input.applicant_guarantee,
+    };
   }
-  const jobTitle = (input.job_title ?? "").trim();
-  if (!jobTitle) return { error: "Bitte einen Jobtitel angeben." };
-  if (!input.campaign_start || !input.campaign_end) {
-    return { error: "Bitte Start- und Enddatum der Kampagne angeben." };
+  if (type === "content") {
+    const onsite = !!input.onsite_production;
+    const interval = onsite ? Math.round(input.onsite_interval_months ?? 3) : null;
+    if (onsite && (!interval || interval < 1)) {
+      return { error: "Bitte ein gültiges Vor-Ort-Intervall (Monate) angeben." };
+    }
+    const minTerm = Math.round(input.min_term_months ?? 0);
+    if (!Number.isFinite(minTerm) || minTerm < 0) return { error: "Ungültige Mindestlaufzeit." };
+    const notice = Math.round(input.notice_period_weeks ?? 4);
+    if (!Number.isFinite(notice) || notice < 1) return { error: "Ungültige Kündigungsfrist." };
+    const posts = input.posts_per_week != null ? Math.round(input.posts_per_week) : null;
+    return {
+      ...NEUTRAL_TYPE_COLUMNS,
+      campaign_start: input.campaign_start || null,
+      content_platforms: (input.content_platforms ?? "").trim() || null,
+      posts_per_week: posts && posts >= 1 ? posts : null,
+      onsite_production: onsite,
+      onsite_interval_months: interval,
+      min_term_months: minTerm,
+      notice_period_weeks: notice,
+    };
   }
-  const budget = Math.round(input.ad_budget_cents ?? 0);
-  if (!Number.isFinite(budget) || budget < 0) return { error: "Ungültiges Werbebudget." };
-  return {
-    job_title: jobTitle,
-    campaign_start: input.campaign_start,
-    campaign_end: input.campaign_end,
-    ad_budget_cents: budget,
-    applicant_guarantee: !!input.applicant_guarantee,
-  };
+  return { ...NEUTRAL_TYPE_COLUMNS };
 }
 
 export async function createContract(input: CreateContractInput): Promise<Result<{ id: string }>> {
@@ -149,13 +206,17 @@ export async function createContract(input: CreateContractInput): Promise<Result
   }
   const type: ContractType = input.type ?? "webdesign";
   const isRecruiting = type === "recruiting";
-  // Recruiting: einmalige Zahlung vor Kampagnenstart, keine monatliche Pauschale.
-  const paymentMode: PaymentMode = isRecruiting ? "einmal" : input.payment_mode;
+  const isContent = type === "content";
+  // Recruiting (einmalig) und Content (monatlich) kennen keine Setup-Ratenzahlung.
+  const paymentMode: PaymentMode = isRecruiting || isContent ? "einmal" : input.payment_mode;
   if (paymentMode === "raten" && (!input.installment_count || input.installment_count < 2)) {
     return { error: "Bei Ratenzahlung mindestens 2 Raten angeben." };
   }
-  const recruiting = recruitingColumns(type, input);
-  if ("error" in recruiting) return recruiting;
+  if (isContent && (!Number.isFinite(input.monthly_maint_cents) || input.monthly_maint_cents <= 0)) {
+    return { error: "Bitte einen monatlichen Betrag angeben." };
+  }
+  const typeCols = typeSpecificColumns(type, input);
+  if ("error" in typeCols) return typeCols;
 
   const db = createServiceClient();
 
@@ -206,7 +267,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
       payment_mode: paymentMode,
       installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
-      ...recruiting,
+      ...typeCols,
       ...normBilling(input.billing),
       created_by: ctx.user.id,
     })
@@ -224,7 +285,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
   return { success: true, id };
 }
 
-export interface UpdateDraftInput extends RecruitingInput {
+export interface UpdateDraftInput extends TypeSpecificInput {
   setup_price_cents: number;
   monthly_maint_cents: number;
   payment_mode: PaymentMode;
@@ -245,12 +306,16 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
   if (contract.status !== "draft") return { error: "Nur Entwürfe können bearbeitet werden." };
 
   const isRecruiting = contract.type === "recruiting";
-  const paymentMode: PaymentMode = isRecruiting ? "einmal" : input.payment_mode;
+  const isContent = contract.type === "content";
+  const paymentMode: PaymentMode = isRecruiting || isContent ? "einmal" : input.payment_mode;
   if (paymentMode === "raten" && (!input.installment_count || input.installment_count < 2)) {
     return { error: "Bei Ratenzahlung mindestens 2 Raten angeben." };
   }
-  const recruiting = recruitingColumns(contract.type, input);
-  if ("error" in recruiting) return recruiting;
+  if (isContent && (!Number.isFinite(input.monthly_maint_cents) || input.monthly_maint_cents <= 0)) {
+    return { error: "Bitte einen monatlichen Betrag angeben." };
+  }
+  const typeCols = typeSpecificColumns(contract.type, input);
+  if ("error" in typeCols) return typeCols;
 
   const db = createServiceClient();
   const { error } = await db
@@ -261,7 +326,7 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
       payment_mode: paymentMode,
       installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
-      ...recruiting,
+      ...typeCols,
       ...normBilling(input.billing),
     })
     .eq("id", id);
