@@ -191,7 +191,7 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
             </span>
           </p>
         </div>
-        <div className="flex flex-col items-end gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           <div className="flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-[#2c2c2e]">
             {(["7", "30", "90"] as const).map((r) => {
               const active = range === r;
@@ -213,7 +213,7 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
           </div>
           <div className="flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-[#2c2c2e]">
             {([
-              ["direction", "Richtung"],
+              ["direction", "Art"],
               ["member", "Mitarbeiter"],
             ] as const).map(([mode, label]) => {
               const active = colorMode === mode;
