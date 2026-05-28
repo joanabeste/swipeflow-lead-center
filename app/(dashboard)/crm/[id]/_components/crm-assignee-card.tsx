@@ -36,9 +36,6 @@ export function CrmAssigneeCard({
         <UserCheck className="h-3.5 w-3.5" />
         Zuständig
       </h2>
-      <p className="mt-1 text-[11px] text-gray-400">
-        Bekommt die Provision, wenn der Lead einen entsprechenden Status erreicht.
-      </p>
       <select
         value={value}
         onChange={(e) => save(e.target.value)}

@@ -13,7 +13,7 @@ import {
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import type { CustomLeadStatus } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
-import { updateCrmStatus } from "./actions";
+import { updateCrmStatus, bulkAssignLeads } from "./actions";
 import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
 
@@ -82,14 +82,16 @@ interface Props {
   currentActivity: string;
   currentLastCall: string;
   currentTodo: string;
+  currentAssigned: string;
   currentFilters: Record<string, string>;
   initialColumnPrefs: ColumnPref[];
+  team: { id: string; name: string; avatarUrl: string | null }[];
 }
 
 export function CrmManager({
   leads, statuses, totalPages, currentPage, currentSort, currentOrder,
-  currentQuery, currentStatus, currentActivity, currentLastCall, currentTodo, currentFilters,
-  initialColumnPrefs,
+  currentQuery, currentStatus, currentActivity, currentLastCall, currentTodo, currentAssigned, currentFilters,
+  initialColumnPrefs, team,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -110,6 +112,7 @@ export function CrmManager({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lastIndex, setLastIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState<string>(activeStatuses[0]?.id ?? "");
+  const [bulkAssignee, setBulkAssignee] = useState<string>("");
   const [pending, startTransition] = useTransition();
   const [showNewLead, setShowNewLead] = useState(false);
 
@@ -160,6 +163,23 @@ export function CrmManager({
     startTransition(async () => {
       for (const id of ids) await updateCrmStatus(id, bulkStatus);
       addToast(`${ids.length} Lead(s) auf "${statuses.find((s) => s.id === bulkStatus)?.label}" gesetzt`);
+      setSelected(new Set());
+      router.refresh();
+    });
+  }
+
+  function handleBulkAssign() {
+    if (!bulkAssignee) return;
+    const ids = Array.from(selected);
+    const value = bulkAssignee === "unassigned" ? null : bulkAssignee;
+    startTransition(async () => {
+      const res = await bulkAssignLeads(ids, value);
+      if ("error" in res && res.error) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      const who = value === null ? "niemandem" : team.find((m) => m.id === value)?.name ?? "Person";
+      addToast(`${ids.length} Lead${ids.length === 1 ? "" : "s"} ${who} zugewiesen.`, "success");
       setSelected(new Set());
       router.refresh();
     });
@@ -229,7 +249,7 @@ export function CrmManager({
     return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
   }
 
-  const hasActiveFilter = currentStatus || currentActivity || currentLastCall || currentTodo || Object.keys(currentFilters).length > 0;
+  const hasActiveFilter = currentStatus || currentActivity || currentLastCall || currentTodo || currentAssigned || Object.keys(currentFilters).length > 0;
 
   return (
     <div className="mt-4 space-y-4">
@@ -292,6 +312,17 @@ export function CrmManager({
             { value: "week", label: "Diese Woche" },
             { value: "any", label: "Mit offenem ToDo" },
             { value: "none", label: "Ohne ToDo" },
+          ]}
+        />
+
+        <FilterSelect
+          label="Zuständig"
+          value={currentAssigned}
+          onChange={(v) => updateParams({ assigned: v, page: "1" })}
+          options={[
+            { value: "", label: "Alle" },
+            { value: "unassigned", label: "Niemand" },
+            ...team.map((m) => ({ value: m.id, label: m.name })),
           ]}
         />
 
@@ -372,6 +403,27 @@ export function CrmManager({
             className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
           >
             Status setzen
+          </button>
+
+          <div className="h-4 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
+
+          <select
+            value={bulkAssignee}
+            onChange={(e) => setBulkAssignee(e.target.value)}
+            className="rounded-lg border border-gray-200 px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option value="">Person wählen…</option>
+            <option value="unassigned">Niemand</option>
+            {team.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={handleBulkAssign}
+            disabled={pending || !bulkAssignee}
+            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-gray-800"
+          >
+            Zuweisen
           </button>
 
           <div className="h-4 w-px bg-gray-200 dark:bg-[#2c2c2e]" />

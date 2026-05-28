@@ -3,6 +3,7 @@ import type { CustomLeadStatus, Lead, ServiceMode } from "@/lib/types";
 import { CrmManager, type CrmLead } from "./crm-manager";
 import { loadTablePrefs } from "@/lib/table-prefs";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
+import { listTeamMembers } from "../deals/actions";
 
 const PAGE_SIZE = 50;
 
@@ -40,6 +41,8 @@ export default async function CrmPage({
     .select("*")
     .order("display_order", { ascending: true });
   const statuses = (statusRows ?? []) as CustomLeadStatus[];
+
+  const team = await listTeamMembers();
 
   // Alle Leads mit mindestens einem Call
   const { data: calledRows } = await db
@@ -95,6 +98,13 @@ export default async function CrmPage({
   }
 
   if (sp.crm_status) query = query.eq("crm_status_id", sp.crm_status);
+
+  // Filter nach zustaendiger Person
+  if (sp.assigned === "unassigned") {
+    query = query.is("assigned_to", null);
+  } else if (sp.assigned) {
+    query = query.eq("assigned_to", sp.assigned);
+  }
 
   // Aktivitäts-Filter
   if (sp.activity === "called" && calledLeadIds.length > 0) {
@@ -276,8 +286,10 @@ export default async function CrmPage({
         currentActivity={sp.activity ?? ""}
         currentLastCall={sp.last_call ?? ""}
         currentTodo={sp.todo ?? ""}
+        currentAssigned={sp.assigned ?? ""}
         currentFilters={columnFilters}
         initialColumnPrefs={initialColumnPrefs}
+        team={team}
       />
     </div>
   );
