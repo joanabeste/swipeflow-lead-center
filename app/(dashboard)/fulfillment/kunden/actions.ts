@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
+import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 
 type Result = { success: true; id: string } | { error: string };
 
@@ -29,30 +30,47 @@ export async function createCustomer(input: {
   if (!input.company_name?.trim()) return { error: "Firmenname fehlt." };
 
   const db = createServiceClient();
-  const { data, error } = await db
-    .from("leads")
-    .insert({
-      company_name: input.company_name.trim(),
-      website: input.website?.trim() || null,
-      city: input.city?.trim() || null,
-      vertical: input.vertical ?? null,
-      source_type: "manual",
-      status: "imported",
-      lifecycle_stage: "customer",
-      became_customer_at: new Date().toISOString(),
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
-  if (error) {
-    console.error("[createCustomer]", error);
-    if (error.code === "42P01" || /column.*does not exist/i.test(error.message)) {
-      return { error: "Fulfillment-Modul nicht migriert (071 fehlt)." };
-    }
-    return { error: `DB-Fehler: ${error.message}` };
+
+  // Vor dem Insert: prüfen, ob ein passender Lead bereits existiert.
+  const match = await findExistingLeadForManual(db, {
+    company_name: input.company_name.trim(),
+    website: input.website?.trim() || null,
+    city: input.city?.trim() || null,
+    email: input.primaryContact?.email?.trim() || null,
+    phone: input.primaryContact?.phone?.trim() || null,
+  });
+  if (match?.archived) {
+    return { error: "Dieser Lead wurde aussortiert." };
   }
 
-  const leadId = data.id as string;
+  let leadId: string;
+  if (match && !match.archived) {
+    leadId = match.leadId;
+  } else {
+    const { data, error } = await db
+      .from("leads")
+      .insert({
+        company_name: input.company_name.trim(),
+        website: input.website?.trim() || null,
+        city: input.city?.trim() || null,
+        vertical: input.vertical ?? null,
+        source_type: "manual",
+        status: "imported",
+        lifecycle_stage: "customer",
+        became_customer_at: new Date().toISOString(),
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[createCustomer]", error);
+      if (error.code === "42P01" || /column.*does not exist/i.test(error.message)) {
+        return { error: "Fulfillment-Modul nicht migriert (071 fehlt)." };
+      }
+      return { error: `DB-Fehler: ${error.message}` };
+    }
+    leadId = data.id as string;
+  }
 
   // Optional: primären Ansprechpartner mit anlegen.
   const pc = input.primaryContact;

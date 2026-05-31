@@ -54,7 +54,7 @@ export function NewLeadModal({
         companySize: companySize || null,
         crmStatusId: crmStatusId || null,
       });
-      if (res.error) {
+      if ("error" in res) {
         setError(res.error);
         addToast(res.error, "error");
       } else if (res.success && res.leadId) {

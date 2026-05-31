@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isFuzzyMatch, normalizeDomain } from "@/lib/csv/dedup";
+import { isFuzzyMatch, isLeadArchived, normalizeDomain } from "@/lib/csv/dedup";
+import { normalizeEmail, normalizePhone } from "@/lib/csv/normalizer";
 import type { BlacklistRule, BlacklistEntry, CancelRule } from "@/lib/types";
 
 // ─── Limits ────────────────────────────────────────────────
@@ -191,6 +192,9 @@ export async function loadImportContext(
 export interface LeadIndex {
   byDomain: Map<string, string>;       // normalisierte Domain → leadId
   byName: { id: string; name: string }[]; // Liste für Fuzzy-Match
+  byEmail: Map<string, string>;        // normalisierte Email → leadId
+  byPhone: Map<string, string>;        // normalisierte Phone → leadId
+  archivedIds: Set<string>;            // Lead-IDs, die als archiviert gelten
   crmStatusById: Map<string, { status: string | null; crmStatusId: string | null }>;
 }
 
@@ -201,16 +205,26 @@ export interface ExistingLeadRow {
   website: string | null;
   status?: string | null;
   crm_status_id?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  lifecycle_stage?: string | null;
+  deleted_at?: string | null;
 }
 
 /**
- * Baut einen Index für O(1)-Domain-Lookup + sortierte Liste für Fuzzy-Match.
+ * Baut einen Index für O(1)-Domain-/Email-/Phone-Lookup + sortierte Liste für Fuzzy-Match.
  * Ersetzt das O(n²)-Pattern, bei dem für jede CSV-Zeile alle existierenden
  * Leads iteriert wurden.
  */
-export function buildLeadIndex(leads: ExistingLeadRow[]): LeadIndex {
+export function buildLeadIndex(
+  leads: ExistingLeadRow[],
+  archivedStatusIds: Set<string>,
+): LeadIndex {
   const byDomain = new Map<string, string>();
   const byName: { id: string; name: string }[] = [];
+  const byEmail = new Map<string, string>();
+  const byPhone = new Map<string, string>();
+  const archivedIds = new Set<string>();
   const crmStatusById = new Map<string, { status: string | null; crmStatusId: string | null }>();
   for (const l of leads) {
     if (l.website) {
@@ -218,12 +232,28 @@ export function buildLeadIndex(leads: ExistingLeadRow[]): LeadIndex {
       if (norm && !byDomain.has(norm)) byDomain.set(norm, l.id);
     }
     byName.push({ id: l.id, name: l.company_name });
+    const e = normalizeEmail(l.email ?? null);
+    if (e && !byEmail.has(e)) byEmail.set(e, l.id);
+    const p = normalizePhone(l.phone ?? null);
+    if (p && !byPhone.has(p)) byPhone.set(p, l.id);
+    if (
+      isLeadArchived(
+        {
+          lifecycle_stage: l.lifecycle_stage ?? null,
+          deleted_at: l.deleted_at ?? null,
+          crm_status_id: l.crm_status_id ?? null,
+        },
+        archivedStatusIds,
+      )
+    ) {
+      archivedIds.add(l.id);
+    }
     crmStatusById.set(l.id, {
       status: l.status ?? null,
       crmStatusId: l.crm_status_id ?? null,
     });
   }
-  return { byDomain, byName, crmStatusById };
+  return { byDomain, byName, byEmail, byPhone, archivedIds, crmStatusById };
 }
 
 /**
@@ -238,23 +268,43 @@ export function isLeadInCrm(index: LeadIndex, leadId: string): boolean {
 }
 
 /**
- * Findet einen passenden bestehenden Lead via Domain-Lookup (O(1))
- * oder Fuzzy-Name-Match (O(n) im Fallback).
+ * Findet einen passenden bestehenden Lead.
+ * Reihenfolge: Domain → Email → Phone → Fuzzy-Name.
  */
 export function findMatchingLead(
   index: LeadIndex,
-  domain: string | null,
-  companyName: string,
-): string | null {
-  if (domain) {
-    const norm = normalizeDomain(domain);
+  key: {
+    domain: string | null;
+    companyName: string;
+    email?: string | null;
+    phone?: string | null;
+  },
+): { leadId: string; archived: boolean } | null {
+  const hit = (leadId: string) => ({ leadId, archived: index.archivedIds.has(leadId) });
+
+  if (key.domain) {
+    const norm = normalizeDomain(key.domain);
     if (norm) {
       const match = index.byDomain.get(norm);
-      if (match) return match;
+      if (match) return hit(match);
+    }
+  }
+  if (key.email) {
+    const e = normalizeEmail(key.email);
+    if (e) {
+      const match = index.byEmail.get(e);
+      if (match) return hit(match);
+    }
+  }
+  if (key.phone) {
+    const p = normalizePhone(key.phone);
+    if (p) {
+      const match = index.byPhone.get(p);
+      if (match) return hit(match);
     }
   }
   for (const { id, name } of index.byName) {
-    if (isFuzzyMatch(companyName, name)) return id;
+    if (isFuzzyMatch(key.companyName, name)) return hit(id);
   }
   return null;
 }

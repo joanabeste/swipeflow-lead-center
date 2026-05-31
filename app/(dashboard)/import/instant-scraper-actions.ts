@@ -29,6 +29,7 @@ type InstantScraperResult = {
   imported: number;
   updated: number;
   skipped: number;
+  archived?: number;
   error?: string;
 };
 
@@ -99,12 +100,24 @@ export async function processInstantScraperImport(
   }
 
   const ctx = await loadImportContext(db);
-  const { data: existingLeads } = await db.from("leads").select("id, company_name, website");
-  const leadIndex = buildLeadIndex(existingLeads ?? []);
+  const { data: existingLeads } = await db
+    .from("leads")
+    .select(
+      "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
+    );
+  const { data: archivedRows } = await db
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("is_archived", true);
+  const archivedStatusIds = new Set(
+    ((archivedRows ?? []) as { id: string }[]).map((r) => r.id),
+  );
+  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
 
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+  let archivedCount = 0;
   const newLeads: Record<string, unknown>[] = [];
 
   for (const row of validRows) {
@@ -157,10 +170,21 @@ export async function processInstantScraperImport(
       continue;
     }
 
-    const existingId = findMatchingLead(leadIndex, domain, companyName);
+    const match = findMatchingLead(leadIndex, {
+      domain,
+      companyName,
+      email: null,
+      phone,
+    });
 
-    if (existingId) {
-      const { data: existingLead } = await db.from("leads").select("*").eq("id", existingId).single();
+    if (match && match.archived) {
+      archivedCount++;
+      skipped++;
+      continue;
+    }
+
+    if (match) {
+      const { data: existingLead } = await db.from("leads").select("*").eq("id", match.leadId).single();
       if (existingLead) {
         const updates: Record<string, unknown> = {};
         if (!existingLead.phone && phone) updates.phone = phone;
@@ -172,7 +196,7 @@ export async function processInstantScraperImport(
         if (!existingLead.source_url && mapsUrl) updates.source_url = mapsUrl;
         if (Object.keys(updates).length > 0) {
           updates.updated_at = new Date().toISOString();
-          await db.from("leads").update(updates).eq("id", existingId);
+          await db.from("leads").update(updates).eq("id", match.leadId);
           updated++;
         }
       }
@@ -208,12 +232,12 @@ export async function processInstantScraperImport(
     action: "import.instant_scraper",
     entityType: "import_log",
     entityId: importLog.id,
-    details: { total: validRows.length, imported, updated, skipped },
+    details: { total: validRows.length, imported, updated, skipped, archived: archivedCount },
   });
 
   revalidatePath("/leads");
   revalidatePath("/import");
   revalidatePath("/");
 
-  return { success: true, imported, updated, skipped };
+  return { success: true, imported, updated, skipped, archived: archivedCount };
 }

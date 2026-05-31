@@ -124,12 +124,13 @@ export async function processJobListingImport(fileContent: string): Promise<{
   contacts: number;
   jobs: number;
   skipped: number;
+  archived: number;
   error?: string;
 }> {
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: "Nicht authentifiziert." };
+  if (!user) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, archived: 0, error: "Nicht authentifiziert." };
 
   // CSV parsen
   const delimiter = detectDelimiter(fileContent);
@@ -137,7 +138,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
 
   // Limit-Check
   const sizeError = validateCsvSize(rows.length);
-  if (sizeError) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: sizeError.error };
+  if (sizeError) return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, archived: 0, error: sizeError.error };
 
   // Spalten-Mapping
   const colIndex: Record<string, number> = {};
@@ -148,7 +149,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   });
 
   if (colIndex.company_name === undefined) {
-    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: "Spalte 'Kontakt' (Firmenname) nicht gefunden." };
+    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, archived: 0, error: "Spalte 'Kontakt' (Firmenname) nicht gefunden." };
   }
 
   // Zeilen parsen + sanitizen
@@ -186,15 +187,24 @@ export async function processJobListingImport(fileContent: string): Promise<{
       userId: user.id,
     });
   } catch (e) {
-    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+    return { success: false, imported: 0, updated: 0, alreadyInCrm: 0, contacts: 0, jobs: 0, skipped: 0, archived: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
   // Blacklist + Cancel-Rules + bestehende Leads — einmal laden
   const ctx = await loadImportContext(db);
+  // Archivierte CRM-Status-IDs vorher laden, damit buildLeadIndex
+  // archived-Flag pro Lead korrekt setzen kann.
+  const { data: archivedRows } = await db
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("is_archived", true);
+  const archivedStatusIds = new Set<string>((archivedRows ?? []).map((r) => r.id as string));
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, website, status, crm_status_id");
-  const leadIndex = buildLeadIndex(existingLeads ?? []);
+    .select(
+      "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
+    );
+  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
 
   let imported = 0;
   let updated = 0;
@@ -202,6 +212,7 @@ export async function processJobListingImport(fileContent: string): Promise<{
   let contactsCreated = 0;
   let jobsCreated = 0;
   let skipped = 0;
+  let archivedCount = 0;
 
   // Sammelliste neue Leads für Batch-Insert
   interface PendingNewLead {
@@ -242,9 +253,23 @@ export async function processJobListingImport(fileContent: string): Promise<{
     if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) { skipped++; continue; }
 
     // Duplikat-Check via O(1)/O(n) Index
-    const existingLeadId = findMatchingLead(leadIndex, domain, first.companyName);
+    const match = findMatchingLead(leadIndex, {
+      domain,
+      companyName: first.companyName,
+      email: first.email ?? null,
+      phone: first.phone ?? null,
+    });
 
-    if (existingLeadId) {
+    if (match && match.archived) {
+      // Aussortierte Leads: KEIN DB-Update — Status „Passt nicht" bleibt
+      // stabil, damit das KI-Negativ-Signal nicht ueberschrieben wird.
+      archivedCount++;
+      skipped++;
+      continue;
+    }
+
+    if (match) {
+      const existingLeadId = match.leadId;
       // Lead ist schon da. Wenn er bereits im CRM liegt: Stammdaten NICHT
       // überschreiben (dort pflegt der Vertrieb manuell). Kontakte + Stellen
       // aus der neuen CSV werden trotzdem angehängt, damit keine Info verloren
@@ -383,14 +408,14 @@ export async function processJobListingImport(fileContent: string): Promise<{
     action: "import.job_listings",
     entityType: "import_log",
     entityId: importLog.id,
-    details: { total: listings.length, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped },
+    details: { total: listings.length, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped, archived: archivedCount },
   });
 
   revalidatePath("/leads");
   revalidatePath("/import");
   revalidatePath("/");
 
-  return { success: true, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped };
+  return { success: true, imported, updated, alreadyInCrm, contacts: contactsCreated, jobs: jobsCreated, skipped, archived: archivedCount };
 }
 
 // ─── Helpers ────────────────────────────────────────────────

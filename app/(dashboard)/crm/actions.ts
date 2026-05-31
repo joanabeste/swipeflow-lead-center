@@ -22,6 +22,7 @@ import {
   type UploadedAttachmentRef,
 } from "@/lib/notes/attachments";
 import { awardCommissionsForStatusChange } from "@/lib/commission/award";
+import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 
 export type CallProvider = "phonemondo" | "webex";
 
@@ -668,7 +669,7 @@ export async function createManualLead(input: {
   industry?: string | null;
   companySize?: string | null;
   crmStatusId?: string | null;
-}) {
+}): Promise<{ success: true; leadId: string } | { error: string; existingId?: string }> {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   if (!input.companyName.trim()) return { error: "Firmenname fehlt." };
@@ -676,6 +677,26 @@ export async function createManualLead(input: {
   const db = createServiceClient();
   const websiteInput = normalizeUrl(input.website ?? null);
   const websiteDomain = extractDomain(websiteInput) || extractDomain(input.email ?? null);
+
+  const existingMatch = await findExistingLeadForManual(db, {
+    company_name: input.companyName.trim(),
+    website: websiteDomain,
+    email: input.email ?? null,
+    phone: input.phone ?? null,
+    city: input.city ?? null,
+  });
+  if (existingMatch) {
+    if (existingMatch.archived) {
+      return {
+        error:
+          "Dieser Lead wurde im CRM aussortiert oder gelöscht und wird nicht erneut angelegt.",
+      };
+    }
+    return {
+      error: "Es existiert bereits ein Lead mit diesen Daten.",
+      existingId: existingMatch.leadId,
+    };
+  }
 
   const { data, error } = await db
     .from("leads")

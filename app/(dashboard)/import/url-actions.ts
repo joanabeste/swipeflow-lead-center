@@ -424,6 +424,10 @@ export async function createLeadsFromDirectory(
         company_name: row.company_name,
         city: null,
         crm_status_id: newLead.crm_status_id ?? null,
+        email: null,
+        phone: null,
+        lifecycle_stage: null,
+        deleted_at: null,
       });
     }
   }

@@ -39,12 +39,13 @@ export async function processGoogleMapsImport(
   imported: number;
   updated: number;
   skipped: number;
+  archived: number;
   error?: string;
 }> {
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, imported: 0, updated: 0, skipped: 0, error: "Nicht authentifiziert." };
+  if (!user) return { success: false, imported: 0, updated: 0, skipped: 0, archived: 0, error: "Nicht authentifiziert." };
 
   // Effektives Mapping: Defaults + User-Overrides (null = explizit aus)
   const effectiveMapping = { ...GOOGLE_MAPS_COLUMNS } as Record<GoogleMapsColumnKey, string>;
@@ -59,7 +60,7 @@ export async function processGoogleMapsImport(
   const col = buildColumnIndex(headers, effectiveMapping);
 
   if (col.companyName < 0) {
-    return { success: false, imported: 0, updated: 0, skipped: 0, error: "Spalte für Firmenname nicht gefunden." };
+    return { success: false, imported: 0, updated: 0, skipped: 0, archived: 0, error: "Spalte für Firmenname nicht gefunden." };
   }
 
   // Valide Zeilen filtern (müssen Firmenname haben)
@@ -67,7 +68,7 @@ export async function processGoogleMapsImport(
 
   // Limit-Check
   const sizeError = validateCsvSize(validRows.length);
-  if (sizeError) return { success: false, imported: 0, updated: 0, skipped: 0, error: sizeError.error };
+  if (sizeError) return { success: false, imported: 0, updated: 0, skipped: 0, archived: 0, error: sizeError.error };
 
   // Import-Log (wirft bei Fehler)
   let importLog;
@@ -79,19 +80,26 @@ export async function processGoogleMapsImport(
       userId: user.id,
     });
   } catch (e) {
-    return { success: false, imported: 0, updated: 0, skipped: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
+    return { success: false, imported: 0, updated: 0, skipped: 0, archived: 0, error: e instanceof Error ? e.message : "Import-Log fehlgeschlagen" };
   }
 
   // Blacklist + Cancel-Rules + Lead-Index
   const ctx = await loadImportContext(db);
+  const { data: archivedRows } = await db
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("is_archived", true);
+  const archivedStatusIds = new Set((archivedRows ?? []).map((r) => r.id as string));
+
   const { data: existingLeads } = await db
     .from("leads")
-    .select("id, company_name, website");
-  const leadIndex = buildLeadIndex(existingLeads ?? []);
+    .select("id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status");
+  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
 
   let imported = 0;
   let updated = 0;
   let skipped = 0;
+  let archivedCount = 0;
 
   // Sammelliste neue Leads für Batch-Insert
   const newLeads: Record<string, unknown>[] = [];
@@ -129,9 +137,22 @@ export async function processGoogleMapsImport(
     if (evaluateCancelRules(leadData as Record<string, unknown>, ctx.cancelRules, "import").cancelled) { skipped++; continue; }
 
     // O(1)/O(n) Duplikat-Check
-    const existingId = findMatchingLead(leadIndex, domain, companyName);
+    const match = findMatchingLead(leadIndex, {
+      domain,
+      companyName,
+      email: null,
+      phone,
+    });
 
-    if (existingId) {
+    if (match && match.archived) {
+      // Aussortierte Leads: KEIN Update, KEIN Insert (analog actions.ts).
+      archivedCount++;
+      skipped++;
+      continue;
+    }
+
+    if (match) {
+      const existingId = match.leadId;
       const { data: existingLead } = await db.from("leads").select("*").eq("id", existingId).single();
       if (existingLead) {
         const updates: Record<string, unknown> = {};
@@ -190,12 +211,12 @@ export async function processGoogleMapsImport(
     action: "import.google_maps",
     entityType: "import_log",
     entityId: importLog.id,
-    details: { total: validRows.length, imported, updated, skipped },
+    details: { total: validRows.length, imported, updated, skipped, archived: archivedCount },
   });
 
   revalidatePath("/leads");
   revalidatePath("/import");
   revalidatePath("/");
 
-  return { success: true, imported, updated, skipped };
+  return { success: true, imported, updated, skipped, archived: archivedCount };
 }

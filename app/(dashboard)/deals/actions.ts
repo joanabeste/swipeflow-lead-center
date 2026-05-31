@@ -14,6 +14,7 @@ import {
 } from "@/lib/deals/server";
 import { parseAmountToCents } from "@/lib/deals/types";
 import type { DealActivityType, DealStageKind } from "@/lib/deals/types";
+import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -252,21 +253,32 @@ export async function createProjectFromDeal(
   if (!leadId) {
     const companyName = ((deal.company_name as string | null) ?? "").trim();
     if (!companyName) return { error: "Deal hat weder Lead noch Firmenname." };
-    const { data: newLead, error: leadErr } = await db
-      .from("leads")
-      .insert({
-        company_name: companyName,
-        source_type: "manual",
-        status: "imported",
-        lifecycle_stage: "customer",
-        became_customer_at: new Date().toISOString(),
-        created_by: user.id,
-      })
-      .select("id")
-      .single();
-    if (leadErr || !newLead) return { error: `Lead-Anlage fehlgeschlagen: ${leadErr?.message ?? "unbekannt"}` };
-    leadId = newLead.id as string;
-    await db.from("deals").update({ lead_id: leadId }).eq("id", dealId);
+    const match = await findExistingLeadForManual(db, {
+      company_name: companyName,
+    });
+    if (match?.archived) {
+      return { error: "Dieser Lead wurde aussortiert und kann nicht erneut angelegt werden." };
+    }
+    if (match) {
+      leadId = match.leadId;
+      await db.from("deals").update({ lead_id: leadId }).eq("id", dealId);
+    } else {
+      const { data: newLead, error: leadErr } = await db
+        .from("leads")
+        .insert({
+          company_name: companyName,
+          source_type: "manual",
+          status: "imported",
+          lifecycle_stage: "customer",
+          became_customer_at: new Date().toISOString(),
+          created_by: user.id,
+        })
+        .select("id")
+        .single();
+      if (leadErr || !newLead) return { error: `Lead-Anlage fehlgeschlagen: ${leadErr?.message ?? "unbekannt"}` };
+      leadId = newLead.id as string;
+      await db.from("deals").update({ lead_id: leadId }).eq("id", dealId);
+    }
   } else {
     // Bestehenden Lead auf Kunde heben (idempotent: nur wenn noch nicht).
     const { data: leadRow } = await db

@@ -20,6 +20,7 @@ import {
   saveProviderSignaturePath,
 } from "@/lib/contracts/settings";
 import { templateVersion } from "@/lib/contracts/template";
+import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 import type { ContractRow, ContractLead, ContractEventType, ContractType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
 
 const LINK_VALID_DAYS = 30;
@@ -226,26 +227,50 @@ export async function createContract(input: CreateContractInput): Promise<Result
   if (!leadId) {
     const nc = input.new_customer;
     if (!nc?.company_name?.trim()) return { error: "Kein Kunde ausgewählt oder angelegt." };
-    const { data: leadData, error: leadErr } = await db
-      .from("leads")
-      .insert({
-        company_name: nc.company_name.trim(),
-        city: nc.city?.trim() || null,
-        email: nc.email?.trim() || null,
-        vertical: type,
-        source_type: "manual",
-        status: "imported",
-        lifecycle_stage: "customer",
-        became_customer_at: new Date().toISOString(),
-        created_by: ctx.user.id,
-      })
-      .select("id")
-      .single();
-    if (leadErr) {
-      console.error("[createContract:newCustomer]", leadErr);
-      return { error: `Kunde konnte nicht angelegt werden: ${leadErr.message}` };
+
+    // Vor dem Anlegen prüfen, ob es den Kunden im CRM bereits gibt.
+    const match = await findExistingLeadForManual(db, {
+      company_name: nc.company_name,
+      email: nc.email,
+      city: nc.city,
+    });
+    if (match?.archived) {
+      return {
+        error:
+          "Dieser Kunde wurde im CRM aussortiert. Bitte zuerst klären, ob der Vertrag trotzdem angelegt werden soll.",
+      };
     }
-    leadId = leadData.id as string;
+    if (match && !match.archived) {
+      // Bestehenden Lead zum Kunden befördern statt Duplikat anlegen.
+      leadId = match.leadId;
+      const { error: promoteErr } = await db
+        .from("leads")
+        .update({ lifecycle_stage: "customer", became_customer_at: new Date().toISOString() })
+        .eq("id", leadId)
+        .neq("lifecycle_stage", "customer");
+      if (promoteErr) console.error("[createContract:promote]", promoteErr);
+    } else {
+      const { data: leadData, error: leadErr } = await db
+        .from("leads")
+        .insert({
+          company_name: nc.company_name.trim(),
+          city: nc.city?.trim() || null,
+          email: nc.email?.trim() || null,
+          vertical: type,
+          source_type: "manual",
+          status: "imported",
+          lifecycle_stage: "customer",
+          became_customer_at: new Date().toISOString(),
+          created_by: ctx.user.id,
+        })
+        .select("id")
+        .single();
+      if (leadErr) {
+        console.error("[createContract:newCustomer]", leadErr);
+        return { error: `Kunde konnte nicht angelegt werden: ${leadErr.message}` };
+      }
+      leadId = leadData.id as string;
+    }
   } else {
     // Aus dem CRM gewählter Lead, der noch kein Kunde ist → zum Kunden befördern.
     // neq stellt sicher, dass became_customer_at bestehender Kunden nicht überschrieben wird.

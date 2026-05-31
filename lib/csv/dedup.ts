@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { normalizeEmail, normalizePhone } from "@/lib/csv/normalizer";
 
 // ============================================================
 // Normalisierung für Fuzzy-Matching
@@ -146,12 +147,16 @@ export interface DuplicateMatch {
   archived: boolean;
 }
 
-interface ExistingLead {
+export interface ExistingLead {
   id: string;
   website: string | null;
   company_name: string | null;
   city: string | null;
   crm_status_id: string | null;
+  email: string | null;
+  phone: string | null;
+  lifecycle_stage: string | null;
+  deleted_at: string | null;
 }
 
 /** Einmalig geladener Snapshot aller bestehenden Leads + archivierter Status.
@@ -160,7 +165,21 @@ interface ExistingLead {
 export interface ExistingLeadsIndex {
   existingLeads: ExistingLead[];
   existingWithDomain: (ExistingLead & { normalizedDomain: string })[];
+  byEmail: Map<string, ExistingLead>;
+  byPhone: Map<string, ExistingLead>;
   archivedSet: Set<string>;
+}
+
+/** Zentrale Wahrheit, wann ein Lead aus Dedup-Sicht als archiviert gilt:
+ *  lifecycle_stage='archived', soft-deleted, oder CRM-Status mit is_archived=true. */
+export function isLeadArchived(
+  lead: Pick<ExistingLead, "lifecycle_stage" | "deleted_at" | "crm_status_id">,
+  archivedSet: Set<string>,
+): boolean {
+  if (lead.lifecycle_stage === "archived") return true;
+  if (lead.deleted_at != null) return true;
+  if (lead.crm_status_id != null && archivedSet.has(lead.crm_status_id)) return true;
+  return false;
 }
 
 /** Laedt alle bestehenden Leads + archivierte CRM-Status genau einmal. */
@@ -178,13 +197,22 @@ export async function loadExistingLeadsIndex(
   const leads = await fetchAllRows<ExistingLead>(
     supabase,
     "leads",
-    "id, website, company_name, city, crm_status_id",
+    "id, website, company_name, city, crm_status_id, email, phone, lifecycle_stage, deleted_at",
   );
   const existingWithDomain = leads
     .filter((l) => l.website)
     .map((l) => ({ ...l, normalizedDomain: normalizeDomain(l.website!) }));
 
-  return { existingLeads: leads, existingWithDomain, archivedSet };
+  const byEmail = new Map<string, ExistingLead>();
+  const byPhone = new Map<string, ExistingLead>();
+  for (const l of leads) {
+    const e = normalizeEmail(l.email);
+    if (e && !byEmail.has(e)) byEmail.set(e, l);
+    const p = normalizePhone(l.phone);
+    if (p && !byPhone.has(p)) byPhone.set(p, l);
+  }
+
+  return { existingLeads: leads, existingWithDomain, byEmail, byPhone, archivedSet };
 }
 
 /** Fuegt einen frisch eingefuegten Lead dem In-Memory-Index hinzu, damit spaetere
@@ -194,6 +222,10 @@ export function addLeadToIndex(index: ExistingLeadsIndex, lead: ExistingLead): v
   if (lead.website) {
     index.existingWithDomain.push({ ...lead, normalizedDomain: normalizeDomain(lead.website) });
   }
+  const e = normalizeEmail(lead.email);
+  if (e && !index.byEmail.has(e)) index.byEmail.set(e, lead);
+  const p = normalizePhone(lead.phone);
+  if (p && !index.byPhone.has(p)) index.byPhone.set(p, lead);
 }
 
 /** Prueft einen einzelnen Lead gegen den Index.
@@ -201,15 +233,21 @@ export function addLeadToIndex(index: ExistingLeadsIndex, lead: ExistingLead): v
  *  normalisiertem Namen — kein reiner Fuzzy-Match, um verschiedene Firmen nicht zu mergen. */
 export function findDbDuplicateForLead(
   index: ExistingLeadsIndex,
-  lead: { company_name?: string | null; website?: string | null; city?: string | null },
+  lead: {
+    company_name?: string | null;
+    website?: string | null;
+    city?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  },
   opts?: { strict?: boolean },
 ): DuplicateMatch | null {
-  const { existingLeads, existingWithDomain, archivedSet } = index;
+  const { existingLeads, existingWithDomain, byEmail, byPhone, archivedSet } = index;
   const strict = opts?.strict ?? false;
 
-  const buildMatch = (l: { id: string; crm_status_id: string | null }): DuplicateMatch => ({
+  const buildMatch = (l: ExistingLead): DuplicateMatch => ({
     leadId: l.id,
-    archived: l.crm_status_id != null && archivedSet.has(l.crm_status_id),
+    archived: isLeadArchived(l, archivedSet),
   });
 
   // Domain-Match (Property website = nackte Domain)
@@ -217,6 +255,24 @@ export function findDbDuplicateForLead(
     const d = normalizeDomain(lead.website);
     const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
     if (match) return buildMatch(match);
+  }
+
+  // Email-Match (normalisiert)
+  if (lead.email) {
+    const e = normalizeEmail(lead.email);
+    if (e) {
+      const hit = byEmail.get(e);
+      if (hit) return buildMatch(hit);
+    }
+  }
+
+  // Phone-Match (normalisiert)
+  if (lead.phone) {
+    const p = normalizePhone(lead.phone);
+    if (p) {
+      const hit = byPhone.get(p);
+      if (hit) return buildMatch(hit);
+    }
   }
 
   // Namens-Match
