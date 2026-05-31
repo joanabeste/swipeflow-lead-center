@@ -13,7 +13,7 @@ import {
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import type { CustomLeadStatus } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
-import { updateCrmStatus, bulkAssignLeads } from "./actions";
+import { bulkAssignLeads, bulkUpdateCrmStatus } from "./actions";
 import { bulkDeleteLeads, bulkArchiveLeads, bulkRestoreCrmStatus } from "../leads/actions";
 import { useServiceMode } from "@/lib/service-mode";
 
@@ -161,8 +161,16 @@ export function CrmManager({
     if (!bulkStatus) return;
     const ids = Array.from(selected);
     startTransition(async () => {
-      for (const id of ids) await updateCrmStatus(id, bulkStatus);
-      addToast(`${ids.length} Lead(s) auf "${statuses.find((s) => s.id === bulkStatus)?.label}" gesetzt`);
+      const res = await bulkUpdateCrmStatus(ids, bulkStatus);
+      if (!("success" in res)) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      const label = statuses.find((s) => s.id === bulkStatus)?.label ?? bulkStatus;
+      addToast(
+        `${res.updated} Lead${res.updated === 1 ? "" : "s"} auf "${label}" gesetzt`,
+        "success",
+      );
       setSelected(new Set());
       router.refresh();
     });
@@ -645,15 +653,15 @@ function CellRenderer({
   switch (colKey) {
     case "company_name":
       return (
-        <span className="inline-flex items-center gap-1.5">
-          <span className="truncate">{lead.company_name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="min-w-0 truncate">{lead.company_name}</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onPreview(lead.id);
             }}
             title="Vorschau"
-            className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
           >
             <Eye className="h-3.5 w-3.5" />
           </button>

@@ -11,6 +11,38 @@ interface Props {
 
 const PAGE_SIZE = 50;
 
+// Whitelist erlaubter Spalten fuer Header-Filter (filter_<col>=<val>).
+// Defensive Absicherung gegen PostgREST-Filter-Injection: NUR diese Spalten
+// duerfen ueber URL-Filter angesprochen werden. Auth-/Status-Felder wie
+// crm_status_id, assigned_to, deleted_at etc. sind hier bewusst NICHT enthalten.
+// "traffic_light" wird in der Logik unten auf traffic_light_rating gemappt.
+const ALLOWED_FILTER_COLUMNS = new Set<string>([
+  "company_name",
+  "website",
+  "city",
+  "zip",
+  "industry",
+  "company_size",
+  "legal_form",
+  "phone",
+  "email",
+  "source_type",
+  "traffic_light",
+]);
+
+// Escape Wildcards und Trenner, damit Benutzereingaben in .ilike()/.or()
+// nicht als PostgREST-Pattern interpretiert werden. Komma trennt or-Filter,
+// % und _ sind SQL-LIKE-Wildcards. Max 100 Zeichen.
+function escapeIlikeWildcards(s: string): string {
+  return s
+    .slice(0, 100)
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/,/g, " ")
+    .replace(/[()]/g, " ");
+}
+
 export default async function LeadsPage({ searchParams }: Props) {
   const params = await searchParams;
   const page = Math.max(1, parseInt(params.page ?? "1", 10));
@@ -28,8 +60,9 @@ export default async function LeadsPage({ searchParams }: Props) {
     .is("deleted_at", null);
 
   if (params.q) {
+    const safeQ = escapeIlikeWildcards(params.q);
     query = query.or(
-      `company_name.ilike.%${params.q}%,website.ilike.%${params.q}%,city.ilike.%${params.q}%`,
+      `company_name.ilike.%${safeQ}%,website.ilike.%${safeQ}%,city.ilike.%${safeQ}%`,
     );
   }
 
@@ -46,17 +79,21 @@ export default async function LeadsPage({ searchParams }: Props) {
       .not("status", "in", '("qualified","exported")');
   }
 
-  // Spalten-Filter anwenden
+  // Spalten-Filter anwenden — Spaltenname strikt aus Whitelist, Wert escaped.
   const columnFilters: Record<string, string> = {};
   for (const [key, value] of Object.entries(params)) {
     if (key.startsWith("filter_") && value) {
       const col = key.replace("filter_", "");
+      if (!ALLOWED_FILTER_COLUMNS.has(col)) {
+        console.warn(`[leads] Ignoriere unerlaubten Filter-Spaltennamen: ${col}`);
+        continue;
+      }
       columnFilters[col] = value;
       if (col === "traffic_light") {
         // Ampel: exakter Match auf die echte Spalte (nicht ilike).
         query = query.eq("traffic_light_rating", value);
       } else {
-        query = query.ilike(col, `%${value}%`);
+        query = query.ilike(col, `%${escapeIlikeWildcards(value)}%`);
       }
     }
   }

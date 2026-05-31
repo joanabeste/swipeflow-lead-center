@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { checkSection } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { triggerCall, isPhoneMondoConfigured } from "@/lib/phonemondo/client";
 import { decryptSecret } from "@/lib/crypto/secrets";
@@ -35,8 +36,9 @@ async function currentUser() {
 }
 
 export async function updateCrmStatus(leadId: string, statusId: string | null) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
 
   const { data: before } = await db
@@ -95,8 +97,9 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
 }
 
 export async function updateLeadAssignedTo(leadId: string, assignedTo: string | null) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
 
   const { data: before } = await db
@@ -135,8 +138,9 @@ export async function updateLeadAssignedTo(leadId: string, assignedTo: string | 
  * Zuordnung mit assignedTo=null). Wird aus der Bulk-Aktionsleiste im CRM gerufen.
  */
 export async function bulkAssignLeads(ids: string[], assignedTo: string | null) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   if (ids.length === 0) return { success: true };
   const db = createServiceClient();
 
@@ -175,6 +179,107 @@ export async function bulkAssignLeads(ids: string[], assignedTo: string | null) 
 }
 
 /**
+ * Setzt fuer mehrere ausgewaehlte Leads gemeinsam denselben CRM-Status. Ersetzt
+ * den frueheren sequentiellen Loop in der UI (N Roundtrips + N revalidatePath)
+ * durch genau einen Update, einen Audit-Bulk-Insert und einen revalidatePath.
+ * Provisions-Awards laufen pro Lead, aber idempotent (UNIQUE in 068), und
+ * Fehler werden nur gesammelt — sie blockieren den Status-Wechsel nicht.
+ */
+export async function bulkUpdateCrmStatus(
+  ids: string[],
+  statusId: string | null,
+): Promise<
+  | { success: true; updated: number; commissionErrors?: string[] }
+  | { error: string }
+> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
+  if (ids.length === 0) return { success: true, updated: 0 };
+  const db = createServiceClient();
+
+  const { data: before } = await db
+    .from("leads")
+    .select("id, crm_status_id")
+    .in("id", ids);
+  const oldById = new Map(
+    (before ?? []).map((r) => [r.id as string, (r.crm_status_id as string | null) ?? null]),
+  );
+
+  const { error } = await db
+    .from("leads")
+    .update({ crm_status_id: statusId, updated_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) {
+    console.error("[bulkUpdateCrmStatus] failed:", error);
+    if (/column.*crm_status_id.*does not exist/i.test(error.message)) {
+      return { error: "Spalte crm_status_id fehlt — Migration 017 muss in Supabase ausgeführt werden." };
+    }
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  // Audit-Inserts in einem einzigen Roundtrip statt N.
+  const auditRows = ids.map((id) => ({
+    user_id: user.id,
+    action: "lead.crm_status_changed",
+    entity_type: "lead",
+    entity_id: id,
+    details: { old_status: oldById.get(id) ?? null, new_status: statusId },
+  }));
+  if (auditRows.length > 0) {
+    const { error: auditErr } = await db.from("audit_logs").insert(auditRows);
+    if (auditErr) console.warn("[bulkUpdateCrmStatus] audit insert failed:", auditErr);
+  }
+
+  // Provisions-Trigger: pro Lead (Logik haengt vom Lead-Assignee ab).
+  // UNIQUE(rule_id, lead_id) in Migration 068 macht den Aufruf idempotent.
+  const commissionErrors: string[] = [];
+  let anyAwarded = false;
+  const awardAuditRows: {
+    user_id: string;
+    action: string;
+    entity_type: string;
+    entity_id: string;
+    details: Record<string, unknown>;
+  }[] = [];
+  for (const id of ids) {
+    const award = await awardCommissionsForStatusChange(db, id, statusId);
+    if (award.error) {
+      console.warn("[bulkUpdateCrmStatus] commission award failed:", id, award.error);
+      commissionErrors.push(`${id}: ${award.error}`);
+      awardAuditRows.push({
+        user_id: user.id,
+        action: "lead.commission_award_failed",
+        entity_type: "lead",
+        entity_id: id,
+        details: { status_id: statusId, error: award.error },
+      });
+    } else if (award.inserted > 0) {
+      anyAwarded = true;
+      awardAuditRows.push({
+        user_id: user.id,
+        action: "lead.commission_awarded",
+        entity_type: "lead",
+        entity_id: id,
+        details: { count: award.inserted, status_id: statusId },
+      });
+    }
+  }
+  if (awardAuditRows.length > 0) {
+    const { error: awardAuditErr } = await db.from("audit_logs").insert(awardAuditRows);
+    if (awardAuditErr) console.warn("[bulkUpdateCrmStatus] award-audit insert failed:", awardAuditErr);
+  }
+  if (anyAwarded) revalidatePath("/zeit/provision");
+
+  revalidatePath("/crm");
+  return {
+    success: true,
+    updated: ids.length,
+    ...(commissionErrors.length > 0 ? { commissionErrors } : {}),
+  };
+}
+
+/**
  * Vom Client aufgerufen, BEVOR die Dateien hochgeladen werden: erzeugt fuer jede
  * Datei eine signed Upload-URL, gegen die der Browser direkt PUTtet. Umgeht damit
  * das 4.5-MB-Function-Payload-Limit.
@@ -186,8 +291,8 @@ export async function createNoteAttachmentUploads(
   | { tickets: NoteAttachmentUploadTicket[]; errors: { clientId: string; error: string }[] }
   | { error: string }
 > {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   if (files.length === 0) return { tickets: [], errors: [] };
   return createNoteAttachmentUploadTickets({ leadId, files });
 }
@@ -197,8 +302,9 @@ export async function addNote(
   content: string,
   attachments: UploadedAttachmentRef[] = [],
 ) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   // Erlaube reine Datei-Notizen (z.B. nur Screenshot pasten): wenn Anhaenge da sind,
   // ist auch leerer Text ok.
   if (!content.trim() && attachments.length === 0) {
@@ -252,8 +358,9 @@ export async function updateNote(
   addAttachments: UploadedAttachmentRef[] = [],
   removeAttachmentIds: string[] = [],
 ) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   if (!content.trim() && addAttachments.length === 0) {
     // Pruefen, ob nach dem Remove noch was uebrig bleibt — sonst ist die Notiz inhaltsleer.
     const db = createServiceClient();
@@ -316,8 +423,9 @@ export async function updateNote(
 }
 
 export async function deleteNote(noteId: string, leadId: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
 
   // Storage-Objects vor DB-Delete entfernen (DB-CASCADE saeubert nur Tabellen-Rows).
@@ -341,8 +449,9 @@ export async function deleteNote(noteId: string, leadId: string) {
 // ─── Aufgaben / Wiedervorlagen ───────────────────────────────
 
 export async function addLeadTodo(leadId: string, title: string, dueDate: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const trimmed = title.trim();
   if (!trimmed) return { error: "Titel darf nicht leer sein." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
@@ -376,8 +485,9 @@ export async function addLeadTodo(leadId: string, title: string, dueDate: string
 }
 
 export async function updateLeadTodo(todoId: string, leadId: string, title: string, dueDate: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const trimmed = title.trim();
   if (!trimmed) return { error: "Titel darf nicht leer sein." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
@@ -404,8 +514,9 @@ export async function updateLeadTodo(todoId: string, leadId: string, title: stri
 }
 
 export async function toggleLeadTodo(todoId: string, leadId: string, done: boolean) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
   const { error } = await db
     .from("lead_todos")
@@ -428,8 +539,9 @@ export async function toggleLeadTodo(todoId: string, leadId: string, done: boole
 }
 
 export async function deleteLeadTodo(todoId: string, leadId: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
   const { error } = await db.from("lead_todos").delete().eq("id", todoId);
   if (error) return { error: error.message };
@@ -457,8 +569,9 @@ export async function logCall(input: {
   notes?: string | null;
   phoneNumber?: string | null;
 }) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
 
   const now = new Date().toISOString();
@@ -513,8 +626,9 @@ export async function startCall(input: {
   phoneNumber: string;
   provider?: CallProvider;
 }) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   if (!input.phoneNumber) return { error: "Keine Telefonnummer vorhanden." };
 
   const provider: CallProvider = input.provider ?? "phonemondo";
@@ -670,8 +784,9 @@ export async function createManualLead(input: {
   companySize?: string | null;
   crmStatusId?: string | null;
 }): Promise<{ success: true; leadId: string } | { error: string; existingId?: string }> {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   if (!input.companyName.trim()) return { error: "Firmenname fehlt." };
 
   const db = createServiceClient();
@@ -753,8 +868,8 @@ export async function addContact(input: {
   phone?: string | null;
   salutation?: "herr" | "frau" | null;
 }): Promise<{ success: true; contactId: string } | { error: string }> {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   if (!input.name.trim()) return { error: "Name fehlt." };
   const { guessSalutationFromName } = await import("@/lib/contacts/salutation-from-name");
   const db = createServiceClient();
@@ -789,8 +904,8 @@ export async function updateContact(contactId: string, leadId: string, input: {
   phone?: string | null;
   salutation?: "herr" | "frau" | null;
 }) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
   const patch: Record<string, unknown> = {
     name: input.name.trim(),
@@ -816,8 +931,8 @@ export async function updateContactSalutation(
   contactId: string,
   salutation: "herr" | "frau" | null,
 ) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
   const { data, error } = await db
     .from("lead_contacts")
@@ -834,8 +949,8 @@ export async function updateContactSalutation(
 }
 
 export async function deleteContact(contactId: string, leadId: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
   const { error } = await db.from("lead_contacts").delete().eq("id", contactId);
   if (error) return { error: error.message };
@@ -852,8 +967,8 @@ export async function addJobPosting(input: {
   location?: string | null;
   url?: string | null;
 }) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   if (!input.title.trim()) return { error: "Titel fehlt." };
   const db = createServiceClient();
   const { error } = await db.from("lead_job_postings").insert({
@@ -874,8 +989,8 @@ export async function addJobPosting(input: {
 }
 
 export async function deleteJobPosting(jobId: string, leadId: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
   const { error } = await db.from("lead_job_postings").delete().eq("id", jobId);
   if (error) return { error: error.message };
@@ -885,8 +1000,9 @@ export async function deleteJobPosting(jobId: string, leadId: string) {
 }
 
 export async function updateCallNotes(callId: string, leadId: string, notes: string) {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
   const db = createServiceClient();
 
   const { error } = await db
@@ -911,9 +1027,9 @@ export async function updateCallNotes(callId: string, leadId: string, notes: str
 
 /** Lädt die E-Mail-Vorlagen des aktuellen Users für den Send-Dialog. */
 export async function loadMyEmailTemplates(): Promise<EmailTemplate[]> {
-  const user = await currentUser();
-  if (!user) return [];
-  return listTemplates(user.id);
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return [];
+  return listTemplates(ctx.user.id);
 }
 
 
@@ -924,8 +1040,9 @@ export async function sendLeadEmail(input: {
   subject: string;
   body: string;
 }): Promise<{ success: true; messageId: string } | { error: string }> {
-  const user = await currentUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
 
   const subject = input.subject.trim();
   const body = input.body.trim();

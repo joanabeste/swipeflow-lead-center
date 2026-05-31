@@ -8,10 +8,56 @@ import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 
+// Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
+// rohem Record<string, ...> aufgerufen. Ohne Whitelist koennte ein Browser-
+// User beliebige Spalten setzen (assigned_to, lifecycle_stage, deleted_at,
+// blacklist_hit, status, crm_status_id ...). Hier explizit auflisten, welche
+// Felder ueber diese Action editierbar sind. Status- und Lifecycle-Wechsel
+// laufen ueber dedizierte Actions (bulkUpdateStatus, setTrafficLightManual,
+// bulkArchiveLeads). Adress-Felder bleiben drin, damit das Re-Geocoding unten
+// triggert.
+const ALLOWED_EDIT_FIELDS = [
+  "company_name",
+  "website",
+  "phone",
+  "email",
+  "street",
+  "city",
+  "zip",
+  "state",
+  "country",
+  "industry",
+  "company_size",
+  "legal_form",
+  "register_id",
+  "career_page_url",
+  "description",
+  // Manuelle Ampel-Korrektur laeuft ueber setTrafficLightManual → ruft
+  // updateLead intern auf. Diese Felder duerfen deshalb hier durch.
+  "traffic_light_rating",
+  "traffic_light_score",
+  "traffic_light_source",
+  "traffic_light_rated_at",
+] as const;
+type AllowedEditField = (typeof ALLOWED_EDIT_FIELDS)[number];
+
 export async function updateLead(
   leadId: string,
   updates: Partial<Lead>,
 ) {
+  // Whitelist anwenden: unbekannte Keys (status, assigned_to, deleted_at, ...)
+  // werden hier verworfen, bevor irgendetwas Sicherheitsrelevantes passiert.
+  const safe = Object.fromEntries(
+    Object.entries(updates).filter(([k]) =>
+      (ALLOWED_EDIT_FIELDS as readonly string[]).includes(k),
+    ),
+  ) as Partial<Record<AllowedEditField, unknown>>;
+
+  // Keine erlaubten Felder uebrig → frueher Erfolg, ohne DB-Call.
+  if (Object.keys(safe).length === 0) {
+    return { success: true };
+  }
+
   const supabase = await createClient();
   const db = createServiceClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,14 +77,14 @@ export async function updateLead(
   // Sonst zeigt die Standort-Karte den alten Ort.
   const ADDRESS_FIELDS = ["street", "zip", "city", "country"] as const;
   const addressChanged = ADDRESS_FIELDS.some((f) => {
-    if (!(f in updates)) return false;
+    if (!(f in safe)) return false;
     const oldVal = (oldLead as Record<string, unknown>)[f];
-    const newVal = (updates as Record<string, unknown>)[f];
+    const newVal = (safe as Record<string, unknown>)[f];
     return String(oldVal ?? "") !== String(newVal ?? "");
   });
 
   const finalUpdates: Record<string, unknown> = {
-    ...updates,
+    ...safe,
     updated_at: new Date().toISOString(),
   };
   if (addressChanged) {
@@ -55,25 +101,9 @@ export async function updateLead(
 
   if (error) return { error: error.message };
 
-  // Override-Tracking: wurde Status manuell aus cancelled/filtered geholt?
-  if (typeof updates.status === "string" && updates.status !== oldLead.status) {
-    await logCancelOverrides(
-      db,
-      [{
-        id: leadId,
-        status: oldLead.status,
-        cancel_reason: oldLead.cancel_reason ?? null,
-        cancel_reason_code: (oldLead as { cancel_reason_code?: string | null }).cancel_reason_code ?? null,
-        cancel_rule_id: oldLead.cancel_rule_id ?? null,
-      }],
-      updates.status,
-      user?.id ?? null,
-    );
-  }
-
   // Änderungen protokollieren
   const changes: { lead_id: string; user_id: string | null; field_name: string; old_value: string | null; new_value: string | null }[] = [];
-  for (const [key, newValue] of Object.entries(updates)) {
+  for (const [key, newValue] of Object.entries(safe)) {
     const oldValue = oldLead[key as keyof typeof oldLead];
     if (String(oldValue ?? "") !== String(newValue ?? "")) {
       changes.push({
@@ -95,7 +125,7 @@ export async function updateLead(
     action: "lead.updated",
     entityType: "lead",
     entityId: leadId,
-    details: { fields: Object.keys(updates) },
+    details: { fields: Object.keys(safe) },
   });
 
   revalidatePath("/leads");

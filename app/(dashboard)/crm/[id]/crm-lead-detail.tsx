@@ -85,6 +85,9 @@ export function CrmLeadDetail({
   const [deletePending, startDeleteTransition] = useTransition();
   const [archivePending, startArchiveTransition] = useTransition();
   const [unarchivePending, startUnarchiveTransition] = useTransition();
+  // Vor-Stand vor dem Aussortieren — wird vom Server zurueckgegeben und beim
+  // Wiederherstellen benoetigt, damit der Original-Status nicht verloren geht.
+  const [archivePrevious, setArchivePrevious] = useState<{ id: string; crm_status_id: string | null }[]>([]);
   const latestEnrichment = enrichments[0] ?? null;
 
   // Aussortier-Banner: zugeordneter CRM-Status mit is_archived=true.
@@ -101,18 +104,29 @@ export function CrmLeadDetail({
     if (!confirm("Lead aussortieren? Er erscheint nicht mehr in Neue Leads oder im CRM und wird der KI als Negativ-Signal gemeldet. Du kannst ihn jederzeit ueber das Banner wiederherstellen.")) return;
     startArchiveTransition(async () => {
       const res = await bulkArchiveLeads([lead.id], serviceMode);
-      if ("error" in res && res.error) {
+      if ("error" in res) {
         alert(res.error);
         return;
       }
+      // previous-Liste vom Server merken — sonst geht der Original-Status beim
+      // Wiederherstellen verloren (Unarchive setzt sonst crm_status_id=null).
+      setArchivePrevious(res.previous ?? []);
       notify();
     });
   }
 
   function handleUnarchive() {
     startUnarchiveTransition(async () => {
-      const res = await bulkRestoreCrmStatus([{ id: lead.id, crm_status_id: null }]);
-      if (!("error" in res) || !res.error) notify();
+      // Vorrang: gemerkter Vor-Stand aus dem Archive-Call. Fallback nur, wenn
+      // wir nichts gemerkt haben (z.B. Seite nach Aussortieren neu geladen).
+      const entries = archivePrevious.length > 0
+        ? archivePrevious
+        : [{ id: lead.id, crm_status_id: null }];
+      const res = await bulkRestoreCrmStatus(entries);
+      if (!("error" in res) || !res.error) {
+        setArchivePrevious([]);
+        notify();
+      }
     });
   }
 

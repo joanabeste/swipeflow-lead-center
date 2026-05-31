@@ -7,6 +7,38 @@ import { listTeamMembers } from "../deals/actions";
 
 const PAGE_SIZE = 50;
 
+// Whitelist erlaubter Spalten fuer Header-Filter (filter_<col>=<val>).
+// Defensive Absicherung gegen PostgREST-Filter-Injection: NUR diese Spalten
+// duerfen ueber URL-Filter angesprochen werden. Auth-/Status-Felder wie
+// crm_status_id, assigned_to, deleted_at etc. sind hier bewusst NICHT enthalten.
+const ALLOWED_FILTER_COLUMNS = new Set<string>([
+  "company_name",
+  "website",
+  "city",
+  "zip",
+  "industry",
+  "company_size",
+  "legal_form",
+  "phone",
+  "email",
+  "source_type",
+  "traffic_light",
+]);
+
+// Escape Wildcards und Trenner, damit Benutzereingaben in .ilike()/.or()
+// nicht als PostgREST-Pattern interpretiert werden. Komma trennt or-Filter,
+// % und _ sind SQL-LIKE-Wildcards. Max 100 Zeichen — alles dahinter ist
+// fuer eine Lead-Suche ohnehin unsinnig.
+function escapeIlikeWildcards(s: string): string {
+  return s
+    .slice(0, 100)
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_")
+    .replace(/,/g, " ")
+    .replace(/[()]/g, " ");
+}
+
 export default async function CrmPage({
   searchParams,
 }: {
@@ -182,17 +214,22 @@ export default async function CrmPage({
   }
 
   if (sp.q) {
-    const like = `%${sp.q}%`;
+    const safeQ = escapeIlikeWildcards(sp.q);
+    const like = `%${safeQ}%`;
     query = query.or(`company_name.ilike.${like},website.ilike.${like},city.ilike.${like}`);
   }
 
-  // Spalten-Filter
+  // Spalten-Filter — Spaltenname strikt aus Whitelist, Wert escaped.
   const columnFilters: Record<string, string> = {};
   for (const [key, value] of Object.entries(sp)) {
     if (key.startsWith("filter_") && value) {
       const col = key.replace("filter_", "");
+      if (!ALLOWED_FILTER_COLUMNS.has(col)) {
+        console.warn(`[crm] Ignoriere unerlaubten Filter-Spaltennamen: ${col}`);
+        continue;
+      }
       columnFilters[col] = value;
-      query = query.ilike(col, `%${value}%`);
+      query = query.ilike(col, `%${escapeIlikeWildcards(value)}%`);
     }
   }
 

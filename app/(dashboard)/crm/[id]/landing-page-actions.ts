@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { checkSection } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import {
   createLandingPage,
@@ -70,8 +71,9 @@ export async function createLandingPageAction(input: {
   logoUrl: string | null;
   pageType?: LandingPageType;
 }): Promise<{ success: true; id: string; slug: string } | { error: string }> {
-  const user = await requireUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
 
   const cleaned = cleanSnapshot(input);
   if ("error" in cleaned) return cleaned;
@@ -122,8 +124,9 @@ export async function updateLandingPageAction(input: {
   primaryColor: string | null;
   logoUrl: string | null;
 }): Promise<{ success: true } | { error: string }> {
-  const user = await requireUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
 
   const cleaned = cleanSnapshot(input);
   if ("error" in cleaned) return cleaned;
@@ -169,8 +172,8 @@ export async function extractLeadBrandAction(input: {
   | { success: true; primaryColor: string | null; logoUrl: string | null; cached: boolean }
   | { error: string }
 > {
-  const user = await requireUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
 
   const db = createServiceClient();
   const { data: lead } = await db
@@ -210,8 +213,9 @@ export async function deleteLandingPageAction(input: {
   id: string;
   leadId: string;
 }): Promise<{ success: true } | { error: string }> {
-  const user = await requireUser();
-  if (!user) return { error: "Nicht angemeldet." };
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const user = ctx.user;
 
   const res = await softDeleteLandingPage(input.id);
   if (res.error) return { error: res.error };
