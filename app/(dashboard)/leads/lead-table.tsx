@@ -581,15 +581,15 @@ export function LeadTable({
                               {lead.website}
                             </a>
                           ) : col.key === "company_name" ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="truncate">{getCellValue(lead, col.key)}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="min-w-0 truncate">{getCellValue(lead, col.key)}</span>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openPreview(lead.id);
                                 }}
                                 title="Vorschau"
-                                className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
+                                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 opacity-0 transition hover:bg-gray-200 hover:text-gray-700 group-hover:opacity-100 dark:hover:bg-white/10 dark:hover:text-gray-200"
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </button>

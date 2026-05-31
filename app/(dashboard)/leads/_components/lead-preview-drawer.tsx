@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCardClient } from "./lead-screenshot-card-client";
+import { LeadTrafficLightCard } from "./lead-traffic-light-card";
 import type { LeadDetailBundle } from "@/lib/leads/load-lead-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
@@ -242,12 +243,27 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
               onBack={handleClose}
               backLabel="Schließen"
               extraRightColumn={
-                <LeadScreenshotCardClient
-                  leadId={data.lead.id}
-                  hasScreenshot={Boolean(data.lead.website_screenshot_path)}
-                  takenAt={data.lead.website_screenshot_taken_at}
-                  websiteUrl={normalizeWebsiteUrl(data.lead.website)}
-                />
+                <>
+                  <LeadScreenshotCardClient
+                    leadId={data.lead.id}
+                    hasScreenshot={Boolean(data.lead.website_screenshot_path)}
+                    takenAt={data.lead.website_screenshot_taken_at}
+                    websiteUrl={normalizeWebsiteUrl(data.lead.website)}
+                  />
+                  {/* Webdesign-Ampel + Begründung — wie in der Vollansicht. Nur
+                      hier (Neue-Leads-Vorschau); das CRM nutzt diesen Drawer nicht.
+                      Bedingung identisch zu /leads/[id]. */}
+                  {(data.lead.vertical === "webdesign" || data.lead.traffic_light_rating != null) && (
+                    <LeadTrafficLightCard
+                      leadId={data.lead.id}
+                      rating={data.lead.traffic_light_rating}
+                      score={data.lead.traffic_light_score}
+                      reason={data.lead.traffic_light_reason}
+                      source={data.lead.traffic_light_source}
+                      ratedAt={data.lead.traffic_light_rated_at}
+                    />
+                  )}
+                </>
               }
             />
           </PreviewRefreshProvider>
