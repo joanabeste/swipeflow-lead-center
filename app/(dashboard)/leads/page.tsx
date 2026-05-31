@@ -52,12 +52,25 @@ export default async function LeadsPage({ searchParams }: Props) {
     if (key.startsWith("filter_") && value) {
       const col = key.replace("filter_", "");
       columnFilters[col] = value;
-      query = query.ilike(col, `%${value}%`);
+      if (col === "traffic_light") {
+        // Ampel: exakter Match auf die echte Spalte (nicht ilike).
+        query = query.eq("traffic_light_rating", value);
+      } else {
+        query = query.ilike(col, `%${value}%`);
+      }
     }
   }
 
+  // "traffic_light" sortiert über den invertierten Score (grün hoch → rot niedrig);
+  // unbewertete Leads landen ans Ende.
+  const sortColumn = sort === "traffic_light" ? "traffic_light_score" : sort;
+  const orderOpts =
+    sort === "traffic_light"
+      ? { ascending: order === "asc", nullsFirst: false }
+      : { ascending: order === "asc" };
+
   const { data: leads, count } = await query
-    .order(sort, { ascending: order === "asc" })
+    .order(sortColumn, orderOpts)
     .range(offset, offset + PAGE_SIZE - 1);
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);

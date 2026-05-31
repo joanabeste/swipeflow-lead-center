@@ -1,7 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
 import { evaluateCancelRules, formatCancelReason, formatError } from "@/lib/cancel-rules/evaluator";
-import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
+import type { EnrichmentConfig, CancelRule, ServiceMode, TrafficLightRating } from "@/lib/types";
 
 const CONCURRENCY = 3;
 
@@ -19,6 +19,7 @@ export interface EnrichJobResult {
   isMobile?: boolean;
   websiteTech?: string;
   designEstimate?: string;
+  trafficLight?: TrafficLightRating;
   cancelled?: boolean;
   cancelReason?: string;
   error?: string;
@@ -220,6 +221,7 @@ export async function processEnrichmentJob(jobId: string): Promise<void> {
           isMobile: result.isMobile,
           websiteTech: result.websiteTech,
           designEstimate: result.designEstimate,
+          trafficLight: result.trafficLight,
           cancelled: result.cancelled ?? false,
           cancelReason: result.cancelReason ? formatCancelReason(result.cancelReason) : undefined,
           error: result.error ? formatError(result.error) : undefined,

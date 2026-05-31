@@ -10,7 +10,8 @@ import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { guessSalutation } from "@/lib/contacts/salutation-from-name";
 import { buildFactorSnapshot, type FactorSnapshot } from "./quality-score";
-import type { EnrichmentConfig, CancelRule, ServiceMode } from "@/lib/types";
+import { evaluateTrafficLight, type TrafficLightResult } from "./traffic-light";
+import type { EnrichmentConfig, CancelRule, ServiceMode, TrafficLightRating } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 
 export interface EnrichLeadResult {
@@ -27,6 +28,8 @@ export interface EnrichLeadResult {
   isMobile?: boolean;
   websiteTech?: string;
   designEstimate?: string;
+  trafficLight?: TrafficLightRating;
+  trafficLightReason?: string;
   cancelled?: boolean;
   cancelReason?: string;
 }
@@ -47,6 +50,47 @@ export async function enrichLead(
     .single();
 
   if (!lead) return { success: false, error: "Lead nicht gefunden." };
+
+  // ── KI-Ampel-Bewertung (Webdesign) — opt-in, manuelle Korrektur respektieren ──
+  const wantTrafficLight =
+    serviceMode === "webdev" &&
+    config.traffic_light_rating === true &&
+    (lead as { traffic_light_source?: string | null }).traffic_light_source !== "manual";
+
+  // Schreibt das Ampel-Ergebnis in einem eigenen Update — robust gegen spätere
+  // Fehler im Enrichment-Flow (z.B. „keine Seiten erreichbar"), damit das Rating
+  // (oft gerade bei inaktiven/toten Seiten = rot) erhalten bleibt.
+  const writeTrafficLight = async (tl: TrafficLightResult | null) => {
+    if (!tl) return;
+    await db.from("leads").update({
+      traffic_light_rating: tl.rating,
+      traffic_light_score: tl.score,
+      traffic_light_reason: tl.reason,
+      traffic_light_rated_at: new Date().toISOString(),
+      traffic_light_source: "ai",
+    }).eq("id", leadId);
+  };
+
+  // Leads ganz ohne Website: KI entscheidet rein anhand der Firmeninfos.
+  const rateNoWebsite = async () => {
+    if (!wantTrafficLight) return;
+    try {
+      const tl = await evaluateTrafficLight({
+        companyName: lead.company_name,
+        website: null,
+        description: lead.description ?? null,
+        screenshotBuffer: null,
+        signals: {
+          designScore: null, ageEstimate: null, issues: [], visualIssues: [],
+          hasSsl: null, isMobileFriendly: null, technology: null,
+          statusCode: null, pageTitle: null, metaDescription: null,
+        },
+      });
+      await writeTrafficLight(tl);
+    } catch {
+      // Ampel darf den Flow nie kippen
+    }
+  };
 
   let websiteOrDomain: string | null = lead.website ?? null;
 
@@ -76,6 +120,7 @@ export async function enrichLead(
           enrichment_source: `nicht_moeglich:domain_unverifiziert:${foundDomain}:score=${verification.score}`,
           updated_at: new Date().toISOString(),
         }).eq("id", leadId);
+        await rateNoWebsite();
         return {
           success: false,
           error: `Domain-Kandidat "${foundDomain}" konnte nicht als zur Firma "${lead.company_name}" gehoerend verifiziert werden (Score ${verification.score}/9).`,
@@ -86,6 +131,7 @@ export async function enrichLead(
         enrichment_source: "nicht_moeglich:keine_website_gefunden",
         updated_at: new Date().toISOString(),
       }).eq("id", leadId);
+      await rateNoWebsite();
       return { success: false, error: `Keine Website für "${lead.company_name}" gefunden.` };
     }
   }
@@ -123,7 +169,10 @@ export async function enrichLead(
     if (serviceMode === "webdev" && webdevScoring) {
       // Pro-Run Override: capture_screenshot=true im Anreicherungs-Modal erzwingt
       // den Visual-Pfad, auch wenn das gespeicherte Scoring textbasiert läuft.
-      const effectiveScoring = config.capture_screenshot
+      // Die Ampel-Bewertung ist stark visuell → erzwingt ebenfalls einen Screenshot,
+      // damit die KI das Design beurteilen kann.
+      const wantScreenshot = config.capture_screenshot || config.traffic_light_rating;
+      const effectiveScoring = wantScreenshot
         ? { ...webdevScoring, screenshot_visual_analysis: true }
         : webdevScoring;
       websiteAnalysis = await analyzeWebsite(websiteOrDomain, effectiveScoring, leadId);
@@ -157,6 +206,36 @@ export async function enrichLead(
         social_instagram_url: websiteAnalysis.socialLinks.instagram,
         social_youtube_url: websiteAnalysis.socialLinks.youtube,
       }).eq("id", leadId);
+    }
+
+    // ── KI-Ampel-Bewertung (Webdesign) ─────────────────────────────────────
+    // Direkt nach der Website-Analyse, eigenes Update (robust gegen spätere
+    // Fehler). Status bleibt unverändert — reine Kennzeichnung.
+    let trafficLight: TrafficLightResult | null = null;
+    if (wantTrafficLight && websiteAnalysis) {
+      try {
+        trafficLight = await evaluateTrafficLight({
+          companyName: lead.company_name,
+          website: websiteOrDomain,
+          description: lead.description ?? null,
+          screenshotBuffer: websiteAnalysis.screenshotBuffer,
+          signals: {
+            designScore: websiteAnalysis.designScore,
+            ageEstimate: websiteAnalysis.designEstimate,
+            issues: websiteAnalysis.issues,
+            visualIssues: websiteAnalysis.visualIssues,
+            hasSsl: websiteAnalysis.hasSsl,
+            isMobileFriendly: websiteAnalysis.isMobileFriendly,
+            technology: websiteAnalysis.technology,
+            statusCode: websiteAnalysis.statusCode,
+            pageTitle: websiteAnalysis.pageTitle,
+            metaDescription: websiteAnalysis.metaDescription,
+          },
+        });
+        await writeTrafficLight(trafficLight);
+      } catch {
+        // Ampel darf den Flow nie kippen
+      }
     }
 
     // Config wird 1:1 vom Modal übernommen — Defaults werden dort basierend auf
@@ -575,6 +654,8 @@ export async function enrichLead(
       isMobile: websiteAnalysis?.isMobileFriendly,
       websiteTech: websiteAnalysis?.technology ?? undefined,
       designEstimate: websiteAnalysis?.designEstimate,
+      trafficLight: trafficLight?.rating,
+      trafficLightReason: trafficLight?.reason,
       cancelled,
       cancelReason,
     };

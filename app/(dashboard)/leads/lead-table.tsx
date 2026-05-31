@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Lead } from "@/lib/types";
+import { TRAFFIC_LIGHT_OPTIONS } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, bulkArchiveLeads, bulkRestoreCrmStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
@@ -50,6 +51,7 @@ const ALL_COLUMNS = [
   { key: "is_mobile_friendly", label: "Mobil", defaultVisible: true, modes: ["webdev"] },
   { key: "website_tech", label: "Technik", defaultVisible: true, modes: ["webdev"] },
   { key: "website_age_estimate", label: "Design", defaultVisible: true, modes: ["webdev"] },
+  { key: "traffic_light", label: "Ampel", defaultVisible: true, modes: ["webdev"] },
   { key: "source_type", label: "Quelle", defaultVisible: false, modes: ["recruiting", "webdev"] },
   { key: "status", label: "Status", defaultVisible: true, modes: ["recruiting", "webdev"] },
   { key: "updated_at", label: "Bearbeitet", defaultVisible: true, modes: ["recruiting", "webdev"] },
@@ -225,6 +227,19 @@ export function LeadTable({
           ))}
         </select>
 
+        {serviceMode === "webdev" && (
+          <select
+            value={currentFilters.traffic_light ?? ""}
+            onChange={(e) => handleColumnFilter("traffic_light", e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+          >
+            <option value="">Alle Ampeln</option>
+            {TRAFFIC_LIGHT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        )}
+
         <ColumnPicker
           columns={modeColumns.map((c) => ({ key: c.key, label: c.label }))}
           visible={visibleKeys}
@@ -243,7 +258,7 @@ export function LeadTable({
                 key={key}
                 className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
               >
-                {col?.label ?? key}: {value}
+                {col?.label ?? key}: {key === "traffic_light" ? (TRAFFIC_LIGHT_OPTIONS.find((o) => o.value === value)?.label ?? value) : value}
                 <button
                   onClick={() => updateParams({ [`filter_${key}`]: "", page: "1" })}
                   className="ml-1 hover:text-primary-dark"
@@ -466,7 +481,7 @@ export function LeadTable({
                       currentSort={currentSort}
                       currentOrder={currentOrder}
                       onSort={handleSort}
-                      filterable={!["created_at", "status"].includes(col.key)}
+                      filterable={!["created_at", "status", "traffic_light"].includes(col.key)}
                       currentFilter={currentFilters[col.key] ?? ""}
                       onFilter={handleColumnFilter}
                       onResize={setWidth}
@@ -528,6 +543,19 @@ export function LeadTable({
                             >
                               {status.label}
                             </span>
+                          ) : col.key === "traffic_light" ? (
+                            lead.traffic_light_rating ? (() => {
+                              const tl = TRAFFIC_LIGHT_OPTIONS.find((o) => o.value === lead.traffic_light_rating)!;
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tl.color}`}
+                                  title={lead.traffic_light_reason ?? undefined}
+                                >
+                                  <span className={`h-2 w-2 rounded-full ${tl.dot}`} />
+                                  {tl.label}
+                                </span>
+                              );
+                            })() : <span className="text-gray-400">–</span>
                           ) : col.key === "website" && lead.website ? (
                             <a
                               href={normalizeWebsiteUrl(lead.website) ?? "#"}

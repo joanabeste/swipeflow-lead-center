@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
-import type { Lead, ServiceMode } from "@/lib/types";
+import type { Lead, ServiceMode, TrafficLightRating } from "@/lib/types";
+import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 
@@ -101,6 +102,23 @@ export async function updateLead(
   revalidatePath("/crm");
   revalidatePath(`/crm/${leadId}`);
   return { success: true };
+}
+
+/**
+ * Manuelle Ampel-Korrektur im Lead-Detail. Setzt `source='manual'`, damit ein
+ * erneuter Anreicherungs-Lauf die Korrektur nicht überschreibt (Guard in
+ * enrich-lead.ts). Nutzt updateLead → Change-Tracking + Audit + Revalidation.
+ */
+export async function setTrafficLightManual(leadId: string, rating: TrafficLightRating) {
+  if (!["green", "amber", "red"].includes(rating)) {
+    return { error: "Ungültiger Ampel-Wert." };
+  }
+  return updateLead(leadId, {
+    traffic_light_rating: rating,
+    traffic_light_score: scoreForRating(rating),
+    traffic_light_source: "manual",
+    traffic_light_rated_at: new Date().toISOString(),
+  } as Partial<Lead>);
 }
 
 export async function deleteLead(leadId: string) {

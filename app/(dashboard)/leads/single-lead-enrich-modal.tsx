@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
-import { X, Sparkles, Target, Loader2, Camera } from "lucide-react";
+import { X, Sparkles, Target, Loader2, Camera, TrafficCone } from "lucide-react";
 import type { EnrichmentConfig, CompanyDetailField, ServiceMode } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import { enrichLeadAction } from "./enrichment-actions";
@@ -76,6 +76,7 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
       company_details_fields: fieldsOnly && selectedFields.length > 0 ? selectedFields : undefined,
       focus_query: focusQuery.trim() || undefined,
       capture_screenshot: config.capture_screenshot,
+      traffic_light_rating: config.traffic_light_rating,
     };
     startTransition(async () => {
       const res = await enrichLeadAction(leadId, finalConfig, serviceMode);
@@ -153,6 +154,23 @@ export function SingleLeadEnrichModal({ leadId, leadName, defaultConfig, service
                   </p>
                   <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                     Macht zusätzlich einen Screenshot und lässt das Design optisch bewerten. +5–8&nbsp;s pro Lead, Screenshot wird im Lead-Detail angezeigt.
+                  </p>
+                </div>
+              </label>
+              <label className="mt-2 flex items-start gap-2.5 rounded-md border border-gray-200 p-3 text-sm hover:border-primary/40 dark:border-[#2c2c2e]">
+                <input
+                  type="checkbox"
+                  checked={config.traffic_light_rating ?? false}
+                  onChange={(e) => setConfig({ ...config, traffic_light_rating: e.target.checked })}
+                  className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                />
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 font-medium">
+                    <TrafficCone className="h-3.5 w-3.5 text-primary" />
+                    Ampel-Bewertung (Webdesign)
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    KI stuft die Lead-Attraktivität ein: <span className="text-green-600 dark:text-green-400">Grün</span> = heiß (Seite alt), <span className="text-orange-500">Orange</span> = unsicher, <span className="text-red-500">Rot</span> = uninteressant. Nutzt einen Screenshot, +1&nbsp;KI-Call.
                   </p>
                 </div>
               </label>

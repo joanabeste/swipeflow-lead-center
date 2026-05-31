@@ -1,0 +1,279 @@
+openapi: 3.1.0
+info:
+  title: Lead Center – Lead Import API
+  version: 1.0.0
+  description: |
+    Externe HTTP-Schnittstelle, über die ein anderes System (z. B. Claude Cowork) neue Leads
+    ins Lead-Center importiert — gebündelt wie ein CSV-Import.
+
+    Jeder Aufruf erzeugt einen Import-Batch (`import_logs`-Eintrag, `import_type: "api"`); alle
+    angelegten Leads teilen dessen `source_import_id` und erscheinen mit Status `"imported"`
+    ("neue Leads") als eine Gruppe in der Import-Historie (`/import`).
+
+    Duplikate werden **strikt übersprungen**: existiert bereits ein Lead mit gleicher Domain,
+    E-Mail, Telefonnummer oder (fuzzy) Firmenname, wird er nicht verändert — nur komplett neue
+    Firmen werden angelegt.
+
+servers:
+  - url: https://your-domain.example
+    description: Produktion (Domain anpassen)
+  - url: http://localhost:3000
+    description: Lokale Entwicklung
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/leads/import:
+    post:
+      operationId: importLeads
+      summary: Neue Leads anlegen (Batch)
+      description: |
+        Legt einen oder mehrere neue Leads an. Authentifizierung per Bearer-Token
+        (`LEADS_IMPORT_API_KEY`). Pro Aufruf max. 10.000 Leads; praktischer Richtwert wegen des
+        Request-Body-Limits (~4,5 MB) ≤ 1.000 Leads.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportRequest'
+            examples:
+              einzelnerLead:
+                summary: Ein Lead mit Ansprechpartner
+                value:
+                  source: claude-cowork
+                  leads:
+                    - company_name: Beispiel GmbH
+                      website: beispiel.de
+                      phone: 0571 123456
+                      email: info@beispiel.de
+                      city: Espelkamp
+                      zip: "32339"
+                      industry: Maschinenbau
+                      contacts:
+                        - name: Max Mustermann
+                          role: Geschäftsführer
+      responses:
+        '201':
+          description: Import verarbeitet (auch wenn 0 Leads neu sind, z. B. nur Duplikate).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              examples:
+                erfolg:
+                  value:
+                    success: true
+                    import_log_id: fe3e1455-8158-41dc-a47f-edb248a21996
+                    imported: 1
+                    skipped: 0
+                    duplicates: 0
+                    updated: 0
+                    archived: 0
+                    errors: 0
+                    contacts_imported: 1
+                    error_details: []
+        '400':
+          description: |
+            Ungültige Anfrage — kein/kaputtes JSON, `leads` fehlt/leer/kein Array,
+            oder mehr als 10.000 Leads.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                leeresArray:
+                  value:
+                    error: "Feld 'leads' muss ein nicht-leeres Array sein."
+                kaputtesJson:
+                  value:
+                    error: Ungueltiges JSON
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unauthorized:
+                  value:
+                    error: Unauthorized
+        '500':
+          description: Interner Fehler (z. B. Import-Log konnte nicht angelegt werden).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Wert der Umgebungsvariable `LEADS_IMPORT_API_KEY`.
+
+  schemas:
+    ImportRequest:
+      type: object
+      required: [leads]
+      properties:
+        source:
+          type: string
+          description: |
+            Optionale Quell-Bezeichnung. Erscheint als Batch-Name in der Import-Historie
+            (`file_name = "api:<source>"`). Default: `claude-cowork`.
+          example: claude-cowork
+        leads:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          description: Liste der anzulegenden Leads. Mehr als 10.000 → 400.
+          items:
+            $ref: '#/components/schemas/LeadInput'
+
+    LeadInput:
+      type: object
+      required: [company_name]
+      description: |
+        Pflicht ist nur `company_name`. Felder werden serverseitig normalisiert
+        (Telefon → `+49…`, E-Mail → lowercase, `website` → nackte Domain, `country` Default
+        „Deutschland"). Leere Strings gelten als nicht gesetzt. Leads ohne `company_name`
+        werden abgelehnt und in `error_details` aufgeführt.
+      properties:
+        company_name:
+          type: string
+          description: Firmenname (Pflichtfeld).
+          example: Beispiel GmbH
+        website:
+          type: string
+          description: Nackte Domain oder volle URL — wird zur Domain normalisiert.
+          example: beispiel.de
+        phone:
+          type: string
+          example: 0571 123456
+        email:
+          type: string
+          format: email
+          example: info@beispiel.de
+        street:
+          type: string
+          example: Hauptstr. 1
+        city:
+          type: string
+          example: Espelkamp
+        zip:
+          type: string
+          example: "32339"
+        state:
+          type: string
+          example: NRW
+        country:
+          type: string
+          description: Default „Deutschland", wenn leer.
+          example: Deutschland
+        industry:
+          type: string
+          example: Maschinenbau
+        company_size:
+          type: string
+          example: 11-50
+        legal_form:
+          type: string
+          example: GmbH
+        register_id:
+          type: string
+          example: HRB 12345
+        description:
+          type: string
+          example: Freitext / Notizen
+        traffic_light_rating:
+          type: string
+          enum: [green, amber, red]
+          description: |
+            Optional vorbelegte Webdesign-Ampel: green = heißer Lead (Seite alt /
+            Relaunch-Bedarf), amber = unsicher/okay, red = uninteressant (Seite top
+            oder Firma inaktiv). Ungültige Werte werden ignoriert (kein Fehler).
+            Gesetzte Werte werden als traffic_light_source="api" markiert.
+          example: green
+        traffic_light_reason:
+          type: string
+          description: Optionale Begründung zur Ampel.
+        contacts:
+          type: array
+          description: |
+            Ansprechpartner. Es werden nur die ersten 3 importiert (weitere werden ignoriert,
+            nicht abgelehnt).
+          items:
+            $ref: '#/components/schemas/ContactInput'
+
+    ContactInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: Max Mustermann
+        role:
+          type: string
+          description: Optionale Rolle/Funktion.
+          example: Geschäftsführer
+
+    ImportResult:
+      type: object
+      required:
+        [success, import_log_id, imported, skipped, duplicates, updated, archived, errors, contacts_imported, error_details]
+      properties:
+        success:
+          type: boolean
+          const: true
+        import_log_id:
+          type: string
+          format: uuid
+          description: ID des Import-Batches (für Rückverfolgung/Löschung in der Historie).
+        imported:
+          type: integer
+          description: Neu angelegte Leads.
+        skipped:
+          type: integer
+          description: Übersprungene Zeilen (Duplikate + Pflichtfeld-Fehler).
+        duplicates:
+          type: integer
+          description: Übersprungen, weil bereits vorhanden.
+        updated:
+          type: integer
+          description: Bei dieser API immer 0 (bestehende Leads werden nicht verändert).
+        archived:
+          type: integer
+          description: Bei dieser API immer 0.
+        errors:
+          type: integer
+          description: Abgelehnte Zeilen (z. B. fehlender `company_name`).
+        contacts_imported:
+          type: integer
+        error_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+
+    ErrorDetail:
+      type: object
+      properties:
+        row:
+          type: integer
+          description: 1-basierte Zeilennummer (−1 für Batch-/Insert-Fehler ohne Zeilenbezug).
+        field:
+          type: string
+          example: company_name
+        message:
+          type: string
+          example: Firmenname fehlt
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

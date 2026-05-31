@@ -20,6 +20,13 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## API
+
+- **Lead-Import-API** (extern, z. B. für Claude Cowork): `POST /api/leads/import`
+  - Anleitung & Beispiele: [`docs/lead-import-api.md`](docs/lead-import-api.md)
+  - OpenAPI-3.1-Spezifikation: [`docs/lead-import-api.openapi.yaml`](docs/lead-import-api.openapi.yaml)
+  - Auth per Bearer-Token (`LEADS_IMPORT_API_KEY`).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -38,7 +38,8 @@ export async function proxy(request: NextRequest) {
   if (
     apiPath.startsWith("/api/cron/") ||
     apiPath.startsWith("/api/phonemondo/") ||
-    apiPath === "/api/webex/sync-recordings"
+    apiPath === "/api/webex/sync-recordings" ||
+    apiPath === "/api/leads/import"
   ) {
     return NextResponse.next({ request: { headers: request.headers } });
   }

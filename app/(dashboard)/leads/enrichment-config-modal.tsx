@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX, Camera } from "lucide-react";
-import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus, CustomLeadStatus } from "@/lib/types";
+import { X, Sparkles, Loader2, Check, AlertTriangle, Send, CircleCheck, CircleX, Camera, TrafficCone } from "lucide-react";
+import type { EnrichmentConfig, ServiceMode, CompanyDetailField, LeadStatus, CustomLeadStatus, TrafficLightRating } from "@/lib/types";
+import { TRAFFIC_LIGHT_OPTIONS } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
@@ -39,6 +40,7 @@ interface EnrichResult {
   isMobile?: boolean;
   websiteTech?: string;
   designEstimate?: string;
+  trafficLight?: TrafficLightRating;
   cancelled?: boolean;
   cancelReason?: string;
   error?: string;
@@ -324,6 +326,27 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                 </label>
               )}
 
+              {/* Ampel-Bewertung (nur Webdev) */}
+              {serviceMode === "webdev" && (
+                <label className="flex items-start gap-2.5 rounded-md border border-gray-200 px-3 py-2.5 text-sm dark:border-[#2c2c2e]">
+                  <input
+                    type="checkbox"
+                    checked={config.traffic_light_rating ?? false}
+                    onChange={(e) => setConfig({ ...config, traffic_light_rating: e.target.checked })}
+                    className="mt-0.5 rounded border-gray-300 dark:border-gray-600"
+                  />
+                  <div>
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <TrafficCone className="h-3.5 w-3.5 text-primary" />
+                      Ampel-Bewertung (Webdesign)
+                    </span>
+                    <span className="ml-1 text-xs text-gray-400">
+                      KI stuft die Lead-Attraktivität ein: <span className="text-green-600 dark:text-green-400">Grün</span> = heiß (Seite alt), <span className="text-orange-500">Orange</span> = unsicher, <span className="text-red-500">Rot</span> = uninteressant (Seite top oder Firma inaktiv). Nutzt einen Screenshot, +1&nbsp;KI-Call pro Lead.
+                    </span>
+                  </div>
+                </label>
+              )}
+
               {/* Detail-Modus: Nur bestimmte Firmendaten-Felder */}
               {config.company_details && (
                 <div className="rounded-md border border-gray-200 dark:border-[#2c2c2e]">
@@ -523,6 +546,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                             <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Technik</th>
                             <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Design</th>
                             <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Issues</th>
+                            <th className="px-3 py-2 text-center text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Ampel</th>
                           </>
                         ) : (
                           <>
@@ -572,6 +596,17 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                               </td>
                               <td className="px-3 py-2 text-center font-medium">{r.websiteIssues ?? 0}</td>
                               <td className="px-3 py-2 text-center">
+                                {r.trafficLight ? (() => {
+                                  const tl = TRAFFIC_LIGHT_OPTIONS.find((o) => o.value === r.trafficLight)!;
+                                  return (
+                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tl.color}`}>
+                                      <span className={`h-1.5 w-1.5 rounded-full ${tl.dot}`} />
+                                      {tl.label}
+                                    </span>
+                                  );
+                                })() : <span className="text-gray-300 dark:text-gray-600">–</span>}
+                              </td>
+                              <td className="px-3 py-2 text-center">
                                 {(r.websiteIssues ?? 0) > 0 ? (
                                   <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Potenzial</span>
                                 ) : (
@@ -603,7 +638,7 @@ export function EnrichmentConfigModal({ leadIds, onClose, defaults, customStatus
                           )}
                           {!isOk && (
                             <>
-                              <td colSpan={isWebdev ? 5 : 4} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                              <td colSpan={isWebdev ? 6 : 4} className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                                 {r.cancelled ? (r.cancelReason ?? "Ausgeschlossen") : (r.error ?? "Fehler")}
                               </td>
                               <td className="px-3 py-2 text-center">

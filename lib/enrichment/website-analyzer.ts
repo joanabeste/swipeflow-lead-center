@@ -15,6 +15,9 @@ export interface WebsiteAnalysis {
   issues: string[];
   screenshotPath: string | null;
   screenshotTakenAt: string | null;
+  /** Roher Screenshot-Buffer (nur wenn in diesem Lauf erstellt) — für Folge-
+   *  Vision-Calls wie die Ampel-Bewertung, spart einen Storage-Re-Download. */
+  screenshotBuffer: Buffer | null;
   // Erweiterte Daten fuer Qualitaets-Beurteilung (passiv erfasst)
   statusCode: number | null;
   finalUrl: string | null;
@@ -293,6 +296,7 @@ export async function analyzeWebsite(
         issues: ["Website nicht erreichbar"],
         screenshotPath: null,
         screenshotTakenAt: null,
+        screenshotBuffer: null,
         statusCode,
         finalUrl,
         htmlSizeBytes: 0,
@@ -364,6 +368,7 @@ export async function analyzeWebsite(
   let visualIssues: string[] = [];
   let screenshotPath: string | null = null;
   let screenshotTakenAt: string | null = null;
+  let screenshotBuffer: Buffer | null = null;
 
   // Vision ist jetzt der bevorzugte Pfad — gibt es einen leadId und ein bisschen
   // HTML, machen wir Screenshot + Vision-LLM. Fallback auf Text-Heuristik bleibt
@@ -375,6 +380,7 @@ export async function analyzeWebsite(
     try {
       const baseUrl = hasSsl ? httpsUrl : httpUrl;
       const { buffer, contentType } = await captureWebsiteScreenshot(baseUrl);
+      screenshotBuffer = buffer;
       const upload = await uploadScreenshot(leadId!, buffer, contentType);
       if ("path" in upload) {
         screenshotPath = upload.path;
@@ -415,6 +421,7 @@ export async function analyzeWebsite(
     issues,
     screenshotPath,
     screenshotTakenAt,
+    screenshotBuffer,
     statusCode,
     finalUrl,
     htmlSizeBytes,

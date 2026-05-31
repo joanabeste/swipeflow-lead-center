@@ -106,6 +106,30 @@ export const LEAD_STATUS_OPTIONS: { value: LeadStatus; label: string; color: str
   { value: "exported", label: "Exportiert", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
 ];
 
+/**
+ * Ampel-Bewertung für Webdesign-Leads. Semantik INVERTIERT (Lead-Attraktivität,
+ * nicht Website-Qualität): green = heißer Lead (Seite alt / Firma aktiv ohne Seite),
+ * amber = Mittelding/unsicher, red = uninteressant (Seite top ODER Firma inaktiv).
+ */
+export type TrafficLightRating = "green" | "amber" | "red";
+
+/** Anzeige-Optionen für die Ampel — Label + Pillen-Klassen + Punkt-Farbe (DRY). */
+export const TRAFFIC_LIGHT_OPTIONS: { value: TrafficLightRating; label: string; color: string; dot: string }[] = [
+  { value: "green", label: "Grün", color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", dot: "bg-green-500" },
+  { value: "amber", label: "Orange", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400", dot: "bg-orange-500" },
+  { value: "red", label: "Rot", color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", dot: "bg-red-500" },
+];
+
+/**
+ * Repräsentativer Score (0-100, invertiert) je Ampelfarbe — Bucket-Mittelwert.
+ * Wird für manuell/per-API gesetzte Ratings ohne KI-Score verwendet, damit die
+ * Sortierung „nach Ampelfarbe" (ORDER BY traffic_light_score DESC) quellenunabhängig
+ * grün→orange→rot ergibt.
+ */
+export function scoreForRating(rating: TrafficLightRating): number {
+  return rating === "green" ? 84 : rating === "amber" ? 50 : 16;
+}
+
 export type LeadSourceType = "csv" | "url" | "directory" | "manual";
 
 export interface Lead {
@@ -147,6 +171,14 @@ export interface Lead {
   website_issues: string[];
   website_screenshot_path: string | null;
   website_screenshot_taken_at: string | null;
+  /** KI-Ampel-Bewertung (Webdesign): grün/orange/rot. Migration 108. */
+  traffic_light_rating: TrafficLightRating | null;
+  /** 0-100, INVERTIERT (grün hoch, rot niedrig) — für Sortierung nach Ampelfarbe. */
+  traffic_light_score: number | null;
+  traffic_light_reason: string | null;
+  traffic_light_rated_at: string | null;
+  /** Herkunft der Ampel: 'ai' (Anreicherung), 'manual' (Korrektur im Detail), 'api'. */
+  traffic_light_source: "ai" | "manual" | "api" | null;
   enriched_at: string | null;
   enrichment_source: string | null;
   latitude: number | null;
@@ -484,6 +516,9 @@ export interface EnrichmentConfig {
   /** Pro-Run Override: erzwingt visuelle Screenshot-Analyse, auch wenn das
    *  Webdesign-Scoring sonst nur HTML-basiert läuft. Nur im Webdev-Modus relevant. */
   capture_screenshot?: boolean;
+  /** KI-Ampel-Bewertung (grün/orange/rot) durchführen. Nur im Webdev-Modus.
+   *  Erzwingt implizit einen Screenshot, damit die KI das Design visuell beurteilen kann. */
+  traffic_light_rating?: boolean;
 }
 
 export const DEFAULT_ENRICHMENT_CONFIG: EnrichmentConfig = {

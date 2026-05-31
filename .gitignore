@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# cowork lead-research memory (local only)
+/.cowork-leads
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
