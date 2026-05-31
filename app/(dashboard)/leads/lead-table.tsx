@@ -11,7 +11,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Lead } from "@/lib/types";
+import type { Lead, ServiceMode } from "@/lib/types";
 import { TRAFFIC_LIGHT_OPTIONS } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, bulkArchiveLeads, bulkRestoreCrmStatus } from "./actions";
@@ -37,25 +37,32 @@ const statusLabels: Record<string, { label: string; color: string }> = {
   exported: { label: "Exportiert", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
 };
 
-const ALL_COLUMNS = [
-  { key: "company_name", label: "Firma", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "website", label: "Website", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "city", label: "Ort", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "zip", label: "PLZ", defaultVisible: false, modes: ["recruiting", "webdev"] },
-  { key: "industry", label: "Branche", defaultVisible: true, modes: ["recruiting"] },
-  { key: "company_size", label: "Größe", defaultVisible: false, modes: ["recruiting", "webdev"] },
-  { key: "legal_form", label: "Rechtsform", defaultVisible: false, modes: ["recruiting"] },
-  { key: "phone", label: "Telefon", defaultVisible: false, modes: ["recruiting", "webdev"] },
-  { key: "email", label: "E-Mail", defaultVisible: false, modes: ["recruiting", "webdev"] },
-  { key: "has_ssl", label: "SSL", defaultVisible: true, modes: ["webdev"] },
-  { key: "is_mobile_friendly", label: "Mobil", defaultVisible: true, modes: ["webdev"] },
-  { key: "website_tech", label: "Technik", defaultVisible: true, modes: ["webdev"] },
-  { key: "website_age_estimate", label: "Design", defaultVisible: true, modes: ["webdev"] },
-  { key: "traffic_light", label: "Ampel", defaultVisible: true, modes: ["webdev"] },
-  { key: "source_type", label: "Quelle", defaultVisible: false, modes: ["recruiting", "webdev"] },
-  { key: "status", label: "Status", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "updated_at", label: "Bearbeitet", defaultVisible: true, modes: ["recruiting", "webdev"] },
-  { key: "created_at", label: "Erstellt", defaultVisible: false, modes: ["recruiting", "webdev"] },
+// defaultVisible ist pro Service-Modus gesetzt: Webentwicklung und Recruiting
+// haben unterschiedliche sinnvolle Standard-Spalten.
+const ALL_COLUMNS: {
+  key: string;
+  label: string;
+  modes: ServiceMode[];
+  defaultVisible: Partial<Record<ServiceMode, boolean>>;
+}[] = [
+  { key: "company_name", label: "Firma", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: true } },
+  { key: "website", label: "Website", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: true } },
+  { key: "city", label: "Ort", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: true } },
+  { key: "zip", label: "PLZ", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: true } },
+  { key: "industry", label: "Branche", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: true } },
+  { key: "company_size", label: "Größe", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: false } },
+  { key: "legal_form", label: "Rechtsform", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: false } },
+  { key: "phone", label: "Telefon", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: true } },
+  { key: "email", label: "E-Mail", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: true } },
+  { key: "has_ssl", label: "SSL", modes: ["webdev"], defaultVisible: { webdev: false } },
+  { key: "is_mobile_friendly", label: "Mobil", modes: ["webdev"], defaultVisible: { webdev: false } },
+  { key: "website_tech", label: "Technik", modes: ["webdev"], defaultVisible: { webdev: false } },
+  { key: "website_age_estimate", label: "Design", modes: ["webdev"], defaultVisible: { webdev: false } },
+  { key: "traffic_light", label: "Ampel", modes: ["webdev"], defaultVisible: { webdev: true } },
+  { key: "source_type", label: "Quelle", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: false } },
+  { key: "status", label: "Status", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: false } },
+  { key: "updated_at", label: "Bearbeitet", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: true, webdev: false } },
+  { key: "created_at", label: "Erstellt", modes: ["recruiting", "webdev"], defaultVisible: { recruiting: false, webdev: false } },
 ];
 
 interface Props {
@@ -88,7 +95,14 @@ export function LeadTable({
   const { addToast } = useToastContext();
   const { mode: serviceMode } = useServiceMode();
 
-  const modeColumns = ALL_COLUMNS.filter((c) => c.modes.includes(serviceMode));
+  const modeColumns = ALL_COLUMNS
+    .filter((c) => c.modes.includes(serviceMode))
+    .map((c) => ({
+      key: c.key,
+      label: c.label,
+      modes: c.modes,
+      defaultVisible: c.defaultVisible[serviceMode] ?? false,
+    }));
   const { visible, widthOf, totalVisibleWidth, reorder, setWidth, toggleVisibility, reset } = useColumnLayout({
     tableKey: "leads",
     allColumns: modeColumns,
