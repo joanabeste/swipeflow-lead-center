@@ -486,8 +486,8 @@ function wrapDocument(title: string, body: string): string {
   .widerruf-form p { margin: 8px 0; }
   .sign-grid { display: flex; gap: 32px; margin-top: 16px; }
   .sign-box { flex: 1; }
-  .sign-img { height: 80px; border-bottom: 1px solid #333; display: flex; align-items: flex-end; }
-  .sign-img img { max-height: 78px; max-width: 100%; }
+  .sign-img { height: 72px; border-bottom: 1px solid #333; display: flex; align-items: flex-end; justify-content: flex-start; padding: 0 4px 6px; }
+  .sign-img img { max-height: 58px; max-width: 90%; object-fit: contain; }
   .sign-line { font-size: 10pt; margin-top: 4px; }
   .sign-cap { font-size: 9pt; color: #777; }
 </style>
