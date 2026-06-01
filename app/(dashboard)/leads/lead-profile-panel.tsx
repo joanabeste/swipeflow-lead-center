@@ -3,12 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive, Search,
+  ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive, Search, Send,
 } from "lucide-react";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
-import { updateLead, deleteLead } from "./actions";
+import { updateLead, deleteLead, bulkUpdateStatus } from "./actions";
+import { enrichAndMoveToCrm } from "./enrichment-actions";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
@@ -66,12 +68,52 @@ export function LeadProfilePanel({
   const [deletePending, startDeleteTransition] = useTransition();
   const [enrichModalOpen, setEnrichModalOpen] = useState(false);
   const [diagnosisOpen, setDiagnosisOpen] = useState(false);
+  const [crmPending, startCrmTransition] = useTransition();
+  const [crmBusy, setCrmBusy] = useState<"crm" | "enrich" | null>(null);
 
   const enrichmentRunning = latestEnrichment?.status === "running";
   const enrichmentFailed = latestEnrichment?.status === "failed";
 
   const hasWebsite = !!lead.website;
   const statusInfo = statusOptions.find((s) => s.value === currentStatus) ?? statusOptions[0];
+  // Liegt der Lead schon im CRM? Dann blenden wir die CRM-Vorwärts-Buttons aus.
+  // (lead.crm_status_id ist der frische Prop nach notify(); currentStatus deckt
+  //  die optimistische manuelle Status-Änderung ab.)
+  const alreadyInCrm =
+    lead.crm_status_id != null || currentStatus === "qualified" || currentStatus === "exported";
+
+  function handleMoveToCrm() {
+    if (crmPending) return;
+    setCrmBusy("crm");
+    startCrmTransition(async () => {
+      const res = await bulkUpdateStatus([lead.id], "qualified", DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode]);
+      setCrmBusy(null);
+      if ("error" in res && res.error) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      addToast("Lead ins CRM verschoben", "success", { action: { label: "Zum CRM", href: "/crm" } });
+      notify();
+    });
+  }
+
+  function handleEnrichAndCrm() {
+    if (crmPending) return;
+    setCrmBusy("enrich");
+    startCrmTransition(async () => {
+      // config undefined → DEFAULT_ENRICHMENT_CONFIG (ohne Ampel, schneller).
+      const res = await enrichAndMoveToCrm(lead.id, undefined, serviceMode);
+      setCrmBusy(null);
+      if ("error" in res) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      addToast("Lead angereichert & ins CRM verschoben", "success", {
+        action: { label: "Zum CRM", href: "/crm" },
+      });
+      notify();
+    });
+  }
 
   // Aussortier-Banner: ist der zugewiesene CRM-Status archived markiert?
   const archivedStatus = lead.crm_status_id
@@ -162,7 +204,7 @@ export function LeadProfilePanel({
           <ArrowLeft className="h-4 w-4" />
           {backLabel}
         </button>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {headerExtras}
 
           {/* Anreicherungs-Status als dezenter Indikator (gleiche Hoehe wie Aktionen). */}
@@ -183,57 +225,89 @@ export function LeadProfilePanel({
             </button>
           )}
 
-          {/* Anreichern — primary action. Auch ohne Website verfügbar:
-              der Backend-Flow versucht via findCompanyWebsite() automatisch
-              eine passende Domain zu ermitteln, bevor er aufgibt. */}
+          {/* ── Vorwärts-Aktionen: alle sichtbar in der Leiste ────────────── */}
+
+          {/* Anreichern + ins CRM — primäre Aktion (golden). Auch ohne Website:
+              der Backend-Flow sucht via findCompanyWebsite() automatisch. */}
+          {!alreadyInCrm && (
+            <button
+              onClick={handleEnrichAndCrm}
+              disabled={crmPending}
+              title="Lead anreichern und anschließend automatisch ins CRM übernehmen"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-gray-900 transition hover:bg-primary-dark disabled:opacity-50"
+            >
+              {crmBusy === "enrich" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {crmBusy === "enrich" ? "Wird angereichert…" : "Anreichern + ins CRM"}
+            </button>
+          )}
+
+          {/* Nur anreichern (öffnet Konfig-Dialog) — auch für CRM-Leads. */}
           <button
             onClick={() => setEnrichModalOpen(true)}
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-gray-900 px-3 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-100"
-            title={!hasWebsite ? "Keine Website hinterlegt — wird beim Anreichern automatisch gesucht" : undefined}
+            disabled={crmPending}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            title={!hasWebsite ? "Keine Website hinterlegt — wird beim Anreichern automatisch gesucht" : "Anreichern mit Optionen"}
           >
             <Sparkles className="h-3.5 w-3.5" />
             {contacts.length > 0 ? "Erneut anreichern" : "Anreichern"}
           </button>
 
-          {/* Status-Dropdown — als farbiger Pill mit Caret + spinning Loader bei pending. */}
+          {/* Nur ins CRM (ohne Anreicherung). */}
+          {!alreadyInCrm && (
+            <button
+              onClick={handleMoveToCrm}
+              disabled={crmPending}
+              title="Lead direkt ins CRM übernehmen"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              {crmBusy === "crm" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              Ins CRM
+            </button>
+          )}
+
+          {/* Trenner zum dezenten Sekundär-Cluster */}
+          <span className="mx-0.5 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden />
+
+          {/* Status — dezent (selten gebraucht). */}
           <div className="relative">
             <select
               value={currentStatus}
               onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
               disabled={statusPending}
-              className={`h-8 cursor-pointer appearance-none rounded-lg border-0 pl-3 pr-7 text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
+              title="Lead-Status"
+              className={`h-8 cursor-pointer appearance-none rounded-lg border-0 pl-2.5 pr-6 text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
             >
               {statusOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70">
+            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-current opacity-70">
               {statusPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
             </span>
           </div>
 
-          {/* Aussortieren — neutral, nicht destruktiv. Banner uebernimmt das Wiederherstellen. */}
+          {/* Aussortieren — nur Icon (Tooltip). */}
           {!archivedStatus && (
             <button
               onClick={handleArchive}
               disabled={archivePending}
-              title="Lead aussortieren — erscheint nicht mehr in Neue Leads oder im CRM"
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              title="Aussortieren — erscheint nicht mehr in Neue Leads oder im CRM"
+              aria-label="Aussortieren"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
             >
               {archivePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-              <span className="hidden sm:inline">Aussortieren</span>
             </button>
           )}
 
-          {/* Loeschen — destructive, etwas separiert. */}
+          {/* Löschen — nur Mülleimer-Icon (Tooltip). */}
           <button
             onClick={handleDelete}
             disabled={deletePending}
-            title="Lead in den Papierkorb verschieben"
-            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm text-red-500 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/10 dark:hover:border-red-900/40"
+            title="In den Papierkorb verschieben"
+            aria-label="Löschen"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-red-500 hover:bg-red-50 hover:border-red-200 disabled:opacity-50 dark:border-gray-700 dark:hover:bg-red-900/10 dark:hover:border-red-900/40"
           >
             {deletePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            <span className="hidden sm:inline">Löschen</span>
           </button>
         </div>
       </div>

@@ -8,7 +8,6 @@ import { Drawer } from "@/components/drawer";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCardClient } from "./lead-screenshot-card-client";
 import { LeadTrafficLightCard } from "./lead-traffic-light-card";
-import { LeadCrmActionsCard } from "./lead-crm-actions-card";
 import type { LeadDetailBundle } from "@/lib/leads/load-lead-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { PreviewRefreshProvider } from "@/lib/preview-refresh-context";
@@ -245,12 +244,6 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
               backLabel="Schließen"
               extraRightColumn={
                 <>
-                  {/* Lead in den CRM-Workflow übernehmen — direkt oder nach Anreicherung. */}
-                  <LeadCrmActionsCard
-                    leadId={data.lead.id}
-                    status={data.lead.status}
-                    crmStatusId={data.lead.crm_status_id}
-                  />
                   <LeadScreenshotCardClient
                     leadId={data.lead.id}
                     hasScreenshot={Boolean(data.lead.website_screenshot_path)}
