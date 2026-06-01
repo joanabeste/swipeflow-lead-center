@@ -268,34 +268,17 @@ export function LeadProfilePanel({
           {/* Trenner zum dezenten Sekundär-Cluster */}
           <span className="mx-0.5 h-5 w-px bg-gray-200 dark:bg-gray-700" aria-hidden />
 
-          {/* Status — dezent (selten gebraucht). */}
-          <div className="relative">
-            <select
-              value={currentStatus}
-              onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
-              disabled={statusPending}
-              title="Lead-Status"
-              className={`h-8 cursor-pointer appearance-none rounded-lg border-0 pl-2.5 pr-6 text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
-            >
-              {statusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-current opacity-70">
-              {statusPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
-            </span>
-          </div>
-
-          {/* Aussortieren — nur Icon (Tooltip). */}
+          {/* Aussortieren — Icon + Label, damit die Aktion verständlich ist. */}
           {!archivedStatus && (
             <button
               onClick={handleArchive}
               disabled={archivePending}
               title="Aussortieren — erscheint nicht mehr in Neue Leads oder im CRM"
               aria-label="Aussortieren"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
             >
               {archivePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+              Aussortieren
             </button>
           )}
 
@@ -332,6 +315,27 @@ export function LeadProfilePanel({
             <> · Angereichert: {new Date(latestEnrichment.completed_at!).toLocaleDateString("de-DE")}</>
           )}
         </p>
+
+        {/* Status — dezent, direkt unter dem Erstellt-Datum (selten gebraucht). */}
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Status:</span>
+          <div className="relative inline-flex">
+            <select
+              value={currentStatus}
+              onChange={(e) => handleStatusChange(e.target.value as LeadStatus)}
+              disabled={statusPending}
+              title="Lead-Status"
+              className={`h-8 cursor-pointer appearance-none rounded-lg border-0 pl-2.5 pr-6 text-xs font-medium focus:ring-2 focus:ring-primary focus:outline-none ${statusInfo.color} ${statusPending ? "opacity-50" : ""}`}
+            >
+              {statusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-current opacity-70">
+              {statusPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ChevronDown className="h-3 w-3" />}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Banner: Aussortiert (CRM-Status mit is_archived). */}
