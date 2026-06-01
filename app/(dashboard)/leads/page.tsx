@@ -112,6 +112,9 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   const { data: leads, count } = await query
     .order(sortColumn, orderOpts)
+    // Stabiler Tiebreaker (eindeutige id) — verhindert nicht-deterministisches
+    // Umsortieren bei Gleichständen (z. B. gleicher updated_at aus Batch-Import).
+    .order("id", { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
 
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);

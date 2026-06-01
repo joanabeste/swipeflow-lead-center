@@ -235,6 +235,10 @@ export default async function CrmPage({
 
   const { data: leads, count } = await query
     .order(sort, { ascending: order === "asc" })
+    // Stabiler Tiebreaker: ohne ihn liefert ORDER BY updated_at (viele Leads mit
+    // identischem Batch-Timestamp) bei jedem Refresh eine andere Reihenfolge, sodass
+    // rechte Panel-Aktionen die Liste scheinbar zufällig umsortieren.
+    .order("id", { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
 
   const leadList = (leads ?? []) as Lead[];
