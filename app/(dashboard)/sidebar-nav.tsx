@@ -32,6 +32,7 @@ import {
   Pencil,
   FileSignature,
   FilePlus,
+  Megaphone,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SectionPermissions, UserRole } from "@/lib/types";
@@ -100,6 +101,7 @@ const fulfillmentSection: Section = {
     { items: [
       { href: "/fulfillment/kunden", label: "Kunden", icon: Users },
       { href: "/fulfillment/projekte", label: "Projekte", icon: Briefcase },
+      { href: "/fulfillment/social-media", label: "Social Media", icon: Megaphone },
       { href: "/fulfillment/inbox", label: "Mail-Inbox", icon: Inbox },
       { href: "/fulfillment/tasks", label: "ClickUp-Tasks", icon: CheckSquare },
     ]},

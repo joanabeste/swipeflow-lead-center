@@ -122,3 +122,74 @@ export function buildContractAdminUrl(contractId: string): string {
   const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
   return `${base}/vertraege/${contractId}`;
 }
+
+// ─── Social-Media-Freigabe ──────────────────────────────────────────────────
+
+/** Versendet den dauerhaften Freigabelink für Social-Media-Inhalte an den Kunden. */
+export async function sendShareLinkEmail(opts: {
+  to: string;
+  customerName: string;
+  link: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const config = getCentralSmtpConfig();
+  const body = [
+    `Guten Tag,`,
+    ``,
+    `wir haben neue Social-Media-Inhalte für Sie vorbereitet.`,
+    `Über den folgenden Link können Sie die geplanten Beiträge in Ruhe ansehen,`,
+    `kommentieren oder direkt freigeben:`,
+    ``,
+    opts.link,
+    ``,
+    `Der Link bleibt dauerhaft gültig — Sie finden dort immer Ihre aktuellen Beiträge.`,
+    ``,
+    `Bei Fragen erreichen Sie uns jederzeit.`,
+    ``,
+    `Mit freundlichen Grüßen`,
+    `swipeflow GmbH`,
+  ].join("\n");
+
+  return sendEmail(config, {
+    to: opts.to,
+    subject: "Ihre Social-Media-Inhalte zur Freigabe — swipeflow GmbH",
+    body,
+  });
+}
+
+/** Interne Benachrichtigung ans Team, dass ein Kunde einen Post freigegeben oder
+ *  eine Änderung angefordert hat. */
+export async function sendPostFeedbackNotifyEmail(opts: {
+  customerName: string;
+  action: "approved" | "changes_requested";
+  postTitle: string;
+  comment?: string;
+  adminUrl: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const config = getCentralSmtpConfig();
+  const to = process.env.CONTENT_NOTIFY_EMAIL || process.env.CONTRACTS_NOTIFY_EMAIL || config.fromEmail;
+  const actionLabel = opts.action === "approved" ? "freigegeben" : "eine Änderung angefordert";
+  const body = [
+    `Ein Kunde hat einen Social-Media-Beitrag ${actionLabel}.`,
+    ``,
+    `Kunde: ${opts.customerName || "—"}`,
+    `Beitrag: ${opts.postTitle || "—"}`,
+    ...(opts.comment ? [``, `Kommentar:`, opts.comment] : []),
+    ``,
+    `Im Backend ansehen: ${opts.adminUrl}`,
+  ].join("\n");
+
+  return sendEmail(config, {
+    to,
+    subject:
+      opts.action === "approved"
+        ? `Beitrag freigegeben: ${opts.customerName || "Kunde"}`
+        : `Änderung angefordert: ${opts.customerName || "Kunde"}`,
+    body,
+  });
+}
+
+/** Baut die absolute Admin-URL zum Social-Media-Board eines Kunden. */
+export function buildSocialBoardAdminUrl(leadId: string): string {
+  const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
+  return `${base}/fulfillment/social-media/${leadId}`;
+}

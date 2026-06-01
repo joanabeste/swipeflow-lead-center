@@ -29,6 +29,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: request.headers } });
   }
 
+  // ─── Öffentliche Freigabe-Route: Kunde gibt Social-Media-Posts ohne Login frei ───
+  if (request.nextUrl.pathname.startsWith("/freigabe/")) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
   // ─── Extern aufgerufene API-Routes ohne Session-Cookie ────────────
   // Vercel-Crons (Bearer CRON_SECRET) und der PhoneMondo-Webhook (HMAC) tragen
   // kein Auth-Cookie. Ohne diese Ausnahme würde das Auth-Gate unten sie auf

@@ -7,14 +7,15 @@ import { ContactsTab } from "./_components/contacts-tab";
 import { ProjectsTab } from "./_components/projects-tab";
 import { TabSwitcher } from "./_components/tab-switcher";
 import { ActivitiesTab } from "./_components/activities-tab";
+import { SocialTab } from "./_components/social-tab";
 import { EditCustomerButton } from "./_components/edit-customer-button";
 import { enrichThreadsWithProjects, loadSuggestedThreadsForEmails, loadThreadsForLead } from "@/lib/email/data";
 import { loadActivitiesForLead } from "../../mail-actions";
 
-type Tab = "aktivitaeten" | "kontakte" | "projekte";
+type Tab = "aktivitaeten" | "kontakte" | "projekte" | "social";
 
 function normalizeTab(s: string | undefined): Tab {
-  if (s === "kontakte" || s === "projekte" || s === "aktivitaeten") return s;
+  if (s === "kontakte" || s === "projekte" || s === "aktivitaeten" || s === "social") return s;
   // Backcompat: alte Slugs auf Aktivitäten umlenken.
   if (s === "mails" || s === "verlauf") return "aktivitaeten";
   return "projekte";
@@ -104,6 +105,7 @@ export default async function KundenDetailPage({
 
       {tab === "kontakte" && <ContactsTab leadId={id} contacts={contacts} />}
       {tab === "projekte" && <ProjectsTab leadId={id} projects={projects} />}
+      {tab === "social" && <SocialTab leadId={id} customerName={customer.company_name ?? ""} />}
       {tab === "aktivitaeten" && await (async () => {
         const emails = [customer.email, ...contacts.map((c) => c.email)].filter((e): e is string => !!e);
         const [attached, suggested, activities] = await Promise.all([
