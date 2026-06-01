@@ -209,8 +209,8 @@ export function ContractTermsFields({
             <Toggle active={!value.withdrawalRight} onClick={() => set({ withdrawalRight: false })}>Nein</Toggle>
           </div>
           <p className="mt-1 text-[11px] text-gray-400">
-            Bei „Ja" wird dem Vertrag eine Widerrufsbelehrung beigelegt (Verbraucher-Widerrufsrecht, § 13 BGB).
-            Für gewerbliche Kunden (B2B) auf „Nein" lassen.
+            Bei „Ja“ wird dem Vertrag eine Widerrufsbelehrung beigelegt (Verbraucher-Widerrufsrecht, § 13 BGB).
+            Für gewerbliche Kunden (B2B) auf „Nein“ lassen.
           </p>
         </Field>
       </Section>
