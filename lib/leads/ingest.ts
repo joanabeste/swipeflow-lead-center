@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { findInternalDuplicates, findDbDuplicatesDetailed } from "@/lib/csv/dedup";
+import {
+  findInternalDuplicates,
+  findDbDuplicatesDetailed,
+  loadExistingLeadsIndex,
+  findDbDuplicateForLead,
+  addLeadToIndex,
+} from "@/lib/csv/dedup";
 import { checkLead } from "@/lib/blacklist/checker";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { getWebdevScoringConfig } from "@/lib/enrichment/webdev-scoring";
@@ -249,8 +255,59 @@ export async function ingestLeads(
     importedCount++;
   }
 
+  // ── Letzter Dedup-Pass UNMITTELBAR vor dem Insert ──────────────────────────
+  // Schliesst zwei Luecken, die zu Dubletten gefuehrt haben:
+  //   (1) within-batch — dieselbe Firma mehrfach in EINEM Import (falls
+  //       findInternalDuplicates etwas durchlaesst);
+  //   (2) Race — ein parallel laufender Import hat zwischenzeitlich Leads
+  //       angelegt (der upfront-Snapshot war zu Beginn geladen).
+  // Wir laden den Bestand FRISCH (kurzes Race-Fenster) und pruefen jeden
+  // geplanten Lead gegen den MITWACHSENDEN Index mit demselben starken Matcher
+  // (Domain/E-Mail/Telefon/Name). Treffer -> nicht einfuegen.
+  let dedupedLeads = leadsToInsert;
+  if (leadsToInsert.length > 0) {
+    const freshIndex = await loadExistingLeadsIndex(db);
+    const droppedIds = new Set<string>();
+    dedupedLeads = [];
+    for (const lead of leadsToInsert) {
+      const probe = {
+        company_name: (lead.company_name as string | null) ?? null,
+        website: (lead.website as string | null) ?? null,
+        city: (lead.city as string | null) ?? null,
+        email: (lead.email as string | null) ?? null,
+        phone: (lead.phone as string | null) ?? null,
+      };
+      if (findDbDuplicateForLead(freshIndex, probe)) {
+        droppedIds.add(lead.id as string);
+        duplicateCount++;
+        importedCount--;
+        continue;
+      }
+      dedupedLeads.push(lead);
+      // Frisch geplanten Lead in den Index aufnehmen, damit die naechste Zeile
+      // desselben Batches gegen ihn matcht (within-batch).
+      addLeadToIndex(freshIndex, {
+        id: lead.id as string,
+        website: probe.website,
+        company_name: probe.company_name,
+        city: probe.city,
+        crm_status_id: null,
+        email: probe.email,
+        phone: probe.phone,
+        lifecycle_stage: "lead",
+        deleted_at: null,
+      });
+    }
+    // Kontakte verwaister (gedroppter) Leads ebenfalls verwerfen.
+    if (droppedIds.size > 0) {
+      for (let j = contactsToInsert.length - 1; j >= 0; j--) {
+        if (droppedIds.has(contactsToInsert[j].lead_id)) contactsToInsert.splice(j, 1);
+      }
+    }
+  }
+
   // Batch-Inserts mit Fehlersammlung
-  const batchResult = await batchInsert(db, "leads", leadsToInsert, BATCH_SIZE);
+  const batchResult = await batchInsert(db, "leads", dedupedLeads, BATCH_SIZE);
   if (batchResult.failed > 0) {
     importedCount -= batchResult.failed;
     errorCount += batchResult.failed;
