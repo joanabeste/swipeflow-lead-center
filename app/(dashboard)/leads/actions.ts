@@ -350,6 +350,24 @@ export async function bulkAddToBlacklist(leadIds: string[]) {
   return { success: true, added };
 }
 
+// Webdesign-Ampel als lesbare Notiz fuer die CRM-Aktivitaeten formatieren.
+// whitespace-pre-wrap im Activity-Feed erhaelt den Zeilenumbruch.
+const TRAFFIC_LIGHT_NOTE_LABELS: Record<string, string> = {
+  green: "🟢 Grün",
+  amber: "🟡 Orange",
+  red: "🔴 Rot",
+};
+function formatTrafficLightNote(
+  rating: string,
+  score: number | null,
+  reason: string | null,
+): string {
+  const label = TRAFFIC_LIGHT_NOTE_LABELS[rating] ?? rating;
+  const head = `Webdesign-Ampel: ${label}${score != null ? ` (Score ${score})` : ""}`;
+  const body = reason?.trim();
+  return body ? `${head}\n${body}` : head;
+}
+
 export async function bulkUpdateStatus(
   leadIds: string[],
   status: string,
@@ -386,12 +404,59 @@ export async function bulkUpdateStatus(
   // relevant: Bulk-Updates sind selten und liefern uns wertvolles Lernsignal).
   const previousStates = await captureLeadStates(db, leadIds);
 
+  // Vor dem Update: CRM-Zugehoerigkeit + Ampel-Daten lesen, um beim Uebergang
+  // "nicht im CRM -> im CRM" die Webdesign-Ampel-Begruendung als Notiz in den
+  // Aktivitaeten zu sichern (Historie bleibt erhalten).
+  const { data: priorAmpelRows } = await db
+    .from("leads")
+    .select("id, status, crm_status_id, traffic_light_rating, traffic_light_score, traffic_light_reason")
+    .in("id", leadIds);
+
   const { error } = await db
     .from("leads")
     .update(payload)
     .in("id", leadIds);
 
   if (error) return { error: error.message };
+
+  // Ampel-Notiz beim Eintritt ins CRM. Idempotent: nur beim echten Uebergang
+  // (vorher nicht im CRM) und nur wenn eine Ampel-Bewertung vorliegt. Best-effort
+  // — ein Fehler hier bricht die CRM-Uebernahme nicht ab.
+  try {
+    const IN_CRM_STATUS = new Set(["qualified", "exported"]);
+    const noteRows = (priorAmpelRows ?? [])
+      .map((row) => {
+        const r = row as {
+          id: string;
+          status: string | null;
+          crm_status_id: string | null;
+          traffic_light_rating: string | null;
+          traffic_light_score: number | null;
+          traffic_light_reason: string | null;
+        };
+        const wasInCrm = r.crm_status_id != null || IN_CRM_STATUS.has(r.status ?? "");
+        const newCrmStatusId =
+          resolvedCrmStatusId === undefined ? r.crm_status_id : resolvedCrmStatusId;
+        const isInCrm = newCrmStatusId != null || IN_CRM_STATUS.has(status);
+        if (wasInCrm || !isInCrm || !r.traffic_light_rating) return null;
+        return {
+          lead_id: r.id,
+          content: formatTrafficLightNote(
+            r.traffic_light_rating,
+            r.traffic_light_score,
+            r.traffic_light_reason,
+          ),
+          created_by: user?.id ?? null,
+        };
+      })
+      .filter((n): n is { lead_id: string; content: string; created_by: string | null } => n !== null);
+    if (noteRows.length > 0) {
+      const { error: noteErr } = await db.from("lead_notes").insert(noteRows);
+      if (noteErr) console.error("[bulkUpdateStatus:ampelNote]", noteErr);
+    }
+  } catch (e) {
+    console.error("[bulkUpdateStatus:ampelNote] unerwartet:", e);
+  }
 
   // Override-Log: cancelled/filtered -> aktiv = passives Signal "Cancel war falsch"
   const overrideCount = await logCancelOverrides(
