@@ -72,11 +72,15 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   // Standardmäßig keine CRM-Leads zeigen (die sind im CRM-Bereich zuhause).
   // Kriterium "im CRM": crm_status_id gesetzt ODER status in (qualified, exported).
+  // Zusätzlich nur echte Leads (lifecycle_stage='lead') — Pipeline (deal),
+  // Kunden (customer) und archivierte (archived) gehören nicht in "Neue Leads".
+  // Spalte ist NOT NULL DEFAULT 'lead' (Migration 071), daher exakter Match.
   // Override via URL-Param: ?include_crm=1
   if (!includeCrm) {
     query = query
       .is("crm_status_id", null)
-      .not("status", "in", '("qualified","exported")');
+      .not("status", "in", '("qualified","exported")')
+      .eq("lifecycle_stage", "lead");
   }
 
   // Spalten-Filter anwenden — Spaltenname strikt aus Whitelist, Wert escaped.

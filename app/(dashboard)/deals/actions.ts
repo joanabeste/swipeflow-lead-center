@@ -98,6 +98,17 @@ export async function createDealAction(input: {
   });
   if ("error" in res) return { error: res.error };
 
+  // Lead in die Pipeline heben: ein Lead mit Deal ist kein "neuer Lead" mehr.
+  // Guard auf lifecycle_stage='lead' stellt sicher, dass Kunden/archivierte
+  // Leads nie zurückgestuft werden.
+  if (leadId) {
+    await db
+      .from("leads")
+      .update({ lifecycle_stage: "deal" })
+      .eq("id", leadId)
+      .eq("lifecycle_stage", "lead");
+  }
+
   await logAudit({
     userId: user.id,
     action: "deal.created",
