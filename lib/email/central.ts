@@ -188,8 +188,8 @@ export async function sendPostFeedbackNotifyEmail(opts: {
   });
 }
 
-/** Baut die absolute Admin-URL zum Social-Media-Board eines Kunden. */
-export function buildSocialBoardAdminUrl(leadId: string): string {
+/** Baut die absolute Admin-URL zum Social-Media-Board eines Projekts. */
+export function buildSocialBoardAdminUrl(projectId: string): string {
   const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
-  return `${base}/fulfillment/social-media/${leadId}`;
+  return `${base}/fulfillment/projekte/${projectId}?tab=social`;
 }

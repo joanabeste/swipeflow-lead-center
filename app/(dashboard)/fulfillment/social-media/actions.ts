@@ -41,8 +41,9 @@ function dbError(prefix: string, error: { code?: string; message?: string }): st
 }
 
 function revalidateLead(leadId: string) {
-  revalidatePath("/fulfillment/social-media");
-  revalidatePath(`/fulfillment/social-media/${leadId}`);
+  // Social lebt jetzt im Projekt-Detail; der Client refresht die konkrete Seite
+  // via router.refresh(). Hier nur Projektliste + Kundenseite invalidieren.
+  revalidatePath("/fulfillment/projekte");
   revalidatePath(`/fulfillment/kunden/${leadId}`);
 }
 
@@ -63,6 +64,7 @@ function prunePlatformCaptions(
 // ─── Posts ──────────────────────────────────────────────────────────────────
 
 export async function createPost(input: {
+  project_id: string;
   lead_id: string;
   title?: string;
   format?: PostFormat;
@@ -75,8 +77,8 @@ export async function createPost(input: {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
 
-  const board = await getOrCreateBoard(input.lead_id, uid);
-  if (!board) return { error: "Board konnte nicht angelegt werden — Migration 109 prüfen." };
+  const board = await getOrCreateBoard(input.project_id, input.lead_id, uid);
+  if (!board) return { error: "Board konnte nicht angelegt werden — Migration 109/111 prüfen." };
 
   const platforms = input.platforms ?? [];
   const db = createServiceClient();
@@ -99,6 +101,7 @@ export async function createPost(input: {
   if (error) return { error: dbError("createPost", error) };
   await logAudit({ userId: uid, action: "social.post.create", entityType: "social_post", entityId: data.id, details: { lead_id: input.lead_id } });
   revalidateLead(input.lead_id);
+  revalidatePath(`/fulfillment/projekte/${input.project_id}`);
   return { success: true, data: { id: data.id } };
 }
 
@@ -237,41 +240,41 @@ export async function reorderMedia(postId: string, orderedMediaIds: string[], le
 
 // ─── Freigabelink ───────────────────────────────────────────────────────────
 
-export async function ensureShareLink(leadId: string): Promise<{ url: string } | { error: string }> {
+export async function ensureShareLink(projectId: string, leadId: string): Promise<{ url: string } | { error: string }> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
-  const res = await ensureBoardShareLink(leadId, uid);
+  const res = await ensureBoardShareLink(projectId, leadId, uid);
   if ("error" in res) return { error: res.error };
   revalidateLead(leadId);
   return { url: res.url };
 }
 
-export async function disableShareLink(leadId: string): Promise<Result> {
+export async function disableShareLink(projectId: string, leadId: string): Promise<Result> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
-  const res = await disableShareLinkLib(leadId);
+  const res = await disableShareLinkLib(projectId);
   if (res.error) return { error: res.error };
-  await logAudit({ userId: uid, action: "social.share.disable", entityType: "social_board", entityId: leadId });
+  await logAudit({ userId: uid, action: "social.share.disable", entityType: "social_board", entityId: projectId });
   revalidateLead(leadId);
   return { success: true };
 }
 
-export async function rotateShareToken(leadId: string): Promise<{ url: string } | { error: string }> {
+export async function rotateShareToken(projectId: string, leadId: string): Promise<{ url: string } | { error: string }> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
-  const res = await rotateShareTokenLib(leadId, uid);
+  const res = await rotateShareTokenLib(projectId, leadId, uid);
   if ("error" in res) return { error: res.error };
-  await logAudit({ userId: uid, action: "social.share.rotate", entityType: "social_board", entityId: leadId });
+  await logAudit({ userId: uid, action: "social.share.rotate", entityType: "social_board", entityId: projectId });
   revalidateLead(leadId);
   return { url: res.url };
 }
 
-export async function sendShareLinkEmailAction(leadId: string, to: string): Promise<Result> {
+export async function sendShareLinkEmailAction(projectId: string, leadId: string, to: string): Promise<Result> {
   const uid = await currentUserId();
   if (!uid) return { error: "Nicht angemeldet." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to.trim())) return { error: "Bitte eine gültige E-Mail-Adresse angeben." };
 
-  const link = await ensureBoardShareLink(leadId, uid);
+  const link = await ensureBoardShareLink(projectId, leadId, uid);
   if ("error" in link) return { error: link.error };
   const customer = await loadCustomer(leadId);
 

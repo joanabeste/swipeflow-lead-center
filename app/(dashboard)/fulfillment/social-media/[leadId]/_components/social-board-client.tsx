@@ -15,17 +15,19 @@ import { ShareLinkDialog } from "./share-link-dialog";
 type View = "board" | "calendar" | "list";
 
 export function SocialBoardClient({
+  projectId,
   leadId,
   customerName,
   board,
   posts: initialPosts,
   embedded = false,
 }: {
+  projectId: string;
   leadId: string;
   customerName: string;
   board: { share_token: string | null; share_enabled: boolean } | null;
   posts: PostWithMedia[];
-  /** Eingebettet im Kunden-Tab: eigener Seitentitel wird unterdrückt. */
+  /** Eingebettet im Projekt-Tab: eigener Seitentitel wird unterdrückt. */
   embedded?: boolean;
 }) {
   const router = useRouter();
@@ -43,7 +45,7 @@ export function SocialBoardClient({
 
   function handleNew() {
     startCreate(async () => {
-      const res = await createPost({ lead_id: leadId, status: "draft" });
+      const res = await createPost({ project_id: projectId, lead_id: leadId, status: "draft" });
       if ("error" in res) {
         addToast(res.error, "error");
         return;
@@ -118,6 +120,7 @@ export function SocialBoardClient({
       />
 
       <ShareLinkDialog
+        projectId={projectId}
         leadId={leadId}
         customerName={customerName}
         open={shareOpen}

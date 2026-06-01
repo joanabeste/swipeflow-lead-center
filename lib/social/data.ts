@@ -1,8 +1,6 @@
 import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { listCustomers } from "@/lib/fulfillment/data";
-import type { Lead } from "@/lib/types";
 import { CLIENT_VISIBLE_STATUSES } from "./format";
 import { loadPostMediaForPosts } from "./attachments";
 import type {
@@ -21,29 +19,36 @@ function isMissingTable(error: { code?: string; message?: string } | null): bool
 
 // ─── Boards ─────────────────────────────────────────────────────────────────
 
-export async function loadBoardByLead(leadId: string): Promise<SocialBoard | null> {
+export async function loadBoardByProject(projectId: string): Promise<SocialBoard | null> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("social_boards")
     .select("*")
-    .eq("lead_id", leadId)
+    .eq("project_id", projectId)
     .maybeSingle<SocialBoard>();
   if (error) {
-    if (!isMissingTable(error)) console.error("[loadBoardByLead]", error);
+    if (!isMissingTable(error)) console.error("[loadBoardByProject]", error);
     return null;
   }
   return data;
 }
 
-/** Holt das Board des Kunden oder legt es an (1:1 via UNIQUE lead_id). */
-export async function getOrCreateBoard(leadId: string, userId: string | null): Promise<SocialBoard | null> {
-  const existing = await loadBoardByLead(leadId);
+/** Holt das Board des Projekts oder legt es an (1:1 via UNIQUE project_id). */
+export async function getOrCreateBoard(
+  projectId: string,
+  leadId: string,
+  userId: string | null,
+): Promise<SocialBoard | null> {
+  const existing = await loadBoardByProject(projectId);
   if (existing) return existing;
 
   const db = createServiceClient();
   const { data, error } = await db
     .from("social_boards")
-    .upsert({ lead_id: leadId, created_by: userId }, { onConflict: "lead_id", ignoreDuplicates: true })
+    .upsert(
+      { project_id: projectId, lead_id: leadId, created_by: userId },
+      { onConflict: "project_id", ignoreDuplicates: true },
+    )
     .select()
     .maybeSingle<SocialBoard>();
   if (error) {
@@ -51,7 +56,7 @@ export async function getOrCreateBoard(leadId: string, userId: string | null): P
     return null;
   }
   // ignoreDuplicates → bei Race kein Row zurück; dann erneut laden.
-  return data ?? (await loadBoardByLead(leadId));
+  return data ?? (await loadBoardByProject(projectId));
 }
 
 /** Lädt das Board zu einem Freigabe-Token — nur wenn der Link aktiv ist. */
@@ -183,53 +188,3 @@ export async function loadPostDetail(
   return { ...post, media: mediaMap.get(postId) ?? [], comments };
 }
 
-// ─── Kundenliste-Einstieg ───────────────────────────────────────────────────
-
-export interface CustomerWithSocialStats {
-  customer: Lead;
-  board: { id: string; share_token: string | null; share_enabled: boolean } | null;
-  total: number;
-  pending: number; // in_review + changes_requested
-  approved: number;
-}
-
-/** Kunden (lifecycle=customer) mit Social-Board-Kennzahlen für die Übersichtsseite. */
-export async function listCustomersWithBoardStats(): Promise<CustomerWithSocialStats[]> {
-  const customers = await listCustomers();
-  if (customers.length === 0) return [];
-  const ids = customers.map((c) => c.id);
-  const db = createServiceClient();
-
-  const [boardsRes, postsRes] = await Promise.all([
-    db.from("social_boards").select("id, lead_id, share_token, share_enabled").in("lead_id", ids),
-    db.from("social_posts").select("lead_id, status").in("lead_id", ids),
-  ]);
-
-  if (boardsRes.error && !isMissingTable(boardsRes.error)) console.error("[listCustomersWithBoardStats:boards]", boardsRes.error);
-  if (postsRes.error && !isMissingTable(postsRes.error)) console.error("[listCustomersWithBoardStats:posts]", postsRes.error);
-
-  const boardByLead = new Map<string, { id: string; share_token: string | null; share_enabled: boolean }>();
-  for (const b of (boardsRes.data ?? []) as Array<{ id: string; lead_id: string; share_token: string | null; share_enabled: boolean }>) {
-    boardByLead.set(b.lead_id, { id: b.id, share_token: b.share_token, share_enabled: b.share_enabled });
-  }
-
-  const stats = new Map<string, { total: number; pending: number; approved: number }>();
-  for (const p of (postsRes.data ?? []) as Array<{ lead_id: string; status: string }>) {
-    const s = stats.get(p.lead_id) ?? { total: 0, pending: 0, approved: 0 };
-    s.total += 1;
-    if (p.status === "in_review" || p.status === "changes_requested") s.pending += 1;
-    if (p.status === "approved") s.approved += 1;
-    stats.set(p.lead_id, s);
-  }
-
-  return customers.map((c) => {
-    const s = stats.get(c.id) ?? { total: 0, pending: 0, approved: 0 };
-    return {
-      customer: c,
-      board: boardByLead.get(c.id) ?? null,
-      total: s.total,
-      pending: s.pending,
-      approved: s.approved,
-    };
-  });
-}

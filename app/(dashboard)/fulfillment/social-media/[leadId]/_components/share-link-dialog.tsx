@@ -13,12 +13,14 @@ import {
 } from "../../actions";
 
 export function ShareLinkDialog({
+  projectId,
   leadId,
   customerName,
   open,
   initialActive,
   onClose,
 }: {
+  projectId: string;
   leadId: string;
   customerName: string;
   open: boolean;
@@ -44,18 +46,18 @@ export function ShareLinkDialog({
     if (!open || !initialActive || url) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    ensureShareLink(leadId)
+    ensureShareLink(projectId, leadId)
       .then((res) => {
         if ("url" in res) setUrl(res.url);
         else addToast(res.error, "error");
       })
       .finally(() => setLoading(false));
-  }, [open, initialActive, url, leadId, addToast]);
+  }, [open, initialActive, url, projectId, leadId, addToast]);
 
   function createLink() {
     setLoading(true);
     startTransition(async () => {
-      const res = await ensureShareLink(leadId);
+      const res = await ensureShareLink(projectId, leadId);
       setLoading(false);
       if ("url" in res) {
         setUrl(res.url);
@@ -80,7 +82,7 @@ export function ShareLinkDialog({
   function sendEmail() {
     if (!emailTo.trim()) return;
     startTransition(async () => {
-      const res = await sendShareLinkEmailAction(leadId, emailTo);
+      const res = await sendShareLinkEmailAction(projectId, leadId, emailTo);
       if ("error" in res) addToast(res.error, "error");
       else {
         addToast("Freigabelink per E-Mail gesendet.", "success");
@@ -92,7 +94,7 @@ export function ShareLinkDialog({
 
   function rotate() {
     startTransition(async () => {
-      const res = await rotateShareToken(leadId);
+      const res = await rotateShareToken(projectId, leadId);
       if ("url" in res) {
         setUrl(res.url);
         addToast("Neuer Link erzeugt — der alte ist nicht mehr gültig.", "success");
@@ -105,7 +107,7 @@ export function ShareLinkDialog({
 
   function disable() {
     startTransition(async () => {
-      const res = await disableShareLink(leadId);
+      const res = await disableShareLink(projectId, leadId);
       if ("error" in res) addToast(res.error, "error");
       else {
         setUrl(null);

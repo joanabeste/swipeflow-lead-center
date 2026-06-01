@@ -28,6 +28,7 @@ export const SETTINGS_GROUPS: SettingsNavGroup[] = [
       { href: "/einstellungen/standort", label: "Standort", icon: MapPin },
       { href: "/einstellungen/crm-status", label: "CRM-Status", icon: Tag },
       { href: "/einstellungen/deal-stages", label: "Deal-Stages", icon: Banknote },
+      { href: "/einstellungen/projekt-typen", label: "Projekt-Typen", icon: Briefcase },
     ],
   },
   {

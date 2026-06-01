@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 
-export type ProjectTab = "uebersicht" | "tasks" | "mails" | "notizen";
-
-const TABS: Array<{ id: ProjectTab; label: string }> = [
-  { id: "uebersicht", label: "Übersicht" },
-  { id: "tasks", label: "Tasks" },
-  { id: "mails", label: "E-Mails" },
-  { id: "notizen", label: "Notizen" },
-];
-
-export function ProjectTabSwitcher({ current, basePath }: { current: ProjectTab; basePath: string }) {
+/** Tabs werden dynamisch aus dem Feature-Set des Projekt-Typs gebildet. */
+export function ProjectTabSwitcher({
+  current,
+  basePath,
+  tabs,
+}: {
+  current: string;
+  basePath: string;
+  tabs: Array<{ id: string; label: string }>;
+}) {
+  if (tabs.length <= 1) return null;
   return (
     <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#161618]">
-      {TABS.map((t) => {
+      {tabs.map((t) => {
         const active = t.id === current;
         return (
           <Link

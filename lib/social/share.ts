@@ -12,10 +12,11 @@ export { generateShareToken, buildShareLink };
  * gibt Token + absoluten Link zurück. Legt das Board bei Bedarf an.
  */
 export async function ensureBoardShareLink(
+  projectId: string,
   leadId: string,
   userId: string | null,
 ): Promise<{ token: string; url: string } | { error: string }> {
-  const board = await getOrCreateBoard(leadId, userId);
+  const board = await getOrCreateBoard(projectId, leadId, userId);
   if (!board) return { error: "Board konnte nicht angelegt werden." };
 
   let token = board.share_token;
@@ -32,21 +33,22 @@ export async function ensureBoardShareLink(
 }
 
 /** Deaktiviert den Freigabelink (Kill-Switch — Token bleibt erhalten). */
-export async function disableShareLink(leadId: string): Promise<{ error?: string }> {
+export async function disableShareLink(projectId: string): Promise<{ error?: string }> {
   const db = createServiceClient();
   const { error } = await db
     .from("social_boards")
     .update({ share_enabled: false })
-    .eq("lead_id", leadId);
+    .eq("project_id", projectId);
   return error ? { error: error.message } : {};
 }
 
 /** Generiert ein neues Token (invalidiert den alten Link) und aktiviert ihn. */
 export async function rotateShareToken(
+  projectId: string,
   leadId: string,
   userId: string | null,
 ): Promise<{ token: string; url: string } | { error: string }> {
-  const board = await getOrCreateBoard(leadId, userId);
+  const board = await getOrCreateBoard(projectId, leadId, userId);
   if (!board) return { error: "Board konnte nicht angelegt werden." };
   const token = generateShareToken();
   const db = createServiceClient();

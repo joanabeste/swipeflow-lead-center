@@ -6,6 +6,8 @@ export type { MediaKind, Platform, PostFormat, PostStatus };
 
 export interface SocialBoard {
   id: string;
+  /** Board hängt an einem Projekt (Migration 111). 1:1 via UNIQUE project_id. */
+  project_id: string;
   lead_id: string;
   share_token: string | null;
   share_enabled: boolean;

@@ -1,5 +1,7 @@
 // Fulfillment-Modul Typen.
 
+import type { FeatureKey } from "./project-features";
+
 export type LifecycleStage = "lead" | "deal" | "customer" | "archived";
 
 export type ProjectStatus = "onboarding" | "active" | "paused" | "completed";
@@ -43,6 +45,8 @@ export interface Project {
   name: string;
   status: ProjectStatus;
   vertical: "webdesign" | "recruiting" | "sonstiges" | null;
+  /** FK auf project_types — bestimmt die Feature-Tabs (Migration 111). Null = Alt-Projekt. */
+  project_type_id: string | null;
   clickup_list_id: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -51,6 +55,24 @@ export interface Project {
   created_at: string;
   updated_at: string;
 }
+
+/** Admin-definierbare Projekt-Typ-Vorlage (Migration 111). */
+export interface ProjectType {
+  id: string;
+  slug: string;
+  label: string;
+  color: string;
+  icon: string | null;
+  features: FeatureKey[];
+  display_order: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Projekt inkl. aufgelöstem Typ (Server joint project_types). */
+export type ProjectWithType = Project & { type: ProjectType | null };
 
 export interface ProjectNote {
   id: string;

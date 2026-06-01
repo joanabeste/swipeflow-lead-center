@@ -24,11 +24,9 @@ function formatScheduled(iso: string | null): string | null {
 export function PublicPostCard({
   token,
   post,
-  authorName,
 }: {
   token: string;
   post: PostWithMediaAndComments;
-  authorName: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -40,14 +38,6 @@ export function PublicPostCard({
   const showCaptionTabs = post.platforms.length > 1 && Object.keys(post.platform_captions ?? {}).length > 0;
   const scheduled = formatScheduled(post.scheduled_at);
   const isApproved = post.status === "approved";
-
-  function ensureName(): boolean {
-    if (!authorName.trim()) {
-      setError("Bitte trage oben deinen Namen ein.");
-      return false;
-    }
-    return true;
-  }
 
   function run(action: () => Promise<{ success: true } | { error: string }>, clearText = false) {
     setError(null);
@@ -63,26 +53,23 @@ export function PublicPostCard({
   }
 
   function onComment() {
-    if (!ensureName()) return;
     if (!text.trim()) {
       setError("Bitte gib einen Kommentar ein.");
       return;
     }
-    run(() => submitComment(token, post.id, { authorName, body: text }), true);
+    run(() => submitComment(token, post.id, { body: text }), true);
   }
 
   function onRequestChanges() {
-    if (!ensureName()) return;
     if (!text.trim()) {
       setError("Bitte beschreibe kurz, was geändert werden soll.");
       return;
     }
-    run(() => requestChanges(token, post.id, { authorName, body: text }), true);
+    run(() => requestChanges(token, post.id, { body: text }), true);
   }
 
   function onApprove() {
-    if (!ensureName()) return;
-    run(() => approvePost(token, post.id, { authorName }));
+    run(() => approvePost(token, post.id, {}));
   }
 
   return (

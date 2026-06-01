@@ -59,7 +59,7 @@ function clean(v: string | undefined, max: number): string {
 export async function submitComment(
   token: string,
   postId: string,
-  payload: { authorName: string; body: string },
+  payload: { authorName?: string; body: string },
 ): Promise<Result> {
   const resolved = await resolveBoardAndPost(token, postId);
   if ("error" in resolved) return resolved;
@@ -67,7 +67,6 @@ export async function submitComment(
 
   const name = clean(payload.authorName, NAME_MAX);
   const body = clean(payload.body, BODY_MAX);
-  if (!name) return { error: "Bitte gib deinen Namen an." };
   if (!body) return { error: "Bitte gib einen Kommentar ein." };
 
   const db = createServiceClient();
@@ -76,7 +75,7 @@ export async function submitComment(
     post_id: post.id,
     board_id: board.id,
     author_kind: "client",
-    author_name: name,
+    author_name: name || null,
     body,
     meta,
   });
@@ -90,21 +89,20 @@ export async function submitComment(
 export async function approvePost(
   token: string,
   postId: string,
-  payload: { authorName: string },
+  payload: { authorName?: string },
 ): Promise<Result> {
   const resolved = await resolveBoardAndPost(token, postId);
   if ("error" in resolved) return resolved;
   const { board, post } = resolved;
 
   const name = clean(payload.authorName, NAME_MAX);
-  if (!name) return { error: "Bitte gib deinen Namen an." };
 
   const db = createServiceClient();
   const signedAt = new Date().toISOString();
   // Atomar: nur aus in_review/changes_requested heraus.
   const { data: updated, error } = await db
     .from("social_posts")
-    .update({ status: "approved", approved_at: signedAt, approved_by_name: name })
+    .update({ status: "approved", approved_at: signedAt, approved_by_name: name || null })
     .eq("id", post.id)
     .eq("board_id", board.id)
     .in("status", ["in_review", "changes_requested"])
@@ -120,7 +118,7 @@ export async function approvePost(
     post_id: post.id,
     board_id: board.id,
     author_kind: "client",
-    author_name: name,
+    author_name: name || null,
     event: "approved",
     meta,
   });
@@ -130,7 +128,7 @@ export async function approvePost(
       customerName: await customerName(board.lead_id),
       action: "approved",
       postTitle: postLabel(post),
-      adminUrl: buildSocialBoardAdminUrl(board.lead_id),
+      adminUrl: buildSocialBoardAdminUrl(board.project_id),
     });
   } catch (e) {
     console.error("[freigabe:approvePost:notify]", e);
@@ -141,7 +139,7 @@ export async function approvePost(
 export async function requestChanges(
   token: string,
   postId: string,
-  payload: { authorName: string; body: string },
+  payload: { authorName?: string; body: string },
 ): Promise<Result> {
   const resolved = await resolveBoardAndPost(token, postId);
   if ("error" in resolved) return resolved;
@@ -149,7 +147,6 @@ export async function requestChanges(
 
   const name = clean(payload.authorName, NAME_MAX);
   const body = clean(payload.body, BODY_MAX);
-  if (!name) return { error: "Bitte gib deinen Namen an." };
   if (!body) return { error: "Bitte beschreibe, was geändert werden soll." };
 
   const db = createServiceClient();
@@ -171,7 +168,7 @@ export async function requestChanges(
     post_id: post.id,
     board_id: board.id,
     author_kind: "client",
-    author_name: name,
+    author_name: name || null,
     body,
     event: "changes_requested",
     meta,
@@ -183,7 +180,7 @@ export async function requestChanges(
       action: "changes_requested",
       postTitle: postLabel(post),
       comment: body,
-      adminUrl: buildSocialBoardAdminUrl(board.lead_id),
+      adminUrl: buildSocialBoardAdminUrl(board.project_id),
     });
   } catch (e) {
     console.error("[freigabe:requestChanges:notify]", e);

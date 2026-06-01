@@ -160,6 +160,7 @@ export async function createProject(input: {
   name: string;
   status?: ProjectStatus;
   vertical?: "webdesign" | "recruiting" | "sonstiges";
+  project_type_id?: string | null;
   started_at?: string;
   notes?: string;
 }): Promise<Result<{ id: string }>> {
@@ -174,6 +175,7 @@ export async function createProject(input: {
       name: input.name.trim(),
       status: input.status ?? "onboarding",
       vertical: input.vertical ?? null,
+      project_type_id: input.project_type_id ?? null,
       started_at: input.started_at || null,
       notes: input.notes?.trim() || null,
       created_by: uid,
@@ -191,6 +193,7 @@ export async function updateProject(id: string, patch: Partial<{
   name: string;
   status: ProjectStatus;
   vertical: "webdesign" | "recruiting" | "sonstiges" | null;
+  project_type_id: string | null;
   clickup_list_id: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -200,7 +203,7 @@ export async function updateProject(id: string, patch: Partial<{
   if (!uid) return { error: "Nicht angemeldet." };
   const db = createServiceClient();
   const update: Record<string, unknown> = {};
-  for (const k of ["name", "status", "vertical", "clickup_list_id", "started_at", "completed_at", "notes"] as const) {
+  for (const k of ["name", "status", "vertical", "project_type_id", "clickup_list_id", "started_at", "completed_at", "notes"] as const) {
     if (patch[k] !== undefined) update[k] = patch[k];
   }
   if (patch.status === "completed" && !patch.completed_at) {

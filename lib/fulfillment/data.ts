@@ -1,8 +1,11 @@
 // Defensive Read-Helper fuer Fulfillment. Geht mit fehlenden Migrationen (071-074) um.
 
 import { createServiceClient } from "@/lib/supabase/server";
-import type { CustomerContact, Project, ProjectNote, ClickupTaskCached, LifecycleStage } from "./types";
+import type { CustomerContact, Project, ProjectWithType, ProjectType, ProjectNote, ClickupTaskCached, LifecycleStage } from "./types";
 import type { Lead } from "@/lib/types";
+
+/** Projekt-Select inkl. aufgelöstem Typ (PostgREST-Embed). */
+const PROJECT_WITH_TYPE = "*, type:project_types(*)";
 
 function isMissingTable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
@@ -72,38 +75,74 @@ export async function loadContacts(leadId: string): Promise<CustomerContact[]> {
   return (data ?? []) as CustomerContact[];
 }
 
-export async function loadProjectsForLead(leadId: string): Promise<Project[]> {
+function withNullType(rows: Project[]): ProjectWithType[] {
+  return rows.map((p) => ({ ...p, type: null }));
+}
+
+export async function loadProjectsForLead(leadId: string): Promise<ProjectWithType[]> {
   const db = createServiceClient();
-  const { data, error } = await db
+  const embed = await db
     .from("projects")
-    .select("*")
+    .select(PROJECT_WITH_TYPE)
     .eq("lead_id", leadId)
     .order("created_at", { ascending: false });
-  if (error) {
-    if (!isMissingTable(error)) console.error("[loadProjectsForLead]", error);
+  if (!embed.error) return (embed.data ?? []) as unknown as ProjectWithType[];
+  // Fallback: project_types evtl. noch nicht migriert → ohne Typ laden.
+  const plain = await db.from("projects").select("*").eq("lead_id", leadId).order("created_at", { ascending: false });
+  if (plain.error) {
+    if (!isMissingTable(plain.error)) console.error("[loadProjectsForLead]", plain.error);
     return [];
   }
-  return (data ?? []) as Project[];
+  return withNullType((plain.data ?? []) as Project[]);
 }
 
-export async function listAllProjects(filter?: { status?: string; vertical?: string }): Promise<Project[]> {
+export async function listAllProjects(filter?: { status?: string; vertical?: string }): Promise<ProjectWithType[]> {
   const db = createServiceClient();
-  let q = db.from("projects").select("*").order("updated_at", { ascending: false });
-  if (filter?.status) q = q.eq("status", filter.status);
-  if (filter?.vertical) q = q.eq("vertical", filter.vertical);
+  const build = (sel: string) => {
+    let q = db.from("projects").select(sel).order("updated_at", { ascending: false });
+    if (filter?.status) q = q.eq("status", filter.status);
+    if (filter?.vertical) q = q.eq("vertical", filter.vertical);
+    return q;
+  };
+  const embed = await build(PROJECT_WITH_TYPE);
+  if (!embed.error) return (embed.data ?? []) as unknown as ProjectWithType[];
+  const plain = await build("*");
+  if (plain.error) {
+    if (!isMissingTable(plain.error)) console.error("[listAllProjects]", plain.error);
+    return [];
+  }
+  return withNullType((plain.data ?? []) as unknown as Project[]);
+}
+
+export async function loadProject(id: string): Promise<ProjectWithType | null> {
+  const db = createServiceClient();
+  const embed = await db.from("projects").select(PROJECT_WITH_TYPE).eq("id", id).maybeSingle();
+  if (!embed.error) return (embed.data ?? null) as unknown as ProjectWithType | null;
+  const plain = await db.from("projects").select("*").eq("id", id).maybeSingle<Project>();
+  if (plain.error) {
+    if (!isMissingTable(plain.error)) console.error("[loadProject]", plain.error);
+    return null;
+  }
+  return plain.data ? { ...plain.data, type: null } : null;
+}
+
+export async function listProjectTypes(opts?: { activeOnly?: boolean }): Promise<ProjectType[]> {
+  const db = createServiceClient();
+  let q = db.from("project_types").select("*").order("display_order", { ascending: true });
+  if (opts?.activeOnly) q = q.eq("is_active", true);
   const { data, error } = await q;
   if (error) {
-    if (!isMissingTable(error)) console.error("[listAllProjects]", error);
+    if (!isMissingTable(error)) console.error("[listProjectTypes]", error);
     return [];
   }
-  return (data ?? []) as Project[];
+  return (data ?? []) as ProjectType[];
 }
 
-export async function loadProject(id: string): Promise<Project | null> {
+export async function loadProjectType(id: string): Promise<ProjectType | null> {
   const db = createServiceClient();
-  const { data, error } = await db.from("projects").select("*").eq("id", id).maybeSingle<Project>();
+  const { data, error } = await db.from("project_types").select("*").eq("id", id).maybeSingle<ProjectType>();
   if (error) {
-    console.error("[loadProject]", error);
+    if (!isMissingTable(error)) console.error("[loadProjectType]", error);
     return null;
   }
   return data;

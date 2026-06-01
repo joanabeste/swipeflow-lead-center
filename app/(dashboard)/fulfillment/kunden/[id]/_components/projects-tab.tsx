@@ -3,18 +3,18 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Plus, ExternalLink } from "lucide-react";
-import type { Project, ProjectStatus } from "@/lib/fulfillment/types";
+import type { ProjectWithType, ProjectType, ProjectStatus } from "@/lib/fulfillment/types";
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/fulfillment/types";
 import { createProject } from "../../../actions";
 import { useToastContext } from "../../../../toast-provider";
 import { formatDateDe } from "@/lib/zeit/format";
 
-export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Project[] }) {
+export function ProjectsTab({ leadId, projects, types }: { leadId: string; projects: ProjectWithType[]; types: ProjectType[] }) {
   const { addToast } = useToastContext();
   const [showAdd, setShowAdd] = useState(false);
   const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState<{ name: string; vertical: "" | "webdesign" | "recruiting" | "sonstiges"; status: ProjectStatus; started_at: string; notes: string }>(
-    { name: "", vertical: "", status: "onboarding", started_at: new Date().toISOString().slice(0, 10), notes: "" },
+  const [draft, setDraft] = useState<{ name: string; project_type_id: string; status: ProjectStatus; started_at: string; notes: string }>(
+    { name: "", project_type_id: types[0]?.id ?? "", status: "onboarding", started_at: new Date().toISOString().slice(0, 10), notes: "" },
   );
 
   function handleAdd(e: React.FormEvent) {
@@ -28,14 +28,14 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
         lead_id: leadId,
         name: draft.name,
         status: draft.status,
-        vertical: draft.vertical || undefined,
+        project_type_id: draft.project_type_id || undefined,
         started_at: draft.started_at || undefined,
         notes: draft.notes || undefined,
       });
       if ("error" in res) addToast(res.error, "error");
       else {
         addToast("Projekt angelegt.", "success");
-        setDraft({ name: "", vertical: "", status: "onboarding", started_at: new Date().toISOString().slice(0, 10), notes: "" });
+        setDraft({ name: "", project_type_id: types[0]?.id ?? "", status: "onboarding", started_at: new Date().toISOString().slice(0, 10), notes: "" });
         setShowAdd(false);
       }
     });
@@ -62,12 +62,12 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
             <Field label="Projekt-Name *">
               <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={inputCls} required />
             </Field>
-            <Field label="Bereich">
-              <select value={draft.vertical} onChange={(e) => setDraft({ ...draft, vertical: e.target.value as "" | "webdesign" | "recruiting" | "sonstiges" })} className={inputCls}>
-                <option value="">—</option>
-                <option value="webdesign">Webdesign</option>
-                <option value="recruiting">Recruiting</option>
-                <option value="sonstiges">Sonstiges</option>
+            <Field label="Typ">
+              <select value={draft.project_type_id} onChange={(e) => setDraft({ ...draft, project_type_id: e.target.value })} className={inputCls}>
+                <option value="">— Kein Typ —</option>
+                {types.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
               </select>
             </Field>
             <Field label="Status">
@@ -110,7 +110,16 @@ export function ProjectsTab({ leadId, projects }: { leadId: string; projects: Pr
                   </span>
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
-                  {p.vertical && <span>{p.vertical}</span>}
+                  {p.type ? (
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                      style={{ backgroundColor: `${p.type.color}1a`, color: p.type.color }}
+                    >
+                      {p.type.label}
+                    </span>
+                  ) : p.vertical ? (
+                    <span>{p.vertical}</span>
+                  ) : null}
                   {p.started_at && <span>Start: {formatDateDe(p.started_at)}</span>}
                   {p.completed_at && <span>Ende: {formatDateDe(p.completed_at)}</span>}
                 </div>

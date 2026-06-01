@@ -38,6 +38,7 @@ export function PostMediaUploader({
   const { addToast } = useToastContext();
   const [order, setOrder] = useState<LoadedPostMedia[]>(media);
   const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const [, startTransition] = useTransition();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -123,7 +124,29 @@ export function PostMediaUploader({
   }
 
   return (
-    <div>
+    <div
+      // Native HTML5-Datei-Drop (getrennt vom @dnd-kit-Umsortieren, das Pointer-Events nutzt).
+      onDragOver={(e) => {
+        if (Array.from(e.dataTransfer.types).includes("Files")) {
+          e.preventDefault();
+          if (!dragOver) setDragOver(true);
+        }
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget === e.target) setDragOver(false);
+      }}
+      onDrop={(e) => {
+        if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files?.length) void addFiles(e.dataTransfer.files);
+      }}
+      className={
+        dragOver
+          ? "rounded-lg ring-2 ring-primary ring-offset-2 dark:ring-offset-[#161618]"
+          : undefined
+      }
+    >
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={order.map((m) => m.id)} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -154,7 +177,7 @@ export function PostMediaUploader({
         }}
       />
       <p className="mt-1.5 text-[11px] text-gray-400">
-        Bilder bis 25 MB, Videos bis 200 MB. Reihenfolge per Drag &amp; Drop (Carousel).
+        Dateien per Drag &amp; Drop oder Klick hinzufügen · Bilder bis 25 MB, Videos bis 200 MB · Reihenfolge der Kacheln ziehen (Carousel).
       </p>
     </div>
   );

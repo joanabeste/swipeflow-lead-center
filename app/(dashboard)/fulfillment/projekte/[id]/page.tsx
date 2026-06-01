@@ -4,17 +4,16 @@ import { ArrowLeft } from "lucide-react";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { loadProject, loadCustomer, loadCachedTasks, loadProjectNotes } from "@/lib/fulfillment/data";
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/fulfillment/types";
+import { typeFeatures, featureByKey } from "@/lib/fulfillment/project-features";
+import { getOrCreateBoard, loadPostsForBoard } from "@/lib/social/data";
+import { SocialBoardClient } from "../../social-media/[leadId]/_components/social-board-client";
 import { formatDateDe } from "@/lib/zeit/format";
 import { ProjectStatusEditor } from "./_components/status-editor";
 import { TaskList } from "./_components/task-list";
 import { ProjectNotes } from "./_components/project-notes";
 import { ProjectMailsTab } from "./_components/project-mails-tab";
-import { ProjectTabSwitcher, type ProjectTab } from "./_components/project-tab-switcher";
+import { ProjectTabSwitcher } from "./_components/project-tab-switcher";
 import { loadThreadsForProject } from "@/lib/email/data";
-
-function isTab(s: string | undefined): s is ProjectTab {
-  return s === "uebersicht" || s === "tasks" || s === "mails" || s === "notizen";
-}
 
 export default async function ProjektDetailPage({
   params,
@@ -25,10 +24,20 @@ export default async function ProjektDetailPage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const tab: ProjectTab = isTab(sp.tab) ? sp.tab : "uebersicht";
 
   const project = await loadProject(id);
   if (!project) notFound();
+
+  // Feature-getriebene Tabs: Übersicht immer, dann je aktivem Feature des Typs.
+  const features = typeFeatures(project.type);
+  const featureTabs = features
+    .map((k) => featureByKey(k))
+    .filter((f): f is NonNullable<typeof f> => !!f)
+    .map((f) => ({ id: f.slug, label: f.label }));
+  const tabs = [{ id: "uebersicht", label: "Übersicht" }, ...featureTabs];
+  const allowed = new Set(tabs.map((t) => t.id));
+  const tab = sp.tab && allowed.has(sp.tab) ? sp.tab : "uebersicht";
+
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
   const customer = await loadCustomer(project.lead_id);
@@ -60,12 +69,23 @@ export default async function ProjektDetailPage({
               {PROJECT_STATUS_LABELS[project.status]}
             </span>
             <h1 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{project.name}</h1>
-            <div className="mt-2 text-sm text-gray-500">
-              Kunde:{" "}
-              <Link href={`/fulfillment/kunden/${project.lead_id}`} className="text-primary hover:underline">
-                {customer?.company_name ?? project.lead_id}
-              </Link>
-              {project.vertical && <span className="ml-3 text-xs uppercase tracking-wider text-gray-400">{project.vertical}</span>}
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+              <span>
+                Kunde:{" "}
+                <Link href={`/fulfillment/kunden/${project.lead_id}`} className="text-primary hover:underline">
+                  {customer?.company_name ?? project.lead_id}
+                </Link>
+              </span>
+              {project.type ? (
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium"
+                  style={{ backgroundColor: `${project.type.color}1a`, color: project.type.color }}
+                >
+                  {project.type.label}
+                </span>
+              ) : project.vertical ? (
+                <span className="text-xs uppercase tracking-wider text-gray-400">{project.vertical}</span>
+              ) : null}
             </div>
             <div className="mt-1 text-xs text-gray-400">
               {project.started_at && <span>Start: {formatDateDe(project.started_at)} · </span>}
@@ -81,18 +101,22 @@ export default async function ProjektDetailPage({
         )}
       </header>
 
-      <ProjectTabSwitcher current={tab} basePath={`/fulfillment/projekte/${id}`} />
+      <ProjectTabSwitcher current={tab} basePath={`/fulfillment/projekte/${id}`} tabs={tabs} />
 
       {tab === "uebersicht" && await (async () => {
         const [tasks, threadCount] = await Promise.all([
-          loadCachedTasks(id, false),
-          loadThreadsForProject(id).then((t) => t.length).catch(() => 0),
+          features.includes("tasks") ? loadCachedTasks(id, false) : Promise.resolve([]),
+          features.includes("mails") ? loadThreadsForProject(id).then((t) => t.length).catch(() => 0) : Promise.resolve(0),
         ]);
         const openTasks = tasks.filter((t) => !t.closed).length;
         return (
           <section className="grid gap-3 sm:grid-cols-3">
-            <Stat label="Offene Tasks" value={String(openTasks)} href={`/fulfillment/projekte/${id}?tab=tasks`} />
-            <Stat label="E-Mail-Threads" value={String(threadCount)} href={`/fulfillment/projekte/${id}?tab=mails`} />
+            {features.includes("tasks") && (
+              <Stat label="Offene Tasks" value={String(openTasks)} href={`/fulfillment/projekte/${id}?tab=tasks`} />
+            )}
+            {features.includes("mails") && (
+              <Stat label="E-Mail-Threads" value={String(threadCount)} href={`/fulfillment/projekte/${id}?tab=mails`} />
+            )}
             <Stat label="Status" value={PROJECT_STATUS_LABELS[project.status]} href={null} />
           </section>
         );
@@ -121,6 +145,23 @@ export default async function ProjektDetailPage({
         return (
           <section>
             <ProjectNotes projectId={project.id} notes={notes} currentUserId={user?.id ?? null} />
+          </section>
+        );
+      })()}
+
+      {tab === "social" && await (async () => {
+        const board = await getOrCreateBoard(project.id, project.lead_id, user?.id ?? null);
+        const posts = board ? await loadPostsForBoard(board.id) : [];
+        return (
+          <section>
+            <SocialBoardClient
+              projectId={project.id}
+              leadId={project.lead_id}
+              customerName={customer?.company_name ?? ""}
+              board={board ? { share_token: board.share_token, share_enabled: board.share_enabled } : null}
+              posts={posts}
+              embedded
+            />
           </section>
         );
       })()}
