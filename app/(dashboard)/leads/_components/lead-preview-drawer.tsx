@@ -46,7 +46,7 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
   const abortRef = useRef<AbortController | null>(null);
 
   const loadBundle = useCallback(
-    (id: string, opts?: { silent?: boolean }) => {
+    (id: string, opts?: { silent?: boolean; fresh?: boolean }) => {
       // Vorherigen Fetch abbrechen — bei schnellem Lead-zu-Lead-Klick haengt
       // der alte Request sonst weiter und verschwendet Server-Zeit.
       abortRef.current?.abort();
@@ -55,7 +55,13 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
 
       if (!opts?.silent) setLoading(true);
       setError(null);
-      fetch(`/api/leads/${id}/preview`, { signal: ac.signal })
+      // fresh=true (nach einer Mutation): Browser-Cache umgehen UND die
+      // gecachte Antwort ersetzen (cache:"reload"), damit auch ein spaeteres
+      // Zurueckblättern die frischen Daten zeigt — die Route cached sonst 30s.
+      fetch(`/api/leads/${id}/preview`, {
+        signal: ac.signal,
+        cache: opts?.fresh ? "reload" : "default",
+      })
         .then(async (r) => {
           if (!r.ok) throw new Error(`Status ${r.status}`);
           return r.json() as Promise<LeadDetailBundle>;
@@ -122,7 +128,7 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
   }, [previewId, siblingIds]);
 
   const handleRefresh = useCallback(() => {
-    if (previewId) loadBundle(previewId, { silent: true });
+    if (previewId) loadBundle(previewId, { silent: true, fresh: true });
     router.refresh();
   }, [previewId, loadBundle, router]);
 
@@ -232,7 +238,12 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
         )}
         {data && (
           <PreviewRefreshProvider onRefresh={handleRefresh}>
+            {/* key=lead.id: beim Blättern (prev/next) wird das Panel neu
+                gemountet, damit unkontrollierte Stammdaten-Inputs und der
+                Status-useState frisch aus dem neuen Lead initialisiert werden.
+                Sonst zeigt/speichert das Formular Daten des vorigen Leads. */}
             <LeadProfilePanel
+              key={data.lead.id}
               lead={data.lead}
               changes={data.changes}
               contacts={data.contacts}

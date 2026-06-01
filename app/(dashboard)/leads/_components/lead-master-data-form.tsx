@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Save } from "lucide-react";
 import type { Lead } from "@/lib/types";
 import { updateLead } from "../actions";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 
 const fieldLabels: Record<string, string> = {
   company_name: "Firmenname",
@@ -40,6 +41,13 @@ export function LeadMasterDataForm({ lead }: { lead: Lead }) {
   }
 
   const [state, formAction, pending] = useActionState(handleSubmit, undefined);
+  const notify = usePreviewRefresh();
+  // Nach erfolgreichem Speichern das Drawer-Bundle (frisch) und die Liste
+  // dahinter aktualisieren — sonst spiegelt die UI die Änderung nicht wider.
+  useEffect(() => {
+    if (state?.success) notify();
+  }, [state, notify]);
+
   const editableFields = Object.keys(fieldLabels);
 
   return (
