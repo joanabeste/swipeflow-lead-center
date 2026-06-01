@@ -45,6 +45,7 @@ export function EditContractForm({
       onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
       min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,
       notice_period_weeks: terms.noticeWeeks ? Number(terms.noticeWeeks) : 4,
+      withdrawal_right: terms.withdrawalRight,
       billing: address,
     });
     setBusy(false);

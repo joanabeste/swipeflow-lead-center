@@ -63,6 +63,7 @@ function buildTermsSnapshot(contract: ContractRow, creditorId: string): Record<s
     onsite_interval_months: contract.onsite_interval_months,
     min_term_months: contract.min_term_months,
     notice_period_weeks: contract.notice_period_weeks,
+    withdrawal_right: contract.withdrawal_right,
     creditor_id: creditorId,
     frozen_at: new Date().toISOString(),
   };
@@ -120,6 +121,8 @@ export interface CreateContractInput extends TypeSpecificInput {
   payment_mode: PaymentMode;
   installment_count?: number | null;
   payment_method: PaymentMethod;
+  /** Widerrufsbelehrung beilegen (Privatkunde / Unternehmen in Gründung). */
+  withdrawal_right?: boolean;
   billing?: BillingInput;
 }
 
@@ -293,6 +296,7 @@ export async function createContract(input: CreateContractInput): Promise<Result
       payment_mode: paymentMode,
       installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      withdrawal_right: !!input.withdrawal_right,
       ...typeCols,
       ...normBilling(input.billing),
       created_by: ctx.user.id,
@@ -317,6 +321,8 @@ export interface UpdateDraftInput extends TypeSpecificInput {
   payment_mode: PaymentMode;
   installment_count?: number | null;
   payment_method: PaymentMethod;
+  /** Widerrufsbelehrung beilegen (Privatkunde / Unternehmen in Gründung). */
+  withdrawal_right?: boolean;
   billing?: BillingInput;
 }
 
@@ -352,6 +358,7 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
       payment_mode: paymentMode,
       installment_count: paymentMode === "raten" ? input.installment_count : null,
       payment_method: input.payment_method,
+      withdrawal_right: !!input.withdrawal_right,
       ...typeCols,
       ...normBilling(input.billing),
     })

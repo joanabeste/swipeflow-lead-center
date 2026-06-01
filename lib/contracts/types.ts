@@ -42,6 +42,9 @@ export interface ContractRow {
   min_term_months: number;
   notice_period_weeks: number;
 
+  // Widerrufsbelehrung beilegen (nur bei Privatkunden / Unternehmen in Gründung).
+  withdrawal_right: boolean;
+
   billing_company: string | null;
   billing_street: string | null;
   billing_zip: string | null;

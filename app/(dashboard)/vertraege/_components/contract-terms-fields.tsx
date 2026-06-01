@@ -23,6 +23,8 @@ export interface TermsState {
   onsiteIntervalMonths: string;
   minTermMonths: string;
   noticeWeeks: string;
+  // Widerrufsbelehrung beilegen (Privatkunde / Unternehmen in Gründung)
+  withdrawalRight: boolean;
 }
 
 function addDays(iso: string, days: number): string {
@@ -198,6 +200,19 @@ export function ContractTermsFields({
         {isContent && (
           <p className="text-[11px] text-gray-400">Die monatliche Pauschale wird monatlich abgerechnet.</p>
         )}
+      </Section>
+
+      <Section title="Widerrufsrecht">
+        <Field label="Privatkunde oder Unternehmen in Gründung">
+          <div className="flex gap-2">
+            <Toggle active={value.withdrawalRight} onClick={() => set({ withdrawalRight: true })}>Ja</Toggle>
+            <Toggle active={!value.withdrawalRight} onClick={() => set({ withdrawalRight: false })}>Nein</Toggle>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-400">
+            Bei „Ja" wird dem Vertrag eine Widerrufsbelehrung beigelegt (Verbraucher-Widerrufsrecht, § 13 BGB).
+            Für gewerbliche Kunden (B2B) auf „Nein" lassen.
+          </p>
+        </Field>
       </Section>
     </>
   );

@@ -56,6 +56,9 @@ export interface ContractRenderInput {
   minTermMonths: number;
   noticePeriodWeeks: number;
 
+  // Widerrufsbelehrung beilegen (Privatkunde / Unternehmen in Gründung).
+  withdrawalRight: boolean;
+
   // SEPA-Gläubiger (aus Env)
   creditor: { id: string; name: string; address: string };
   // SEPA-Mandatsreferenz (stabil pro Vertrag)
@@ -222,10 +225,16 @@ function sepaMandateSection(input: ContractRenderInput): string {
 }
 
 // Widerrufsbelehrung (Fernabsatz, Dienstleistung) — gilt nur für Verbraucher
-// (§ 13 BGB). Über-inklusiv für alle Verträge gerendert und klar auf Verbraucher
-// eingegrenzt, sodass Unternehmer hieraus kein Widerrufsrecht ableiten.
+// (§ 13 BGB). Wird pro Vertrag über input.withdrawalRight gesteuert (Checkbox
+// "Privatkunde / Unternehmen in Gründung" auf /vertraege/neu) und klar auf
+// Verbraucher eingegrenzt, sodass Unternehmer hieraus kein Widerrufsrecht ableiten.
 // HINWEIS: Vor dem Produktiveinsatz anwaltlich prüfen lassen.
-function widerrufSection(): string {
+function widerrufLeistung(type: ContractType): string {
+  if (type === "recruiting") return "Durchführung einer Social-Recruiting-Kampagne zur Personalgewinnung";
+  if (type === "content") return "Social-Media-Betreuung (Content-Erstellung und -Veröffentlichung)";
+  return "Erstellung, Hosting und Wartung einer Webseite";
+}
+function widerrufSection(input: ContractRenderInput): string {
   const email = (
     process.env.CONTRACTS_WIDERRUF_EMAIL ||
     process.env.CENTRAL_SMTP_FROM_EMAIL ||
@@ -249,7 +258,7 @@ function widerrufSection(): string {
     <p class="muted">(Wenn Sie den Vertrag widerrufen wollen, füllen Sie bitte dieses Formular aus und senden Sie es zurück.)</p>
     <div class="widerruf-form">
       <p>An ${kontakt}:</p>
-      <p>Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung: Erstellung, Hosting und Wartung einer Webseite.</p>
+      <p>Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung: ${widerrufLeistung(input.type)}.</p>
       <p>Bestellt am (*) / erhalten am (*): ____________________</p>
       <p>Name des/der Verbraucher(s): ____________________</p>
       <p>Anschrift des/der Verbraucher(s): ____________________</p>
@@ -439,7 +448,7 @@ function webdesignBody(input: ContractRenderInput): string {
     <p>(2) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
     <p>(3) Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Dienstleisters.</p>
 
-    ${widerrufSection()}
+    ${input.withdrawalRight ? widerrufSection(input) : ""}
 
     ${sepaMandateSection(input)}
 
@@ -648,6 +657,8 @@ function recruitingBody(input: ContractRenderInput): string {
     <p>10.1 Änderungen und Ergänzungen dieses AV-Vertrags bedürfen der Schriftform.</p>
     <p>10.2 Sollten einzelne Bestimmungen dieses Vertrages unwirksam sein oder werden, so bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.</p>
     <p>10.3 Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist der Sitz des Verantwortlichen.</p>
+
+    ${input.withdrawalRight ? widerrufSection(input) : ""}
 
     ${sepaMandateSection(input)}
 
@@ -865,6 +876,8 @@ function contentBody(input: ContractRenderInput): string {
     <p>(1) Änderungen und Ergänzungen dieses Teils bedürfen der Textform.</p>
     <p>(2) Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen unberührt.</p>
     <p>(3) Es gilt deutsches Recht. Gerichtsstand ist der Sitz der Agentur.</p>
+
+    ${input.withdrawalRight ? widerrufSection(input) : ""}
 
     ${sepaMandateSection(input)}
 

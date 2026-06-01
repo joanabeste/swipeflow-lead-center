@@ -37,6 +37,7 @@ const DEFAULT_TERMS: TermsState = {
   onsiteIntervalMonths: "3",
   minTermMonths: "0",
   noticeWeeks: "4",
+  withdrawalRight: false,
 };
 
 const RECRUITING_DEFAULT_TERMS: TermsState = {
@@ -146,6 +147,7 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
       onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
       min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,
       notice_period_weeks: terms.noticeWeeks ? Number(terms.noticeWeeks) : 4,
+      withdrawal_right: terms.withdrawalRight,
       billing: address,
     });
     if ("error" in res) {

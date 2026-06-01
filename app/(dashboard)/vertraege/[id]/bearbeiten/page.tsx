@@ -39,6 +39,7 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
     onsiteIntervalMonths: contract.onsite_interval_months != null ? String(contract.onsite_interval_months) : "",
     minTermMonths: String(contract.min_term_months),
     noticeWeeks: String(contract.notice_period_weeks),
+    withdrawalRight: contract.withdrawal_right,
   };
 
   const initialAddress: AddressState = {

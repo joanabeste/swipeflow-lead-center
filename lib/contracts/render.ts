@@ -80,6 +80,7 @@ export function buildRenderInput(
     onsiteIntervalMonths: contract.onsite_interval_months,
     minTermMonths: contract.min_term_months,
     noticePeriodWeeks: contract.notice_period_weeks,
+    withdrawalRight: contract.withdrawal_right,
     creditor: opts.creditor,
     mandateReference: mandateReference(contract.id),
     sepa,
