@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { LeadProfilePanel } from "../lead-profile-panel";
 import { LeadScreenshotCard } from "../_components/lead-screenshot-card";
 import { LeadTrafficLightCard } from "../_components/lead-traffic-light-card";
+import { LeadCrmActionsCard } from "../_components/lead-crm-actions-card";
 import { loadLeadDetail } from "@/lib/leads/load-lead-detail";
 import { normalizeWebsiteUrl } from "@/lib/website-url";
 
@@ -25,6 +26,11 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
 
   const rightColumn = (
     <>
+      <LeadCrmActionsCard
+        leadId={data.lead.id}
+        status={data.lead.status}
+        crmStatusId={data.lead.crm_status_id}
+      />
       <LeadScreenshotCard
         screenshotPath={data.lead.website_screenshot_path}
         takenAt={data.lead.website_screenshot_taken_at}

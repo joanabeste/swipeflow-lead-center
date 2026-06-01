@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { enrichLead } from "@/lib/enrichment/enrich-lead";
 import type { EnrichmentConfig, ServiceMode } from "@/lib/types";
+import { bulkUpdateStatus } from "./actions";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 
 export async function enrichLeadAction(
   leadId: string,
@@ -24,6 +26,37 @@ export async function enrichLeadAction(
     return { error: result.error ?? "Anreicherung fehlgeschlagen." };
   }
 
+  return { success: true };
+}
+
+/**
+ * Reichert einen Lead an und übernimmt ihn anschließend automatisch ins CRM.
+ * Bei technischem Anreicherungsfehler wird NICHT verschoben (Error zurück).
+ * Sonst wird IMMER verschoben (Nutzer-Entscheidung) — auch bei rot/ausgeschlossen;
+ * forciert status='qualified' + gültige crm_status_id (repariert auch den Fall,
+ * dass enrichLead zwar qualifiziert, aber nie eine crm_status_id schreibt).
+ */
+export async function enrichAndMoveToCrm(
+  leadId: string,
+  config?: EnrichmentConfig,
+  serviceMode: ServiceMode = "recruiting",
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const result = await enrichLead(leadId, user?.id ?? null, config, serviceMode);
+  if (!result.success) {
+    return { error: result.error ?? "Anreicherung fehlgeschlagen." };
+  }
+
+  const move = await bulkUpdateStatus([leadId], "qualified", DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode]);
+  if ("error" in move && move.error) {
+    return { error: move.error };
+  }
+
+  // bulkUpdateStatus revalidiert bereits /leads + /crm; Detail-Pfade ergänzen.
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/crm/${leadId}`);
   return { success: true };
 }
 
