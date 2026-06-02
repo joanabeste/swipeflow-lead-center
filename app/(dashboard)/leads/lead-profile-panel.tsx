@@ -10,8 +10,10 @@ import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead, bulkUpdateStatus } from "./actions";
 import { enrichAndMoveToCrm } from "./enrichment-actions";
-import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE, MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
+import { useDialog } from "@/components/dialog";
+import { MoveToCrmStatusPicker } from "./_components/move-to-crm-status-picker";
 import { ResizableColumns } from "@/components/resizable-columns";
 import { SingleLeadEnrichModal } from "./single-lead-enrich-modal";
 import { EnrichmentDiagnosisModal } from "./enrichment-diagnosis-modal";
@@ -68,8 +70,15 @@ export function LeadProfilePanel({
 }: Props) {
   const router = useRouter();
   const notify = usePreviewRefresh();
+  const dialog = useDialog();
   const { mode: serviceMode } = useServiceMode();
   const { addToast } = useToastContext();
+
+  // Auswählbare CRM-Zielstatus für „Ins CRM": aktive, NICHT-archivierte Status der
+  // aktuellen Vertikale (vertical=null = agnostisch). Archivierte gehören nicht hierher.
+  const crmStatusOptions = customStatuses.filter(
+    (s) => s.is_active && !s.is_archived && (s.vertical === MODE_TO_VERTICAL[serviceMode] || s.vertical === null),
+  );
   const [currentStatus, setCurrentStatus] = useState<LeadStatus>(lead.status);
   const [statusPending, startStatusTransition] = useTransition();
   const [deletePending, startDeleteTransition] = useTransition();
@@ -89,11 +98,26 @@ export function LeadProfilePanel({
   const alreadyInCrm =
     lead.crm_status_id != null || currentStatus === "qualified" || currentStatus === "exported";
 
-  function handleMoveToCrm() {
+  async function handleMoveToCrm() {
     if (crmPending) return;
+    // Vorher CRM-Status wählen lassen (Default vorausgewählt → schnelles Bestätigen
+    // hält das alte Verhalten). Abbruch (null) → nichts tun.
+    const chosen = await dialog.show<string>({
+      size: "max-w-md",
+      render: (close) => (
+        <MoveToCrmStatusPicker
+          count={1}
+          statuses={crmStatusOptions}
+          defaultStatusId={DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode]}
+          onCancel={() => close()}
+          onConfirm={(crmStatusId) => close(crmStatusId)}
+        />
+      ),
+    });
+    if (!chosen) return;
     setCrmBusy("crm");
     startCrmTransition(async () => {
-      const res = await bulkUpdateStatus([lead.id], "qualified", DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode]);
+      const res = await bulkUpdateStatus([lead.id], "qualified", chosen);
       setCrmBusy(null);
       if ("error" in res && res.error) {
         addToast(`Fehler: ${res.error}`, "error");
@@ -262,7 +286,7 @@ export function LeadProfilePanel({
           {/* Nur ins CRM (ohne Anreicherung). */}
           {!alreadyInCrm && (
             <button
-              onClick={handleMoveToCrm}
+              onClick={() => void handleMoveToCrm()}
               disabled={crmPending}
               title="Lead direkt ins CRM übernehmen"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"

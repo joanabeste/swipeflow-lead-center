@@ -28,6 +28,7 @@ export function LeadTableWrapper(props: Props) {
     <>
       <LeadTable
         {...tableProps}
+        customStatuses={customStatuses}
         onOpenEnrichModal={(ids) => setEnrichModalIds(ids)}
       />
       {enrichModalIds && (

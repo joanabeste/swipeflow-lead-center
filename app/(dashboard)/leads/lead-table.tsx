@@ -11,13 +11,15 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-import type { Lead, ServiceMode } from "@/lib/types";
+import type { Lead, ServiceMode, CustomLeadStatus } from "@/lib/types";
 import { TRAFFIC_LIGHT_OPTIONS } from "@/lib/types";
 import type { ColumnPref } from "@/lib/table-prefs";
 import { bulkUpdateStatus, bulkDeleteLeads, bulkAddToBlacklist, bulkArchiveLeads, bulkRestoreCrmStatus } from "./actions";
 import { useToastContext } from "../toast-provider";
 import { useServiceMode } from "@/lib/service-mode";
-import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
+import { DEFAULT_QUALIFY_STATUS_BY_MODE, MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
+import { useDialog } from "@/components/dialog";
+import { MoveToCrmStatusPicker } from "./_components/move-to-crm-status-picker";
 import { SearchBox } from "@/components/table/search-box";
 import { TablePagination } from "@/components/table/pagination";
 import { ColumnPicker } from "@/components/table/column-picker";
@@ -75,6 +77,7 @@ interface Props {
   currentStatus: string;
   currentFilters: Record<string, string>;
   initialColumnPrefs: ColumnPref[];
+  customStatuses: CustomLeadStatus[];
   onOpenEnrichModal?: (ids: string[]) => void;
 }
 
@@ -88,12 +91,21 @@ export function LeadTable({
   currentStatus,
   currentFilters,
   initialColumnPrefs,
+  customStatuses,
   onOpenEnrichModal,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToastContext();
+  const dialog = useDialog();
   const { mode: serviceMode } = useServiceMode();
+
+  // Auswählbare CRM-Zielstatus für „Ins CRM": aktive, NICHT-archivierte Status der
+  // aktuellen Vertikale (vertical=null = agnostisch, daher auch erlaubt). Archivierte
+  // („Passt nicht" …) gehören nicht hierher — dafür gibt es „Aussortieren".
+  const crmStatusOptions = customStatuses.filter(
+    (s) => s.is_active && !s.is_archived && (s.vertical === MODE_TO_VERTICAL[serviceMode] || s.vertical === null),
+  );
 
   const modeColumns = ALL_COLUMNS
     .filter((c) => c.modes.includes(serviceMode))
@@ -116,6 +128,37 @@ export function LeadTable({
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [bulkStatus, setBulkStatus] = useState("qualified");
   const [bulkPending, startBulkTransition] = useTransition();
+
+  // Öffnet den Status-Picker und verschiebt die gewählten Leads ins CRM mit dem
+  // gewählten CRM-Status. Bricht der Nutzer ab (null), passiert nichts.
+  async function moveSelectionToCrm() {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    const chosen = await dialog.show<string>({
+      size: "max-w-md",
+      render: (close) => (
+        <MoveToCrmStatusPicker
+          count={ids.length}
+          statuses={crmStatusOptions}
+          defaultStatusId={DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode]}
+          onCancel={() => close()}
+          onConfirm={(crmStatusId) => close(crmStatusId)}
+        />
+      ),
+    });
+    if (!chosen) return;
+    const count = ids.length;
+    startBulkTransition(async () => {
+      const res = await bulkUpdateStatus(ids, "qualified", chosen);
+      if (res.error) {
+        addToast(`Fehler: ${res.error}`, "error");
+        return;
+      }
+      addToast(`${count} Lead${count === 1 ? "" : "s"} ins CRM verschoben`);
+      setSelected(new Set());
+      router.push("/crm");
+    });
+  }
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -336,21 +379,7 @@ export function LeadTable({
           </button>
           <button
             disabled={bulkPending}
-            onClick={() => {
-              const ids = Array.from(selected);
-              const count = ids.length;
-              const defaultCrmId = DEFAULT_QUALIFY_STATUS_BY_MODE[serviceMode];
-              startBulkTransition(async () => {
-                const res = await bulkUpdateStatus(ids, "qualified", defaultCrmId);
-                if (res.error) {
-                  addToast(`Fehler: ${res.error}`, "error");
-                  return;
-                }
-                addToast(`${count} Lead${count === 1 ? "" : "s"} ins CRM verschoben`);
-                setSelected(new Set());
-                router.push("/crm");
-              });
-            }}
+            onClick={() => void moveSelectionToCrm()}
             className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800"
           >
             <Send className="h-3.5 w-3.5" />
