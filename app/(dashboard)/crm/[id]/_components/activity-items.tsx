@@ -176,6 +176,29 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
     });
   }
 
+  // „Duplikat wieder trennen": macht den Merge rückgängig. `leadId` ist der Survivor,
+  // `note.merged_from_lead_id` der archivierte Verlierer. Nur an der echten Merge-Notiz sichtbar.
+  function handleUnmerge() {
+    if (!note.merged_from_lead_id) return;
+    if (
+      !confirm(
+        "Dieses zusammengeführte Duplikat wieder trennen?\n\nDer Ursprungs-Lead wird reaktiviert; " +
+          "übernommene Aktivitäten und befüllte Stammdaten werden — soweit nachvollziehbar — zurückübertragen.",
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const res = await unmergeDuplicate(leadId, note.merged_from_lead_id!);
+      if ("error" in res) {
+        addToast(res.error, "error");
+        return;
+      }
+      addToast(res.info ?? "Duplikat wieder getrennt", "success");
+      notify();
+    });
+  }
+
   if (editing) {
     return (
       <div>
@@ -254,12 +277,12 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
   return (
     <div className="group relative">
       {note.merged_from_company && (
-        <p className="mb-1">
+        <div className="mb-1 flex flex-wrap items-center gap-1.5">
           {note.merged_from_lead_id ? (
             <Link
               href={`/crm/${note.merged_from_lead_id}`}
               className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-200 hover:underline dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
-              title="Ursprungs-Lead ansehen / wiederherstellen (trennen)"
+              title="Ursprungs-Lead ansehen"
             >
               ↪ übernommen von {note.merged_from_company}
             </Link>
@@ -271,7 +294,19 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
               ↪ übernommen von {note.merged_from_company}
             </span>
           )}
-        </p>
+          {/* „Trennen" nur an der echten Merge-Notiz (🔀) — nicht an übernommenen Kind-Notizen. */}
+          {note.merged_from_lead_id && note.content?.startsWith("🔀") && (
+            <button
+              onClick={handleUnmerge}
+              disabled={pending}
+              title="Duplikat wieder trennen — Ursprungs-Lead reaktivieren"
+              className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-50 dark:border-amber-900/50 dark:bg-[#232325] dark:text-amber-300 dark:hover:bg-amber-900/20"
+            >
+              {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+              Trennen
+            </button>
+          )}
+        </div>
       )}
       {note.content && (
         <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
