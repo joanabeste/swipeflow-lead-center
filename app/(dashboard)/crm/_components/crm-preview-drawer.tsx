@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 import { Drawer } from "@/components/drawer";
 import { CrmLeadDetail } from "../[id]/crm-lead-detail";
@@ -24,6 +25,7 @@ interface Props {
 const SLIDE_OUT_MS = 200;
 
 export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClose }: Props) {
+  const router = useRouter();
   const [data, setData] = useState<CrmDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,14 +34,20 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClo
   const { addToast } = useToastContext();
 
   const loadBundle = useCallback(
-    (id: string, opts?: { silent?: boolean }) => {
+    (id: string, opts?: { silent?: boolean; fresh?: boolean }) => {
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
       if (!opts?.silent) setLoading(true);
       setError(null);
-      fetch(`/api/crm/${id}/preview`, { signal: ac.signal })
+      // fresh=true (nach einer Mutation, z.B. Merge): die 30s-HTTP-Cache-Antwort
+      // umgehen UND ersetzen (cache:"reload"), sonst liefert der stille Refetch
+      // den veralteten Vor-Merge-Stand und das offene Panel aktualisiert sich nicht.
+      fetch(`/api/crm/${id}/preview`, {
+        signal: ac.signal,
+        cache: opts?.fresh ? "reload" : "default",
+      })
         .then(async (r) => {
           if (!r.ok) throw new Error(`Status ${r.status}`);
           return r.json() as Promise<CrmDetailBundle>;
@@ -86,9 +94,13 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClo
     prefetchNeighbors(siblingIds, previewId, "crm", 2);
   }, [previewId, siblingIds]);
 
+  // notify() aus dem Panel landet hier: das offene Lead-Bundle frisch nachladen
+  // (Cache umgehen) UND die CRM-Liste hinter dem Drawer revalidieren. Der Drawer
+  // bleibt offen — gleiche Ansicht, nur mit aktuellen Daten.
   const handleRefresh = useCallback(() => {
-    if (previewId) loadBundle(previewId, { silent: true });
-  }, [previewId, loadBundle]);
+    if (previewId) loadBundle(previewId, { silent: true, fresh: true });
+    router.refresh();
+  }, [previewId, loadBundle, router]);
 
   // closing bleibt true bis previewId durch onClose null wird (useEffect oben
   // resetet) — sonst flackert der Drawer 1 Frame lang auf.

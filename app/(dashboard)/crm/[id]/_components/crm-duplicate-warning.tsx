@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Copy, Loader2, ExternalLink, Check } from "lucide-react";
 import { mergeDuplicateLead, dismissDuplicatePair } from "../../../leads/actions";
+import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 
 // Klartext-Begründung, warum ein Lead als mögliches Duplikat gilt.
@@ -30,7 +30,12 @@ export function CrmDuplicateWarning({
   leadId: string;
   candidates: DuplicateCandidate[];
 }) {
-  const router = useRouter();
+  // notify() = im Drawer: re-fetcht das offene Lead-Bundle (Notizen, Anrufe,
+  // Kontakte, zusammengeführte Telefon-/Domain-Daten …) UND aktualisiert die
+  // Liste dahinter — der Drawer bleibt offen. Auf der Vollseite Fallback auf
+  // router.refresh(). NICHT direkt router.refresh() nutzen: das lädt nur den
+  // Server-Tree hinter dem Drawer neu, nicht das per fetch geladene Panel.
+  const notify = usePreviewRefresh();
   const [items, setItems] = useState<DuplicateCandidate[]>(candidates);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +62,7 @@ export function CrmDuplicateWarning({
         return;
       }
       setItems((prev) => prev.filter((c) => c.id !== loserId));
-      router.refresh();
+      notify();
     });
   }
 
@@ -79,7 +84,7 @@ export function CrmDuplicateWarning({
         return;
       }
       setItems((prev) => prev.filter((c) => c.id !== otherId));
-      router.refresh();
+      notify();
     });
   }
 
