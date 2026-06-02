@@ -9,6 +9,7 @@ import {
   type LeadForCluster,
 } from "@/lib/leads/duplicate-clusters";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { insertMergeNote } from "@/lib/leads/merge-note";
 import { revalidatePath } from "next/cache";
 
 export interface ClusterView {
@@ -106,6 +107,8 @@ export async function mergeAllClusters(): Promise<{ merged: number; losers: numb
         if (error) throw new Error(error.message);
         losersMerged++;
       }
+      // Vermerk im Aktivitäten-Feed des behaltenen Leads (best-effort).
+      await insertMergeNote(db, cluster.survivor.id, cluster.losers);
       await logAudit({
         userId: user?.id ?? null,
         action: "lead.merged",

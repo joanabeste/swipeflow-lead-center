@@ -8,6 +8,7 @@ import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 import { checkSection } from "@/lib/auth";
+import { insertMergeNote } from "@/lib/leads/merge-note";
 
 // Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
 // rohem Record<string, ...> aufgerufen. Ohne Whitelist koennte ein Browser-
@@ -256,6 +257,14 @@ export async function mergeDuplicateLead(
   }
 
   const db = createServiceClient();
+
+  // Verlierer-Stammdaten VOR dem Merge lesen — für die Notiz auf dem Survivor.
+  const { data: loser } = await db
+    .from("leads")
+    .select("company_name, website, city")
+    .eq("id", loserId)
+    .maybeSingle();
+
   const { error } = await db.rpc("merge_lead", {
     p_survivor: survivorId,
     p_loser: loserId,
@@ -270,6 +279,9 @@ export async function mergeDuplicateLead(
         : error.message,
     };
   }
+
+  // Vermerk im Aktivitäten-Feed des behaltenen Leads (best-effort).
+  await insertMergeNote(db, survivorId, [loser ?? { company_name: null }]);
 
   await logAudit({
     userId: ctx.user.id,
