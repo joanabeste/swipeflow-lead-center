@@ -9,6 +9,8 @@ import {
   validateCsvSize,
   sanitizeCellValue,
   createImportLog,
+  fetchImportLogsPage,
+  IMPORT_HISTORY_PAGE_SIZE,
 } from "@/lib/csv/import-helpers";
 import { ingestLeads } from "@/lib/leads/ingest";
 
@@ -189,4 +191,20 @@ export async function loadMappingTemplates() {
     .select("*")
     .order("name");
   return data ?? [];
+}
+
+/**
+ * Lädt die nächste Seite der Vergangene-Imports-Liste ab `offset`
+ * (für den "Mehr laden"-Button in der Import-Historie).
+ */
+export async function loadMoreImports(offset: number) {
+  const db = createServiceClient();
+  const { data, error } = await fetchImportLogsPage(
+    db,
+    offset,
+    offset + IMPORT_HISTORY_PAGE_SIZE - 1,
+    false,
+  );
+  if (error) return { error: error.message };
+  return { imports: data ?? [] };
 }

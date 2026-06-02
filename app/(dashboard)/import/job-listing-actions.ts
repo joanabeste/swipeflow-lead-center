@@ -20,7 +20,9 @@ import {
   createImportLog,
   finalizeImportLog,
   batchInsert,
+  type ExistingLeadRow,
 } from "@/lib/csv/import-helpers";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 // BA-Spalten Mapping
 const COLUMN_MAP: Record<string, string> = {
@@ -199,12 +201,15 @@ export async function processJobListingImport(fileContent: string): Promise<{
     .select("id")
     .eq("is_archived", true);
   const archivedStatusIds = new Set<string>((archivedRows ?? []).map((r) => r.id as string));
-  const { data: existingLeads } = await db
-    .from("leads")
-    .select(
-      "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
-    );
-  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
+  // WICHTIG: paginiert laden (fetchAllRows) — ein einfaches .select() ist bei
+  // PostgREST auf ~1000 Zeilen gedeckelt. Bei > 1000 Leads waeren aeltere Leads
+  // sonst unsichtbar fuer den Dedup-Index → Re-Importe legen Duplikate an.
+  const existingLeads = await fetchAllRows<ExistingLeadRow>(
+    db,
+    "leads",
+    "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
+  );
+  const leadIndex = buildLeadIndex(existingLeads, archivedStatusIds);
 
   let imported = 0;
   let updated = 0;

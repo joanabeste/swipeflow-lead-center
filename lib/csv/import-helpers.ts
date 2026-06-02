@@ -257,6 +257,30 @@ export function buildLeadIndex(
 }
 
 /**
+ * Nimmt einen frisch im selben Import-Batch eingeplanten (noch nicht
+ * eingefuegten) Lead in den In-Memory-Index auf, damit eine spaetere Zeile
+ * desselben Batches per Domain/E-Mail/Telefon/Name gegen ihn matcht
+ * (Within-Batch-Dedup). Pendant zu `addLeadToIndex` in dedup.ts, aber fuer den
+ * `LeadIndex`-Typ der Scraper-Importe. Der Lead gilt als nicht-archiviert und
+ * nicht im CRM (frischer Import-Lead).
+ */
+export function addToLeadIndex(
+  index: LeadIndex,
+  lead: { id: string; company_name: string; website: string | null; email?: string | null; phone?: string | null },
+): void {
+  if (lead.website) {
+    const norm = normalizeDomain(lead.website);
+    if (norm && !index.byDomain.has(norm)) index.byDomain.set(norm, lead.id);
+  }
+  index.byName.push({ id: lead.id, name: lead.company_name });
+  const e = normalizeEmail(lead.email ?? null);
+  if (e && !index.byEmail.has(e)) index.byEmail.set(e, lead.id);
+  const p = normalizePhone(lead.phone ?? null);
+  if (p && !index.byPhone.has(p)) index.byPhone.set(p, lead.id);
+  index.crmStatusById.set(lead.id, { status: null, crmStatusId: null });
+}
+
+/**
  * Prüft, ob ein bekannter Lead bereits im CRM zuhause ist.
  * Kriterium: crm_status_id gesetzt ODER status ∈ {qualified, exported}.
  */
@@ -415,6 +439,52 @@ export async function finalizeImportLog(
       .update({ status: stats.status ?? "completed" })
       .eq("id", logId);
   }
+}
+
+// ─── Import-Historie laden (mit Schema-Fallback) ────────────
+
+export const IMPORT_LOG_BASE_COLS =
+  "id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count";
+export const IMPORT_LOG_WITH_CSV_COLS = `${IMPORT_LOG_BASE_COLS}, csv_storage_path, csv_expires_at`;
+/** Seitengröße der Vergangene-Imports-Liste (page.tsx + "Mehr laden"). */
+export const IMPORT_HISTORY_PAGE_SIZE = 20;
+
+/**
+ * Lädt eine Seite der Import-Historie (neueste zuerst), robust gegen alte
+ * Schemata ohne CSV-Storage-Spalten (Code 42703 → Fallback auf Basis-Spalten).
+ * `from`/`to` sind inklusive Range-Indizes (Supabase `.range`). Sekundär nach `id`
+ * sortiert, damit die Paginierung bei gleichem `created_at` stabil bleibt
+ * (keine Duplikate/Lücken zwischen den Seiten).
+ */
+export async function fetchImportLogsPage(
+  db: SupabaseClient,
+  from: number,
+  to: number,
+  withCount = false,
+): Promise<{
+  data: Record<string, unknown>[] | null;
+  error: { message: string; code?: string } | null;
+  count: number | null;
+}> {
+  const run = (cols: string) =>
+    db
+      .from("import_logs")
+      .select(cols, withCount ? { count: "exact" } : undefined)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to);
+
+  // Daten-Cast: Supabase kann die dynamischen Spalten-Strings nicht typisieren
+  // (liefert sonst GenericStringError) — die Aufrufer behandeln die Zeilen ohnehin
+  // generisch als Record<string, unknown>.
+  const asRows = (d: unknown) => (d as Record<string, unknown>[] | null) ?? null;
+
+  const first = await run(IMPORT_LOG_WITH_CSV_COLS);
+  if (first.error && first.error.code === "42703") {
+    const second = await run(IMPORT_LOG_BASE_COLS);
+    return { data: asRows(second.data), error: second.error, count: second.count ?? null };
+  }
+  return { data: asRows(first.data), error: first.error, count: first.count ?? null };
 }
 
 // ─── Batch-Insert Helper ────────────────────────────────────

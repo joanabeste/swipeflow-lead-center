@@ -20,6 +20,8 @@ import { LeadTodosCard } from "./_components/lead-todos-card";
 import { PromoteToCustomerButton } from "./_components/promote-to-customer-button";
 import { SingleLeadEnrichModal } from "../../leads/single-lead-enrich-modal";
 import { deleteLead, bulkArchiveLeads, bulkRestoreCrmStatus } from "../../leads/actions";
+import { CrmDuplicateWarning } from "./_components/crm-duplicate-warning";
+import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 import { useServiceMode } from "@/lib/service-mode";
 
 type AuthorProfile = { name: string; avatar_url: string | null };
@@ -61,6 +63,8 @@ interface Props {
   caseStudies: CaseStudy[];
   landingPages: LandingPage[];
   todos: LeadTodo[];
+  /** Mutmaßliche Duplikate dieses Leads (serverseitig ermittelt). Leeres Array → kein Banner. */
+  duplicates?: DuplicateCandidate[];
   backHref?: string;
   /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
   onBack?: () => void;
@@ -72,6 +76,7 @@ interface Props {
 export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
+  duplicates = [],
   backHref = "/crm",
   onBack,
   forceStackedLayout = false,
@@ -196,6 +201,11 @@ export function CrmLeadDetail({
           </button>
         </div>
       </div>
+
+      {/* Duplikat-Warnung — andere Leads, die mutmaßlich dieselbe Firma sind. */}
+      {duplicates.length > 0 && (
+        <CrmDuplicateWarning leadId={lead.id} candidates={duplicates} />
+      )}
 
       {/* Aussortier-Banner — Lead ist auf einen archived Status gesetzt. */}
       {archivedStatus && (

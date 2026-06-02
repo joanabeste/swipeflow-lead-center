@@ -11,6 +11,7 @@ import {
   sanitizeCellValue,
   loadImportContext,
   buildLeadIndex,
+  addToLeadIndex,
   findMatchingLead,
   createImportLog,
   finalizeImportLog,
@@ -21,7 +22,9 @@ import {
   parseLatLngFromMapsUrl,
   parseGoogleRating,
   parseGoogleReviewCount,
+  type ExistingLeadRow,
 } from "@/lib/csv/import-helpers";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { reverseGeocodeNominatim } from "@/lib/geo/geocode";
 
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
@@ -91,10 +94,15 @@ export async function processGoogleMapsImport(
     .eq("is_archived", true);
   const archivedStatusIds = new Set((archivedRows ?? []).map((r) => r.id as string));
 
-  const { data: existingLeads } = await db
-    .from("leads")
-    .select("id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status");
-  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
+  // WICHTIG: paginiert laden (fetchAllRows) — ein einfaches .select() ist bei
+  // PostgREST auf ~1000 Zeilen gedeckelt. Bei > 1000 Leads waeren aeltere Leads
+  // sonst unsichtbar fuer den Dedup-Index → Re-Importe legen Duplikate an.
+  const existingLeads = await fetchAllRows<ExistingLeadRow>(
+    db,
+    "leads",
+    "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
+  );
+  const leadIndex = buildLeadIndex(existingLeads, archivedStatusIds);
 
   let imported = 0;
   let updated = 0;
@@ -190,6 +198,15 @@ export async function processGoogleMapsImport(
         source_import_id: importLog.id,
         status: "imported",
         created_by: user.id,
+      });
+      // Within-Batch-Dedup: frisch eingeplanten Lead in den Index aufnehmen,
+      // damit dieselbe Firma weiter unten in derselben CSV nicht ein zweites Mal
+      // angelegt wird (Google-Maps-Exports listen Firmen oft doppelt).
+      addToLeadIndex(leadIndex, {
+        id: crypto.randomUUID(),
+        company_name: companyName,
+        website: domain,
+        phone,
       });
     }
   }

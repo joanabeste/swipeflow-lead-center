@@ -1,5 +1,6 @@
 import { ExternalLink, Briefcase } from "lucide-react";
 import { createServiceClient } from "@/lib/supabase/server";
+import { fetchImportLogsPage, IMPORT_HISTORY_PAGE_SIZE } from "@/lib/csv/import-helpers";
 import { ImportTabs } from "./import-tabs";
 import { ImportHistory } from "./import-history";
 
@@ -17,33 +18,14 @@ export default async function ImportPage() {
     .select("*")
     .order("name");
 
-  // Robust gegen alte Schemata: zuerst mit den neuen CSV-Storage-Spalten
-  // versuchen, bei „column does not exist" auf die Basis-Spalten fallback.
-  // So funktioniert die Seite auch bevor Migration 060 in der DB liegt.
-  const BASE_COLS = "id, file_name, row_count, imported_count, duplicate_count, error_count, status, created_at, import_type, source_url, updated_count, skipped_count";
-  const WITH_CSV_COLS = `${BASE_COLS}, csv_storage_path, csv_expires_at`;
-  let imports: Record<string, unknown>[] | null = null;
-  let importsError: { message: string; code?: string } | null = null;
-  let count: number | null = null;
-  const first = await db
-    .from("import_logs")
-    .select(WITH_CSV_COLS, { count: "exact" })
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (first.error && first.error.code === "42703") {
-    const second = await db
-      .from("import_logs")
-      .select(BASE_COLS, { count: "exact" })
-      .order("created_at", { ascending: false })
-      .limit(20);
-    imports = second.data;
-    importsError = second.error;
-    count = second.count;
-  } else {
-    imports = first.data;
-    importsError = first.error;
-    count = first.count;
-  }
+  // Erste Seite der Import-Historie (neueste zuerst) inkl. Gesamtanzahl.
+  // Der Helper ist robust gegen alte Schemata ohne CSV-Storage-Spalten und
+  // wird vom "Mehr laden"-Button (loadMoreImports) wiederverwendet.
+  const {
+    data: imports,
+    error: importsError,
+    count,
+  } = await fetchImportLogsPage(db, 0, IMPORT_HISTORY_PAGE_SIZE - 1, true);
 
   return (
     <div>
@@ -82,24 +64,11 @@ export default async function ImportPage() {
       </div>
 
       <div className="mt-10">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-lg font-bold">Vergangene Imports</h2>
-          {count != null && count > 0 && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {imports?.length ?? 0} von {count} angezeigt
-            </span>
-          )}
-        </div>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Lösche einen Import, wenn du alle zugehörigen Leads wieder entfernen willst.
-        </p>
-        {importsError && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
-            <p className="font-medium">Fehler beim Laden der Historie</p>
-            <p className="mt-1 font-mono text-xs">{importsError.message} (Code: {importsError.code ?? "?"})</p>
-          </div>
-        )}
-        <ImportHistory imports={(imports ?? []) as unknown as Parameters<typeof ImportHistory>[0]["imports"]} />
+        <ImportHistory
+          imports={(imports ?? []) as unknown as Parameters<typeof ImportHistory>[0]["imports"]}
+          total={count ?? 0}
+          error={importsError}
+        />
       </div>
     </div>
   );

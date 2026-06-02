@@ -7,6 +7,7 @@ import type { Lead, ServiceMode, TrafficLightRating } from "@/lib/types";
 import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
+import { checkSection } from "@/lib/auth";
 
 // Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
 // rohem Record<string, ...> aufgerufen. Ohne Whitelist koennte ein Browser-
@@ -233,6 +234,57 @@ export async function mergeLeads(keepId: string, mergeId: string) {
   return { success: true };
 }
 
+/**
+ * Sicheres Zusammenführen zweier Leads über die Postgres-Funktion `merge_lead`
+ * (Migration 101): haengt ALLE Kind-Daten (Anrufe, Verträge, Deals, Provisionen,
+ * Notizen …) per Foreign-Key dynamisch um und ARCHIVIERT den Verlierer
+ * (umkehrbar) — statt ihn wie das alte `mergeLeads` hart zu löschen (das konnte
+ * an `contracts ON DELETE RESTRICT` scheitern bzw. Daten verlieren).
+ *
+ * `survivorId` bleibt erhalten (der Lead, den der Nutzer gerade ansieht),
+ * `loserId` wird zusammengeführt. Fehler werden im Klartext zurückgegeben —
+ * inkl. eindeutigem Hinweis, falls die RPC in der DB fehlt.
+ */
+export async function mergeDuplicateLead(
+  survivorId: string,
+  loserId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung zum Zusammenführen." };
+  if (!survivorId || !loserId || survivorId === loserId) {
+    return { error: "Ungültige Auswahl zum Zusammenführen." };
+  }
+
+  const db = createServiceClient();
+  const { error } = await db.rpc("merge_lead", {
+    p_survivor: survivorId,
+    p_loser: loserId,
+  });
+  if (error) {
+    const missingFn = /could not find the function|pgrst202|merge_lead.* does not exist|schema cache/i.test(
+      error.message ?? "",
+    );
+    return {
+      error: missingFn
+        ? "Die Datenbank-Funktion „merge_lead“ fehlt — Migration 101 (101_merge_lead_fix.sql) muss in Supabase ausgeführt werden."
+        : error.message,
+    };
+  }
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "lead.merged",
+    entityType: "lead",
+    entityId: survivorId,
+    details: { survivor: survivorId, loser: loserId, source: "lead-detail" },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${survivorId}`);
+  return { success: true };
+}
+
 export async function findSimilarLeads(leadId: string) {
   const db = createServiceClient();
   const { data: lead } = await db.from("leads").select("company_name, website, city").eq("id", leadId).single();
@@ -446,10 +498,12 @@ export async function bulkUpdateStatus(
             r.traffic_light_score,
             r.traffic_light_reason,
           ),
-          created_by: user?.id ?? null,
+          // System-Notiz: created_by=null -> der Aktivitaeten-Feed zeigt "System"
+          // statt des handelnden Nutzers (item.author ?? "System").
+          created_by: null,
         };
       })
-      .filter((n): n is { lead_id: string; content: string; created_by: string | null } => n !== null);
+      .filter((n): n is NonNullable<typeof n> => n !== null);
     if (noteRows.length > 0) {
       const { error: noteErr } = await db.from("lead_notes").insert(noteRows);
       if (noteErr) console.error("[bulkUpdateStatus:ampelNote]", noteErr);

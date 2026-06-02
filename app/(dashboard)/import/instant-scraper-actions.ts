@@ -13,6 +13,7 @@ import {
   sanitizeCellValue,
   loadImportContext,
   buildLeadIndex,
+  addToLeadIndex,
   findMatchingLead,
   createImportLog,
   finalizeImportLog,
@@ -22,7 +23,9 @@ import {
   parseCityZipFromMapsUrl,
   looksLikePhone,
   looksLikeUrl,
+  type ExistingLeadRow,
 } from "@/lib/csv/import-helpers";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 type InstantScraperResult = {
   success: boolean;
@@ -100,11 +103,14 @@ export async function processInstantScraperImport(
   }
 
   const ctx = await loadImportContext(db);
-  const { data: existingLeads } = await db
-    .from("leads")
-    .select(
-      "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
-    );
+  // WICHTIG: paginiert laden (fetchAllRows) — ein einfaches .select() ist bei
+  // PostgREST auf ~1000 Zeilen gedeckelt. Bei > 1000 Leads waeren aeltere Leads
+  // sonst unsichtbar fuer den Dedup-Index → Re-Importe legen Duplikate an.
+  const existingLeads = await fetchAllRows<ExistingLeadRow>(
+    db,
+    "leads",
+    "id, company_name, website, email, phone, lifecycle_stage, deleted_at, crm_status_id, status",
+  );
   const { data: archivedRows } = await db
     .from("custom_lead_statuses")
     .select("id")
@@ -112,7 +118,7 @@ export async function processInstantScraperImport(
   const archivedStatusIds = new Set(
     ((archivedRows ?? []) as { id: string }[]).map((r) => r.id),
   );
-  const leadIndex = buildLeadIndex(existingLeads ?? [], archivedStatusIds);
+  const leadIndex = buildLeadIndex(existingLeads, archivedStatusIds);
 
   let imported = 0;
   let updated = 0;
@@ -216,6 +222,15 @@ export async function processInstantScraperImport(
         source_url: mapsUrl,
         status: "imported",
         created_by: user.id,
+      });
+      // Within-Batch-Dedup: frisch eingeplanten Lead in den Index aufnehmen,
+      // damit dieselbe Firma weiter unten in derselben CSV nicht ein zweites Mal
+      // angelegt wird.
+      addToLeadIndex(leadIndex, {
+        id: crypto.randomUUID(),
+        company_name: companyName,
+        website: domain,
+        phone,
       });
     }
   }

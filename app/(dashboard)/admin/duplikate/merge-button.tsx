@@ -7,7 +7,7 @@ import { mergeAllClusters } from "./actions";
 export function MergeAllButton({ disabled }: { disabled: boolean }) {
   const [isPending, startTransition] = useTransition();
   const [confirming, setConfirming] = useState(false);
-  const [result, setResult] = useState<{ merged: number; losers: number; errors: number } | null>(null);
+  const [result, setResult] = useState<{ merged: number; losers: number; errors: number; errorMessage?: string } | null>(null);
 
   function run() {
     setConfirming(false);
@@ -18,6 +18,16 @@ export function MergeAllButton({ disabled }: { disabled: boolean }) {
   }
 
   if (result) {
+    // Alles fehlgeschlagen → roter Fehlerkasten mit echter Meldung (nicht grün,
+    // sonst sieht "0 zusammengeführt" wie ein Erfolg aus).
+    if (result.merged === 0 && result.errors > 0) {
+      return (
+        <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+          <p className="font-medium">Zusammenführen fehlgeschlagen ({result.errors} Fehler).</p>
+          {result.errorMessage && <p className="mt-1 font-mono text-xs">{result.errorMessage}</p>}
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-2 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-400">
         <Check className="h-4 w-4" />

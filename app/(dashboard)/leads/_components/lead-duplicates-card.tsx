@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Merge } from "lucide-react";
-import { findSimilarLeads, mergeLeads } from "../actions";
+import { findSimilarLeads, mergeDuplicateLead } from "../actions";
 
 type SimilarLead = { id: string; company_name: string; website: string | null; city: string | null; status: string };
 
@@ -44,10 +44,14 @@ export function LeadDuplicatesCard({ leadId }: { leadId: string }) {
               </div>
               <button
                 onClick={() => {
-                  if (confirm(`"${s.company_name}" in diesen Lead zusammenführen? Der andere Lead wird gelöscht.`)) {
+                  if (confirm(`"${s.company_name}" in diesen Lead zusammenführen? Das Duplikat wird archiviert (umkehrbar), die Daten wandern hierher.`)) {
                     startTransition(async () => {
-                      await mergeLeads(leadId, s.id);
-                      setSimilar((prev) => prev.filter((p) => p.id !== s.id));
+                      const res = await mergeDuplicateLead(leadId, s.id);
+                      if (!("error" in res)) {
+                        setSimilar((prev) => prev.filter((p) => p.id !== s.id));
+                      } else {
+                        alert(res.error);
+                      }
                     });
                   }
                 }}

@@ -82,7 +82,7 @@ export async function findDuplicateClusters(): Promise<ClusterView[]> {
 
 /** Fuehrt alle erkannten Cluster automatisch zusammen. Pro Cluster gekapselt,
  *  damit ein Fehler die uebrigen nicht abbricht. */
-export async function mergeAllClusters(): Promise<{ merged: number; losers: number; errors: number }> {
+export async function mergeAllClusters(): Promise<{ merged: number; losers: number; errors: number; errorMessage?: string }> {
   await requireAdmin();
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -92,6 +92,9 @@ export async function mergeAllClusters(): Promise<{ merged: number; losers: numb
   let merged = 0;
   let losersMerged = 0;
   let errors = 0;
+  // Echte Fehlermeldungen sammeln, damit der Button den Grund anzeigen kann
+  // (frueher wurden Fehler nur gezaehlt → "0 zusammengefuehrt" sah aus wie Erfolg).
+  const errorMessages: string[] = [];
 
   for (const cluster of clusters) {
     try {
@@ -116,16 +119,30 @@ export async function mergeAllClusters(): Promise<{ merged: number; losers: numb
       });
       merged++;
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.error(
         `[mergeAllClusters] Cluster (survivor ${cluster.survivor.id}) fehlgeschlagen:`,
-        e instanceof Error ? e.message : e,
+        msg,
       );
       errors++;
+      errorMessages.push(msg);
     }
   }
 
   revalidatePath("/admin/duplikate");
   revalidatePath("/leads");
   revalidatePath("/");
-  return { merged, losers: losersMerged, errors };
+
+  // Repraesentative Fehlermeldung durchreichen. Den haeufigsten Fall — die
+  // Postgres-Funktion merge_lead fehlt in der DB (Migration 101 nicht
+  // angewandt) — in einen klaren Handlungshinweis uebersetzen.
+  let errorMessage: string | undefined;
+  if (errorMessages.length > 0) {
+    const first = errorMessages[0];
+    errorMessage = /could not find the function|pgrst202|function .*merge_lead.* does not exist|schema cache/i.test(first)
+      ? "Die Datenbank-Funktion „merge_lead“ fehlt — Migration 101 (101_merge_lead_fix.sql) muss in Supabase ausgeführt werden."
+      : first;
+  }
+
+  return { merged, losers: losersMerged, errors, errorMessage };
 }
