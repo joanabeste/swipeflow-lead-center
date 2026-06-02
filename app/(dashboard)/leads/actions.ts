@@ -8,7 +8,7 @@ import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 import { checkSection } from "@/lib/auth";
-import { insertMergeNote } from "@/lib/leads/merge-note";
+import { insertMergeNote, insertNoDuplicateNote } from "@/lib/leads/merge-note";
 
 // Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
 // rohem Record<string, ...> aufgerufen. Ohne Whitelist koennte ein Browser-
@@ -307,6 +307,71 @@ export async function mergeDuplicateLead(
   revalidatePath("/leads");
   revalidatePath("/crm");
   revalidatePath(`/crm/${survivorId}`);
+  return { success: true };
+}
+
+/**
+ * „Kein Duplikat": markiert das Paar (leadId, otherLeadId) als geprüft & bestätigt
+ * NICHT-Duplikat. Das Paar wird kanonisch sortiert in lead_duplicate_dismissals
+ * abgelegt (idempotent) → findLeadDuplicates blendet es danach beidseitig aus, die
+ * Warnung erscheint nicht mehr. Die Entscheidung wird in der Historie BEIDER Leads
+ * vermerkt (mit dem entscheidenden Nutzer als Autor).
+ */
+export async function dismissDuplicatePair(
+  leadId: string,
+  otherLeadId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  if (!leadId || !otherLeadId || leadId === otherLeadId) {
+    return { error: "Ungültige Auswahl." };
+  }
+
+  const db = createServiceClient();
+
+  // Firmennamen beider Leads für die Historien-Notiz laden.
+  const { data: rows } = await db
+    .from("leads")
+    .select("id, company_name")
+    .in("id", [leadId, otherLeadId]);
+  const nameOf = (id: string) =>
+    rows?.find((r) => r.id === id)?.company_name ?? null;
+
+  // Paar kanonisch sortiert (lead_id_a < lead_id_b) speichern; erneutes Bestätigen ignorieren.
+  const [a, b] = [leadId, otherLeadId].sort();
+  const { error } = await db
+    .from("lead_duplicate_dismissals")
+    .upsert(
+      { lead_id_a: a, lead_id_b: b, dismissed_by: ctx.user.id },
+      { onConflict: "lead_id_a,lead_id_b", ignoreDuplicates: true },
+    );
+  if (error) {
+    const missingTbl = /lead_duplicate_dismissals|relation .* does not exist|schema cache/i.test(
+      error.message ?? "",
+    );
+    return {
+      error: missingTbl
+        ? "Die Tabelle „lead_duplicate_dismissals“ fehlt — Migration 119 muss in Supabase ausgeführt werden."
+        : error.message,
+    };
+  }
+
+  // Entscheidung in der Historie beider Leads festhalten (best-effort).
+  await insertNoDuplicateNote(db, leadId, nameOf(otherLeadId), ctx.user.id);
+  await insertNoDuplicateNote(db, otherLeadId, nameOf(leadId), ctx.user.id);
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "lead.duplicate_dismissed",
+    entityType: "lead",
+    entityId: leadId,
+    details: { lead_id: leadId, other_lead_id: otherLeadId },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/crm/${otherLeadId}`);
   return { success: true };
 }
 

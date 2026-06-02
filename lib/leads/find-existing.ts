@@ -4,6 +4,7 @@ import {
   isLeadArchived,
   isFuzzyMatch,
   isDomainMatch,
+  isGenericDomain,
   normalizeDomain,
   loadExistingLeadsIndex,
   type DuplicateMatch,
@@ -151,7 +152,8 @@ export async function findLeadDuplicates(
   },
   limit = 10,
 ): Promise<DuplicateCandidate[]> {
-  const selfDomain = lead.website ? normalizeDomain(lead.website) : null;
+  // Generische Domains (facebook.com …) zählen nicht als Identität → wie „keine Domain".
+  const selfDomain = lead.website && !isGenericDomain(lead.website) ? normalizeDomain(lead.website) : null;
   const selfEmail = normalizeEmail(lead.email ?? null);
   const selfPhone = normalizePhone(lead.phone ?? null);
   const selfCity = lead.city?.toLowerCase() ?? null;
@@ -161,10 +163,13 @@ export async function findLeadDuplicates(
   if (!selfDomain && !selfEmail && !selfPhone && !selfName) return [];
 
   const index = await loadExistingLeadsIndex(db);
+  // Vom Nutzer als „kein Duplikat" bestätigte Paare ausblenden (beidseitig).
+  const dismissed = await loadDismissedDuplicateIds(db, lead.id);
 
   const out: DuplicateCandidate[] = [];
   for (const c of index.existingLeads) {
     if (c.id === lead.id) continue;
+    if (dismissed.has(c.id)) continue;
     if (isLeadArchived(c, index.archivedSet)) continue;
 
     let matchedOn: DuplicateCandidate["matchedOn"] | null = null;
@@ -190,4 +195,34 @@ export async function findLeadDuplicates(
     if (out.length >= limit) break;
   }
   return out;
+}
+
+/**
+ * Lädt die IDs aller Leads, die mit `leadId` als „kein Duplikat" bestätigt wurden
+ * (Tabelle lead_duplicate_dismissals, Paar kanonisch sortiert → beide Richtungen
+ * prüfen). Resilient: existiert die Tabelle noch nicht (Migration 119 nicht
+ * eingespielt), wird leer zurückgegeben, statt die Duplikat-Warnung zu brechen.
+ */
+async function loadDismissedDuplicateIds(
+  db: SupabaseClient,
+  leadId: string,
+): Promise<Set<string>> {
+  try {
+    const { data, error } = await db
+      .from("lead_duplicate_dismissals")
+      .select("lead_id_a, lead_id_b")
+      .or(`lead_id_a.eq.${leadId},lead_id_b.eq.${leadId}`);
+    if (error) {
+      console.error("[loadDismissedDuplicateIds]", error.message);
+      return new Set();
+    }
+    const out = new Set<string>();
+    for (const row of data ?? []) {
+      out.add(row.lead_id_a === leadId ? (row.lead_id_b as string) : (row.lead_id_a as string));
+    }
+    return out;
+  } catch (e) {
+    console.error("[loadDismissedDuplicateIds] unerwartet:", e);
+    return new Set();
+  }
 }

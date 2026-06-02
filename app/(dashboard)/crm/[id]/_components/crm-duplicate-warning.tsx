@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Loader2, ExternalLink } from "lucide-react";
-import { mergeDuplicateLead } from "../../../leads/actions";
+import { Copy, Loader2, ExternalLink, Check } from "lucide-react";
+import { mergeDuplicateLead, dismissDuplicatePair } from "../../../leads/actions";
 import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 
 // Klartext-Begründung, warum ein Lead als mögliches Duplikat gilt.
@@ -35,6 +35,7 @@ export function CrmDuplicateWarning({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
 
   if (items.length === 0) return null;
 
@@ -56,6 +57,28 @@ export function CrmDuplicateWarning({
         return;
       }
       setItems((prev) => prev.filter((c) => c.id !== loserId));
+      router.refresh();
+    });
+  }
+
+  function handleDismiss(otherId: string, name: string | null) {
+    if (
+      !confirm(
+        `„${name ?? "Lead"}“ als KEIN Duplikat bestätigen?\n\nDer Hinweis verschwindet dann dauerhaft (für beide Leads) und die Entscheidung wird in der Historie vermerkt.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setDismissingId(otherId);
+    startTransition(async () => {
+      const res = await dismissDuplicatePair(leadId, otherId);
+      setDismissingId(null);
+      if ("error" in res) {
+        setError(res.error);
+        return;
+      }
+      setItems((prev) => prev.filter((c) => c.id !== otherId));
       router.refresh();
     });
   }
@@ -110,6 +133,19 @@ export function CrmDuplicateWarning({
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
+                <button
+                  onClick={() => handleDismiss(c.id, c.company_name)}
+                  disabled={pending}
+                  title="Als geprüft markieren — kein Duplikat. Der Hinweis verschwindet dauerhaft."
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:border-gray-600 dark:bg-transparent dark:text-gray-300 dark:hover:bg-gray-800"
+                >
+                  {pending && dismissingId === c.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Check className="h-3 w-3" />
+                  )}
+                  Kein Duplikat
+                </button>
                 <button
                   onClick={() => handleMerge(c.id, c.company_name)}
                   disabled={pending}

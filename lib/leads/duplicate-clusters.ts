@@ -1,4 +1,4 @@
-import { normalizeName, normalizeDomain, isDomainMatch } from "@/lib/csv/dedup";
+import { normalizeName, normalizeDomain, isDomainMatch, isGenericDomain } from "@/lib/csv/dedup";
 
 export interface LeadForCluster {
   id: string;
@@ -17,6 +17,9 @@ export interface LeadForCluster {
 function coreDomain(website: string | null): string | null {
   if (!website) return null;
   const d = normalizeDomain(website);
+  // Generische Domains (facebook.com …) nicht als Bucket nutzen — sonst ein
+  // riesiger Sammel-Bucket aller Social-Leads (O(n²)) + keine echte Identität.
+  if (!d || isGenericDomain(d)) return null;
   const parts = d.split(".");
   if (parts.length <= 2) return d;
   return parts.slice(-2).join(".");
@@ -35,8 +38,15 @@ function isSameCompany(a: LeadForCluster, b: LeadForCluster): boolean {
 
   if (a.company_name && b.company_name &&
       normalizeName(a.company_name) === normalizeName(b.company_name)) {
-    // Widersprechende Domains schliessen einen Namens-Match aus.
-    if (a.website && b.website && !isDomainMatch(a.website, b.website)) return false;
+    // Widersprechende ECHTE Domains schliessen einen Namens-Match aus.
+    // Generische Domains (facebook.com …) sind uninformativ → kein Ausschluss.
+    if (
+      a.website && b.website &&
+      !isGenericDomain(a.website) && !isGenericDomain(b.website) &&
+      !isDomainMatch(a.website, b.website)
+    ) {
+      return false;
+    }
     return sameCityOrUnknown(a, b);
   }
   return false;

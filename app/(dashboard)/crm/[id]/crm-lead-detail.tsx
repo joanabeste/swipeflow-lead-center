@@ -219,7 +219,8 @@ export function CrmLeadDetail({
               Aussortiert · {archivedStatus.label}
             </p>
             <p className="mt-0.5 text-xs text-red-700/90 dark:text-red-400/90">
-              Erscheint nicht in Neue Leads oder im CRM. Wird der KI als Negativ-Signal gemeldet.
+              Erscheint nicht in Neue Leads oder im CRM.
+              {archivedStatus.learning_signal === "negative" && " Wird der KI als Negativ-Signal gemeldet."}
             </p>
           </div>
           <button

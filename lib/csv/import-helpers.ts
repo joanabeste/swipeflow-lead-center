@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isFuzzyMatch, isLeadArchived, normalizeDomain } from "@/lib/csv/dedup";
+import { isFuzzyMatch, isGenericDomain, isLeadArchived, normalizeDomain } from "@/lib/csv/dedup";
 import { normalizeEmail, normalizePhone } from "@/lib/csv/normalizer";
 import type { BlacklistRule, BlacklistEntry, CancelRule } from "@/lib/types";
 
@@ -229,7 +229,8 @@ export function buildLeadIndex(
   for (const l of leads) {
     if (l.website) {
       const norm = normalizeDomain(l.website);
-      if (norm && !byDomain.has(norm)) byDomain.set(norm, l.id);
+      // Generische Domains (facebook.com …) NICHT als Dedup-Schlüssel indizieren.
+      if (norm && !isGenericDomain(norm) && !byDomain.has(norm)) byDomain.set(norm, l.id);
     }
     byName.push({ id: l.id, name: l.company_name });
     const e = normalizeEmail(l.email ?? null);
@@ -270,7 +271,7 @@ export function addToLeadIndex(
 ): void {
   if (lead.website) {
     const norm = normalizeDomain(lead.website);
-    if (norm && !index.byDomain.has(norm)) index.byDomain.set(norm, lead.id);
+    if (norm && !isGenericDomain(norm) && !index.byDomain.has(norm)) index.byDomain.set(norm, lead.id);
   }
   index.byName.push({ id: lead.id, name: lead.company_name });
   const e = normalizeEmail(lead.email ?? null);
@@ -308,7 +309,7 @@ export function findMatchingLead(
 
   if (key.domain) {
     const norm = normalizeDomain(key.domain);
-    if (norm) {
+    if (norm && !isGenericDomain(norm)) {
       const match = index.byDomain.get(norm);
       if (match) return hit(match);
     }

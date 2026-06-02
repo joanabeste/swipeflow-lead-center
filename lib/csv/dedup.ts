@@ -49,6 +49,35 @@ export function normalizeDomain(domain: string): string {
   return d;
 }
 
+/**
+ * Generische / geteilte Domains, die KEINE firmenspezifische Website sind
+ * (Social-Profile, Verzeichnisse, Link-Shortener). Scraper hinterlegen sie oft
+ * als „Website" — dürfen aber NIE als Domain-Treffer fürs Dedup zählen, sonst
+ * würden beliebige Firmen mit z.B. einer Facebook-Seite zusammengeführt.
+ */
+const GENERIC_DOMAINS = new Set<string>([
+  "facebook.com", "fb.com", "fb.me",
+  "instagram.com", "linkedin.com", "xing.com",
+  "twitter.com", "x.com", "youtube.com", "youtu.be",
+  "tiktok.com", "pinterest.com", "pinterest.de",
+  "google.com", "g.page", "goo.gl", "business.site",
+  "wa.me", "t.me", "linktr.ee", "beacons.ai",
+  "yelp.com", "yelp.de", "tripadvisor.com", "tripadvisor.de",
+  "gelbeseiten.de", "dasoertliche.de", "11880.com", "meinestadt.de",
+  "wer-zu-wem.de", "cylex.de", "yellowmap.de", "branchenbuch.com",
+]);
+
+/** True, wenn die Domain (bzw. ihr Core aus den letzten zwei Labels) generisch ist. */
+export function isGenericDomain(domain: string | null | undefined): boolean {
+  if (!domain) return false;
+  const d = normalizeDomain(domain);
+  if (!d) return false;
+  if (GENERIC_DOMAINS.has(d)) return true;
+  const parts = d.split(".");
+  if (parts.length > 2 && GENERIC_DOMAINS.has(parts.slice(-2).join("."))) return true;
+  return false;
+}
+
 /** Einfache Ähnlichkeitsberechnung (Bigram-basiert, schneller als Levenshtein) */
 function bigramSimilarity(a: string, b: string): number {
   if (a === b) return 1;
@@ -91,6 +120,9 @@ export function isDomainMatch(domainA: string, domainB: string): boolean {
   // Domain (oder mit Müll wie "http://", der zu "" normalisiert) fälschlich als
   // Domain-Duplikat. "" === "" wäre sonst true.
   if (!a || !b) return false;
+  // Generische/geteilte Domains (facebook.com, instagram.com, Verzeichnisse …)
+  // sind keine firmenspezifische Identität → kein Domain-Treffer.
+  if (isGenericDomain(a) || isGenericDomain(b)) return false;
   if (a === b) return true;
 
   // Sub-Domain-Match (z.B. karriere.firma.de vs firma.de)
@@ -288,9 +320,16 @@ export function findDbDuplicateForLead(
       if (strict) {
         // Ohne verlaessliche Stadt nur exakter Name nach Normalisierung.
         if (normalizeName(lead.company_name!) !== normalizeName(existing.company_name)) return false;
-        // Widersprechende Domains schliessen einen Namens-Match aus
+        // Widersprechende ECHTE Domains schliessen einen Namens-Match aus
         // (zwei gleichnamige Firmen mit unterschiedlicher Website sind verschieden).
-        if (lead.website && existing.website && !isDomainMatch(lead.website, existing.website)) return false;
+        // Generische Domains (facebook.com …) widersprechen nicht — sie sind uninformativ.
+        if (
+          lead.website && existing.website &&
+          !isGenericDomain(lead.website) && !isGenericDomain(existing.website) &&
+          !isDomainMatch(lead.website, existing.website)
+        ) {
+          return false;
+        }
         return sameCity;
       }
       return sameCity && isFuzzyMatch(lead.company_name!, existing.company_name);

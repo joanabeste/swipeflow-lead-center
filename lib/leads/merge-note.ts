@@ -87,3 +87,36 @@ export async function insertPhoneSwapNote(
     console.error("[insertPhoneSwapNote] unerwartet:", e);
   }
 }
+
+/**
+ * Schreibt eine Notiz, dass ein Duplikat-Vorschlag geprüft und als KEIN Duplikat
+ * bestätigt wurde — sichtbar im Aktivitäten-Feed. Anders als die Merge-/System-
+ * Notizen wird hier der entscheidende Nutzer als Autor gesetzt (created_by=userId),
+ * damit die Historie zeigt, WER die Entscheidung getroffen hat.
+ *
+ * Best-effort: wirft NIE.
+ */
+export async function insertNoDuplicateNote(
+  db: SupabaseClient,
+  leadId: string,
+  otherCompany: string | null,
+  userId: string | null,
+): Promise<void> {
+  if (!leadId) return;
+
+  const other = otherCompany?.trim() || "ein anderer Lead";
+  const content =
+    `🟢 Duplikat-Prüfung: „${other}" wurde gefunden, aber als KEIN Duplikat bestätigt — ` +
+    `der Duplikat-Vorschlag wurde verworfen.`;
+
+  try {
+    const { error } = await db.from("lead_notes").insert({
+      lead_id: leadId,
+      content,
+      created_by: userId, // entscheidender Nutzer → erscheint mit Namen im Feed
+    });
+    if (error) console.error("[insertNoDuplicateNote]", error.message);
+  } catch (e) {
+    console.error("[insertNoDuplicateNote] unerwartet:", e);
+  }
+}

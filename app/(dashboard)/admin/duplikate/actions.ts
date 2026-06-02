@@ -149,3 +149,72 @@ export async function mergeAllClusters(): Promise<{ merged: number; losers: numb
 
   return { merged, losers: losersMerged, errors, errorMessage };
 }
+
+/**
+ * Führt nur die AUSGEWÄHLTEN Duplikate zusammen (pro Gruppe der behaltene Lead +
+ * die selektierten Verlierer). Wichtig, weil die automatische Clusterung über eine
+ * geteilte Domain (z.B. Franchise-Portal zaunteam.de) verschiedene Firmen
+ * zusammenfassen kann — der Admin wählt daher gezielt aus. Pro Gruppe gekapselt.
+ */
+export async function mergeSelectedDuplicates(
+  groups: {
+    survivorId: string;
+    losers: { id: string; company_name: string | null; website: string | null; city: string | null }[];
+  }[],
+): Promise<{ merged: number; losers: number; errors: number; errorMessage?: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const db = createServiceClient();
+
+  let merged = 0;
+  let losersMerged = 0;
+  let errors = 0;
+  const errorMessages: string[] = [];
+
+  for (const group of groups) {
+    const losers = group.losers.filter((l) => l.id && l.id !== group.survivorId);
+    if (!group.survivorId || losers.length === 0) continue;
+    try {
+      for (const loser of losers) {
+        const { error } = await db.rpc("merge_lead", {
+          p_survivor: group.survivorId,
+          p_loser: loser.id,
+        });
+        if (error) throw new Error(error.message);
+        losersMerged++;
+      }
+      await insertMergeNote(db, group.survivorId, losers);
+      await logAudit({
+        userId: user?.id ?? null,
+        action: "lead.merged",
+        entityType: "lead",
+        entityId: group.survivorId,
+        details: {
+          survivor: group.survivorId,
+          losers: losers.map((l) => l.id),
+          source: "duplikate-selektiv",
+        },
+      });
+      merged++;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[mergeSelectedDuplicates] Gruppe (survivor ${group.survivorId}) fehlgeschlagen:`, msg);
+      errors++;
+      errorMessages.push(msg);
+    }
+  }
+
+  revalidatePath("/admin/duplikate");
+  revalidatePath("/leads");
+  revalidatePath("/");
+
+  let errorMessage: string | undefined;
+  if (errorMessages.length > 0) {
+    const first = errorMessages[0];
+    errorMessage = /could not find the function|pgrst202|function .*merge_lead.* does not exist|schema cache/i.test(first)
+      ? "Die Datenbank-Funktion „merge_lead“ fehlt — Migration muss in Supabase ausgeführt werden."
+      : first;
+  }
+  return { merged, losers: losersMerged, errors, errorMessage };
+}
