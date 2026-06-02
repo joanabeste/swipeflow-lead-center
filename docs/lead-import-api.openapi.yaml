@@ -238,6 +238,81 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/leads/{id}/notes:
+    get:
+      operationId: listLeadNotes
+      summary: Notizen eines Leads lesen (chronologisch)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Notizen des Leads.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteListResponse'
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Kein (nicht gelöschter) Lead mit dieser ID.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      operationId: addLeadNote
+      summary: Notiz zu einem Lead schreiben
+      description: |
+        Legt eine Text-Notiz am Lead an (erscheint in der Lead-Historie). Anhänge werden nicht
+        unterstützt. Über die API angelegte Notizen haben created_by=null ("System") und werden
+        im Audit-Log mit source="api" markiert.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteInput'
+            examples:
+              notiz:
+                value:
+                  content: Telefonisch erreicht, Rückruf am Freitag vereinbart.
+      responses:
+        '201':
+          description: Notiz angelegt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteCreateResult'
+        '400':
+          description: content fehlt/leer oder kaputtes JSON.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Lead nicht gefunden.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -540,3 +615,41 @@ components:
         success:
           type: boolean
           const: true
+
+    NoteInput:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: Notiz-Text (nicht-leer).
+          example: Telefonisch erreicht, Rückruf am Freitag vereinbart.
+
+    Note:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        lead_id: { type: string, format: uuid }
+        content: { type: string }
+        created_by:
+          type: [string, "null"]
+          description: null = via API / System (kein Session-User).
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        merged_from_lead_id: { type: [string, "null"] }
+        merged_from_company: { type: [string, "null"] }
+
+    NoteListResponse:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: array
+          items: { $ref: '#/components/schemas/Note' }
+
+    NoteCreateResult:
+      type: object
+      required: [success, note]
+      properties:
+        success: { type: boolean, const: true }
+        note: { $ref: '#/components/schemas/Note' }

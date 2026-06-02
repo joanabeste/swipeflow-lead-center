@@ -14,6 +14,8 @@ ins Lead-Center **importieren**, **auslesen** und **aktualisieren** kann.
 | `GET` | `/api/leads` | Leads auflisten (filterbar, paginiert) — z. B. die neuen Leads |
 | `GET` | `/api/leads/:id` | einzelnen Lead inkl. Kontakte + Links lesen |
 | `PATCH` | `/api/leads/:id` | Stammdaten eines Leads aktualisieren |
+| `GET` | `/api/leads/:id/notes` | Notizen eines Leads lesen |
+| `POST` | `/api/leads/:id/notes` | Notiz zu einem Lead schreiben |
 
 Alle Endpunkte:
 
@@ -251,6 +253,68 @@ oder wenn der Body kein Objekt ist.
 
 ---
 
+## `GET /api/leads/:id/notes` — Notizen lesen
+
+Liefert die Notizen des Leads, chronologisch (älteste zuerst).
+
+```jsonc
+{
+  "notes": [
+    {
+      "id": "…", "content": "Telefonisch erreicht, Rückruf vereinbart.",
+      "created_by": null,              // null = System / via API (kein Session-User)
+      "created_at": "2026-06-02T09:00:00Z", "updated_at": "2026-06-02T09:00:00Z",
+      "merged_from_lead_id": null, "merged_from_company": null
+    }
+  ]
+}
+```
+
+`404`, wenn kein (nicht gelöschter) Lead mit dieser ID existiert.
+
+---
+
+## `POST /api/leads/:id/notes` — Notiz schreiben
+
+Legt eine Text-Notiz am Lead an. Sie erscheint in der Lead-Historie (CRM). Anhänge werden
+über die API **nicht** unterstützt (nur Text).
+
+### Request
+
+```json
+{ "content": "Telefonisch erreicht, Rückruf am Freitag vereinbart." }
+```
+
+- `content` (Pflicht, nicht-leer). Über die API angelegte Notizen haben **keinen** Autor
+  (`created_by: null`) und erscheinen in der Historie als „System"-Notiz; der Audit-Eintrag
+  wird mit `source: "api"` markiert.
+
+### Beispiel (curl)
+
+```bash
+curl -X POST "https://<deine-domain>/api/leads/fe3e1455-…/notes" \
+  -H "Authorization: Bearer $LEADS_IMPORT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Telefonisch erreicht, Rückruf vereinbart." }'
+```
+
+### Response — **201 Created**
+
+```json
+{
+  "success": true,
+  "note": {
+    "id": "…", "lead_id": "fe3e1455-…",
+    "content": "Telefonisch erreicht, Rückruf vereinbart.",
+    "created_by": null, "created_at": "2026-06-02T09:00:00Z", "updated_at": "2026-06-02T09:00:00Z"
+  }
+}
+```
+
+`404`, wenn der Lead nicht existiert. `400`, wenn `content` fehlt/leer oder das JSON kaputt ist.
+
+---
+
 ## Einrichtung
 
 1. Schlüssel erzeugen: `openssl rand -hex 32`
@@ -263,6 +327,7 @@ oder wenn der Body kein Objekt ist.
 - Import-Route: [`app/api/leads/import/route.ts`](../app/api/leads/import/route.ts)
 - Listen-Route: [`app/api/leads/route.ts`](../app/api/leads/route.ts)
 - Detail/Update-Route: [`app/api/leads/[id]/route.ts`](../app/api/leads/[id]/route.ts)
+- Notiz-Route: [`app/api/leads/[id]/notes/route.ts`](<../app/api/leads/[id]/notes/route.ts>)
 - Gemeinsame Bearer-Auth: [`lib/leads/api-auth.ts`](../lib/leads/api-auth.ts)
 - Gemeinsame Import-Logik (mit CSV-Import geteilt): [`lib/leads/ingest.ts`](../lib/leads/ingest.ts)
 - Update reuse: dieselbe Server-Action wie das CRM-Formular ([`updateLead`](<../app/(dashboard)/leads/actions.ts>))
