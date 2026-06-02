@@ -120,3 +120,41 @@ export async function insertNoDuplicateNote(
     console.error("[insertNoDuplicateNote] unerwartet:", e);
   }
 }
+
+/**
+ * Schreibt eine System-Notiz auf den Survivor, dass ein Merge wieder getrennt wurde.
+ * Content beginnt mit ↩️, damit die Notiz-Rückführung in unmerge_lead sie am Survivor
+ * belässt (Guard: content NOT LIKE '↩️%').
+ *
+ * `partial=true` = Alt-Merge (vor Migration 120) ohne Herkunfts-Tags → nur der Lead
+ * wurde reaktiviert, umgehängte Aktivitäten bleiben am Survivor.
+ *
+ * Best-effort: wirft NIE.
+ */
+export async function insertUnmergeNote(
+  db: SupabaseClient,
+  survivorId: string,
+  loserCompany: string | null,
+  partial: boolean,
+): Promise<void> {
+  if (!survivorId) return;
+
+  const name = loserCompany?.trim() || "ein Duplikat";
+  const content = partial
+    ? `↩️ Zusammenführung rückgängig gemacht: „${name}" wurde wieder als eigener Lead getrennt. ` +
+      `Hinweis: Dieser Merge stammt aus der Zeit vor der Trennen-Funktion — bereits übernommene ` +
+      `Aktivitätsdaten (Anrufe, Kontakte, Notizen) bleiben an diesem Lead.`
+    : `↩️ Zusammenführung rückgängig gemacht: „${name}" wurde wieder als eigener Lead getrennt — ` +
+      `übernommene Aktivitäten und befüllte Stammdaten wurden zurückübertragen.`;
+
+  try {
+    const { error } = await db.from("lead_notes").insert({
+      lead_id: survivorId,
+      content,
+      created_by: null, // → Aktivitäten-Feed zeigt "System"
+    });
+    if (error) console.error("[insertUnmergeNote]", error.message);
+  } catch (e) {
+    console.error("[insertUnmergeNote] unerwartet:", e);
+  }
+}

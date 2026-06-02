@@ -8,7 +8,7 @@ import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 import { checkSection } from "@/lib/auth";
-import { insertMergeNote, insertNoDuplicateNote } from "@/lib/leads/merge-note";
+import { insertMergeNote, insertNoDuplicateNote, insertUnmergeNote } from "@/lib/leads/merge-note";
 
 // Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
 // rohem Record<string, ...> aufgerufen. Ohne Whitelist koennte ein Browser-
@@ -315,6 +315,85 @@ export async function mergeDuplicateLead(
   revalidatePath(`/leads/${survivorId}`);
   revalidatePath(`/leads/${loserId}`);
   return { success: true };
+}
+
+/**
+ * „Duplikat wieder trennen": macht einen Merge rückgängig (RPC `unmerge_lead`).
+ * Hängt die mit Herkunft getaggten Kind-Daten zurück zum Verlierer, dreht die beim
+ * Merge befüllten Survivor-Stammdaten zurück und reaktiviert den Verlierer.
+ *
+ * Alt-Merges (vor Migration 120) haben keine Herkunfts-Tags/kein Protokoll →
+ * `reverted=false` (partial): der Verlierer wird trotzdem reaktiviert (seine Stammdaten
+ * sind intakt), umgehängte Aktivitäten bleiben am Survivor. Die UI kommuniziert das.
+ */
+export async function unmergeDuplicate(
+  survivorId: string,
+  loserId: string,
+): Promise<{ success: true; info?: string } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung zum Trennen." };
+  if (!survivorId || !loserId || survivorId === loserId) {
+    return { error: "Ungültige Auswahl zum Trennen." };
+  }
+
+  const db = createServiceClient();
+
+  // Verlierer-Firmenname für die Notiz (vor der Reaktivierung egal — nur Anzeige).
+  const { data: loser } = await db
+    .from("leads")
+    .select("company_name")
+    .eq("id", loserId)
+    .maybeSingle();
+
+  const { data: result, error } = await db.rpc("unmerge_lead", {
+    p_survivor: survivorId,
+    p_loser: loserId,
+  });
+  if (error) {
+    const missing = /could not find the function|pgrst202|unmerge_lead.* does not exist|schema cache|merged_from_lead_id|lead_merges/i.test(
+      error.message ?? "",
+    );
+    return {
+      error: missing
+        ? "Die Trennen-Funktion ist noch nicht verfügbar — Migration 120 (120_unmerge_lead.sql) muss in Supabase ausgeführt werden."
+        : error.message,
+    };
+  }
+
+  const res = (result ?? {}) as { reverted?: boolean; moved_rows?: number; fields_reverted?: number };
+  const partial = res.reverted === false; // kein Merge-Protokoll → Altdaten-Fall
+
+  await insertUnmergeNote(db, survivorId, loser?.company_name ?? null, partial);
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "lead.unmerged",
+    entityType: "lead",
+    entityId: survivorId,
+    details: {
+      survivor: survivorId,
+      loser: loserId,
+      reverted: res.reverted ?? null,
+      moved_rows: res.moved_rows ?? 0,
+      fields_reverted: res.fields_reverted ?? 0,
+      partial,
+    },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath("/crm");
+  revalidatePath(`/crm/${survivorId}`);
+  revalidatePath(`/crm/${loserId}`);
+  revalidatePath(`/leads/${survivorId}`);
+  revalidatePath(`/leads/${loserId}`);
+  revalidatePath("/einstellungen/aussortierte-leads");
+
+  return {
+    success: true,
+    info: partial
+      ? "Der Lead wurde wieder getrennt und reaktiviert. Hinweis: Dieser Merge stammt aus der Zeit vor der Trennen-Funktion — bereits übernommene Aktivitätsdaten bleiben am behaltenen Lead."
+      : undefined,
+  };
 }
 
 /**

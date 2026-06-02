@@ -1,4 +1,4 @@
-import { normalizeName, normalizeDomain, isDomainMatch, isGenericDomain } from "@/lib/csv/dedup";
+import { normalizeName, normalizeDomain, isDomainMatch, isGenericDomain, computeSharedDomains } from "@/lib/csv/dedup";
 
 export interface LeadForCluster {
   id: string;
@@ -33,16 +33,22 @@ function sameCityOrUnknown(a: LeadForCluster, b: LeadForCluster): boolean {
 /** Zwei Leads gehoeren zusammen, wenn (strikt):
  *  - die Domains matchen, ODER
  *  - der normalisierte Name exakt gleich ist UND weder Stadt noch Domain widersprechen. */
-function isSameCompany(a: LeadForCluster, b: LeadForCluster): boolean {
-  if (a.website && b.website && isDomainMatch(a.website, b.website)) return true;
+function isSameCompany(a: LeadForCluster, b: LeadForCluster, sharedDomains: Set<string>): boolean {
+  // Geteilte Domains (Verzeichnisse/Portale wie malerfinder.de) sind keine
+  // firmenspezifische Identität → weder Treffer noch Widerspruch.
+  const aShared = !!a.website && sharedDomains.has(normalizeDomain(a.website));
+  const bShared = !!b.website && sharedDomains.has(normalizeDomain(b.website));
+
+  if (a.website && b.website && !aShared && !bShared && isDomainMatch(a.website, b.website)) return true;
 
   if (a.company_name && b.company_name &&
       normalizeName(a.company_name) === normalizeName(b.company_name)) {
     // Widersprechende ECHTE Domains schliessen einen Namens-Match aus.
-    // Generische Domains (facebook.com …) sind uninformativ → kein Ausschluss.
+    // Generische/geteilte Domains sind uninformativ → kein Ausschluss.
     if (
       a.website && b.website &&
       !isGenericDomain(a.website) && !isGenericDomain(b.website) &&
+      !aShared && !bShared &&
       !isDomainMatch(a.website, b.website)
     ) {
       return false;
@@ -55,6 +61,9 @@ function isSameCompany(a: LeadForCluster, b: LeadForCluster): boolean {
 /** Gruppiert Leads in Duplikat-Cluster (Union-Find ueber Buckets, damit nicht
  *  jedes Paar global verglichen werden muss). Gibt nur Cluster mit >= 2 Leads zurueck. */
 export function buildDuplicateClusters(leads: LeadForCluster[]): LeadForCluster[][] {
+  // Geteilte Domains (Branchenverzeichnisse/Portale) vorab ermitteln — sie dürfen
+  // weder buckets bilden noch als Treffer zählen.
+  const sharedDomains = computeSharedDomains(leads);
   const parent = new Map<string, string>();
   const byId = new Map<string, LeadForCluster>();
   for (const l of leads) {
@@ -86,8 +95,11 @@ export function buildDuplicateClusters(leads: LeadForCluster[]): LeadForCluster[
     else buckets.set(key, [l]);
   };
   for (const l of leads) {
+    const nd = l.website ? normalizeDomain(l.website) : null;
     const cd = coreDomain(l.website);
-    if (cd) addToBucket(`d:${cd}`, l);
+    // Geteilte Domains NICHT als Domain-Bucket nutzen (sonst landen verschiedene
+    // Firmen eines Verzeichnisses im selben Bucket und werden zusammengeführt).
+    if (cd && !(nd && sharedDomains.has(nd))) addToBucket(`d:${cd}`, l);
     if (l.company_name) addToBucket(`n:${normalizeName(l.company_name)}`, l);
   }
 
@@ -95,7 +107,7 @@ export function buildDuplicateClusters(leads: LeadForCluster[]): LeadForCluster[
     if (group.length < 2) continue;
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
-        if (isSameCompany(group[i], group[j])) union(group[i].id, group[j].id);
+        if (isSameCompany(group[i], group[j], sharedDomains)) union(group[i].id, group[j].id);
       }
     }
   }

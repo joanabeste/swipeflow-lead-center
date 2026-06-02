@@ -63,8 +63,21 @@ const GENERIC_DOMAINS = new Set<string>([
   "google.com", "g.page", "goo.gl", "business.site",
   "wa.me", "t.me", "linktr.ee", "beacons.ai",
   "yelp.com", "yelp.de", "tripadvisor.com", "tripadvisor.de",
-  "gelbeseiten.de", "dasoertliche.de", "11880.com", "meinestadt.de",
-  "wer-zu-wem.de", "cylex.de", "yellowmap.de", "branchenbuch.com",
+  // Branchenverzeichnisse / Telefonbücher
+  "gelbeseiten.de", "dasoertliche.de", "dastelefonbuch.de", "das-telefonbuch.de",
+  "telefonbuch.de", "11880.com", "meinestadt.de", "wer-zu-wem.de", "cylex.de",
+  "cylex.de.com", "yellowmap.de", "branchenbuch.com", "branchen-info.net",
+  "golocal.de", "stadtbranchenbuch.com", "marktplatz-mittelstand.de",
+  "wlw.de", "europages.de", "europages.com", "kompass.com",
+  // Firmen-/Handelsregister-Auskünfte (keine Firmen-Website)
+  "gewerbeauskunft-zentrale.de", "unternehmensauskunft.de", "firmenwissen.de",
+  "northdata.com", "companyhouse.de", "firmeneintrag.de",
+  // Handwerker-/Dienstleister-Vermittler & -Verzeichnisse
+  "malerfinder.de", "handwerker.de", "myhammer.de", "my-hammer.de",
+  "blauarbeit.de", "1a-installateur.de", "kennstdueinen.de",
+  "werkenntdenbesten.de", "check24.de",
+  // Bewertungsportale
+  "provenexpert.com", "trustpilot.com", "kundentests.com", "jameda.de",
 ]);
 
 /** True, wenn die Domain (bzw. ihr Core aus den letzten zwei Labels) generisch ist. */
@@ -76,6 +89,40 @@ export function isGenericDomain(domain: string | null | undefined): boolean {
   const parts = d.split(".");
   if (parts.length > 2 && GENERIC_DOMAINS.has(parts.slice(-2).join("."))) return true;
   return false;
+}
+
+/** Ab so vielen UNTERSCHIEDLICHEN Firmennamen auf derselben Domain gilt sie als
+ *  geteilt (Branchenverzeichnis/Portal/Franchise, z.B. malerfinder.de, zaunteam.de)
+ *  und wird vom Domain-Matching ausgeschlossen. Eine echte Firmen-Domain trägt nur
+ *  EINEN Namen — auch bei mehreren Duplikaten desselben Namens. */
+export const SHARED_DOMAIN_NAME_THRESHOLD = 3;
+
+/** Ermittelt „geteilte" Domains aus einer Lead-Menge: Domains, unter denen ≥
+ *  `threshold` unterschiedliche normalisierte Firmennamen vorkommen. Generische
+ *  Domains sind ohnehin ausgeschlossen (separat behandelt). */
+export function computeSharedDomains(
+  rows: { website: string | null; company_name: string | null }[],
+  threshold: number = SHARED_DOMAIN_NAME_THRESHOLD,
+): Set<string> {
+  const namesByDomain = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.website) continue;
+    const d = normalizeDomain(r.website);
+    if (!d || isGenericDomain(d)) continue;
+    const name = normalizeName(r.company_name ?? "");
+    if (!name) continue;
+    let names = namesByDomain.get(d);
+    if (!names) {
+      names = new Set<string>();
+      namesByDomain.set(d, names);
+    }
+    names.add(name);
+  }
+  const shared = new Set<string>();
+  for (const [d, names] of namesByDomain) {
+    if (names.size >= threshold) shared.add(d);
+  }
+  return shared;
 }
 
 /** Einfache Ähnlichkeitsberechnung (Bigram-basiert, schneller als Levenshtein) */
@@ -204,6 +251,8 @@ export interface ExistingLeadsIndex {
   byEmail: Map<string, ExistingLead>;
   byPhone: Map<string, ExistingLead>;
   archivedSet: Set<string>;
+  /** Geteilte Domains (Verzeichnisse/Portale) — vom Domain-Matching ausgeschlossen. */
+  sharedDomains: Set<string>;
 }
 
 /** Zentrale Wahrheit, wann ein Lead aus Dedup-Sicht als archiviert gilt:
@@ -248,7 +297,9 @@ export async function loadExistingLeadsIndex(
     if (p && !byPhone.has(p)) byPhone.set(p, l);
   }
 
-  return { existingLeads: leads, existingWithDomain, byEmail, byPhone, archivedSet };
+  const sharedDomains = computeSharedDomains(leads);
+
+  return { existingLeads: leads, existingWithDomain, byEmail, byPhone, archivedSet, sharedDomains };
 }
 
 /** Fuegt einen frisch eingefuegten Lead dem In-Memory-Index hinzu, damit spaetere
@@ -278,7 +329,7 @@ export function findDbDuplicateForLead(
   },
   opts?: { strict?: boolean },
 ): DuplicateMatch | null {
-  const { existingLeads, existingWithDomain, byEmail, byPhone, archivedSet } = index;
+  const { existingLeads, existingWithDomain, byEmail, byPhone, archivedSet, sharedDomains } = index;
   const strict = opts?.strict ?? false;
 
   const buildMatch = (l: ExistingLead): DuplicateMatch => ({
@@ -286,11 +337,15 @@ export function findDbDuplicateForLead(
     archived: isLeadArchived(l, archivedSet),
   });
 
-  // Domain-Match (Property website = nackte Domain)
+  // Domain-Match (Property website = nackte Domain). Generische UND geteilte
+  // Domains (Branchenverzeichnisse/Portale) sind ausgeschlossen — sonst würden
+  // verschiedene Firmen mit derselben Verzeichnis-Domain fälschlich gematcht.
   if (lead.website) {
     const d = normalizeDomain(lead.website);
-    const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
-    if (match) return buildMatch(match);
+    if (d && !isGenericDomain(d) && !sharedDomains.has(d)) {
+      const match = existingWithDomain.find((e) => isDomainMatch(d, e.normalizedDomain));
+      if (match) return buildMatch(match);
+    }
   }
 
   // Email-Match (normalisiert)

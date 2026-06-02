@@ -163,6 +163,9 @@ export async function findLeadDuplicates(
   if (!selfDomain && !selfEmail && !selfPhone && !selfName) return [];
 
   const index = await loadExistingLeadsIndex(db);
+  // Geteilte Domains (Branchenverzeichnisse/Portale wie malerfinder.de) zählen
+  // nicht als Identität → Domain-Treffer für diesen Lead deaktivieren.
+  const effSelfDomain = selfDomain && !index.sharedDomains.has(selfDomain) ? selfDomain : null;
   // Vom Nutzer als „kein Duplikat" bestätigte Paare ausblenden (beidseitig).
   const dismissed = await loadDismissedDuplicateIds(db, lead.id);
 
@@ -173,7 +176,7 @@ export async function findLeadDuplicates(
     if (isLeadArchived(c, index.archivedSet)) continue;
 
     let matchedOn: DuplicateCandidate["matchedOn"] | null = null;
-    if (selfDomain && c.website && isDomainMatch(selfDomain, c.website)) {
+    if (effSelfDomain && c.website && isDomainMatch(effSelfDomain, c.website)) {
       matchedOn = "domain";
     } else if (selfEmail && normalizeEmail(c.email) === selfEmail) {
       matchedOn = "email";

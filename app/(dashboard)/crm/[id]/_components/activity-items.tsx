@@ -7,6 +7,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
   Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail, Paperclip, X,
+  Undo2, Loader2,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange, LoadedNoteAttachment } from "@/lib/types";
 import type { LeadImportInfo } from "./types";
@@ -22,6 +23,7 @@ import {
 import { uploadFileToTicket } from "@/lib/notes/client-upload";
 import { CrmStatusBadge } from "../../status-badge";
 import { createNoteAttachmentUploads, deleteNote, updateNote } from "../../actions";
+import { unmergeDuplicate } from "../../../leads/actions";
 import { useToastContext } from "../../../toast-provider";
 import type { NoteRow, CallRow, AuditRow, EmailRow } from "./types";
 import { formatDur } from "./activity-helpers";
