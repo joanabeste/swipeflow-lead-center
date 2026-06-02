@@ -252,6 +252,7 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
               customStatuses={data.customStatuses}
               hq={data.hq}
               duplicates={data.duplicates}
+              links={data.links}
               onBack={handleClose}
               backLabel="Schließen"
               extraRightColumn={

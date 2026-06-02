@@ -7,7 +7,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2, Archive } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage, LeadTodo, LeadImportInfo,
+  EmailMessage, LeadTodo, LeadImportInfo, LeadLink,
 } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
@@ -46,6 +46,7 @@ interface Props {
   lead: Lead;
   contacts: LeadContact[];
   jobs: LeadJobPosting[];
+  links: LeadLink[];
   notes: NoteRow[];
   calls: CallRow[];
   emails: EmailRow[];
@@ -76,7 +77,7 @@ interface Props {
 }
 
 export function CrmLeadDetail({
-  lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
+  lead, contacts, jobs, links, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
   duplicates = [],
   importInfo,
@@ -289,7 +290,7 @@ export function CrmLeadDetail({
           </div>
         );
         const leftColProps = {
-          lead, contacts, jobs, latestEnrichment, hq, senderName,
+          lead, contacts, jobs, links, latestEnrichment, hq, senderName,
           deals, dealStages, team, industries, caseStudies, landingPages, screenshotCard,
         };
         if (forceStackedLayout) {

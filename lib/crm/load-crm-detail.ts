@@ -2,7 +2,7 @@ import "server-only";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage, LeadTodo, LoadedNoteAttachment, LeadImportInfo,
+  EmailMessage, LeadTodo, LoadedNoteAttachment, LeadImportInfo, LeadLink,
 } from "@/lib/types";
 import { getNoteAttachmentsForNotes } from "@/lib/notes/attachments";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
@@ -52,6 +52,8 @@ export interface CrmDetailBundle {
   duplicates: DuplicateCandidate[];
   /** Herkunft des Leads — ältester „Importiert"-Eintrag in der Historie. */
   importInfo: LeadImportInfo;
+  /** Zusätzliche Webseiten/Profile (Facebook, Instagram, …). */
+  links: LeadLink[];
 }
 
 /**
@@ -76,6 +78,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     { data: changes },
     { data: auditLogs },
     { data: todos },
+    { data: links },
     hq,
   ] = await Promise.all([
     db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
@@ -95,6 +98,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       .order("created_at", { ascending: false })
       .limit(200),
     db.from("lead_todos").select("*").eq("lead_id", id).order("due_date", { ascending: true }),
+    db.from("lead_links").select("*").eq("lead_id", id).order("created_at"),
     getHqLocation(),
   ]);
 
@@ -317,5 +321,6 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       : null,
     duplicates,
     importInfo,
+    links: (links ?? []) as LeadLink[],
   };
 }

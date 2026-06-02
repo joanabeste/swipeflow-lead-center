@@ -46,6 +46,7 @@ type AllowedEditField = (typeof ALLOWED_EDIT_FIELDS)[number];
 export async function updateLead(
   leadId: string,
   updates: Partial<Lead>,
+  opts?: { auditSource?: string },
 ) {
   // Whitelist anwenden: unbekannte Keys (status, assigned_to, deleted_at, ...)
   // werden hier verworfen, bevor irgendetwas Sicherheitsrelevantes passiert.
@@ -132,7 +133,9 @@ export async function updateLead(
     action: "lead.updated",
     entityType: "lead",
     entityId: leadId,
-    details: { fields: Object.keys(safe) },
+    // auditSource kennzeichnet z.B. externe API-Edits (kein Session-User → sonst
+    // nicht von System-Änderungen unterscheidbar). UI-Aufrufe lassen es weg.
+    details: { fields: Object.keys(safe), ...(opts?.auditSource ? { source: opts.auditSource } : {}) },
   });
 
   revalidatePath("/leads");

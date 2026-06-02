@@ -24,6 +24,7 @@ import {
 } from "@/lib/notes/attachments";
 import { awardCommissionsForStatusChange } from "@/lib/commission/award";
 import { findExistingLeadForManual } from "@/lib/leads/find-existing";
+import { detectLinkType } from "@/lib/leads/link-platforms";
 
 export type CallProvider = "phonemondo" | "webex";
 
@@ -953,6 +954,49 @@ export async function deleteContact(contactId: string, leadId: string) {
   if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
   const { error } = await db.from("lead_contacts").delete().eq("id", contactId);
+  if (error) return { error: error.message };
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/leads/${leadId}`);
+  return { success: true };
+}
+
+// ─── Lead-Links / Profile (zusätzliche Webseiten/Social) ──────
+
+export async function addLeadLink(
+  leadId: string,
+  url: string,
+  opts?: { type?: string; label?: string | null },
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const normalized = normalizeUrl(url);
+  if (!normalized) return { error: "Ungültige URL." };
+  const type = opts?.type?.trim() || detectLinkType(normalized);
+  const db = createServiceClient();
+  const { error } = await db.from("lead_links").upsert(
+    {
+      lead_id: leadId,
+      url: normalized,
+      type,
+      label: opts?.label?.trim() || null,
+      created_by: ctx.user.id,
+    },
+    { onConflict: "lead_id,url", ignoreDuplicates: true },
+  );
+  if (error) return { error: error.message };
+  revalidatePath(`/crm/${leadId}`);
+  revalidatePath(`/leads/${leadId}`);
+  return { success: true };
+}
+
+export async function deleteLeadLink(
+  linkId: string,
+  leadId: string,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+  const db = createServiceClient();
+  const { error } = await db.from("lead_links").delete().eq("id", linkId);
   if (error) return { error: error.message };
   revalidatePath(`/crm/${leadId}`);
   revalidatePath(`/leads/${leadId}`);

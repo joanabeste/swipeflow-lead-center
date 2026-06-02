@@ -1,6 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus, LeadLink } from "@/lib/types";
 import { getHqLocation, type HqLocation } from "@/lib/app-settings";
 import { findLeadDuplicates, type DuplicateCandidate } from "@/lib/leads/find-existing";
 
@@ -14,6 +14,8 @@ export interface LeadDetailBundle {
   hq: HqLocation;
   /** Mutmaßliche Duplikate dieses Leads — für das Warnbanner in der Neue-Leads-Ansicht. */
   duplicates: DuplicateCandidate[];
+  /** Zusätzliche Webseiten/Profile (Facebook, Instagram, …). */
+  links: LeadLink[];
 }
 
 /**
@@ -38,6 +40,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     { data: jobPostings },
     { data: enrichments },
     { data: customStatuses },
+    { data: links },
     hq,
   ] = await Promise.all([
     db.from("leads").select("*").eq("id", id).is("deleted_at", null).maybeSingle(),
@@ -46,6 +49,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_enrichments").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1),
     db.from("custom_lead_statuses").select("*"),
+    db.from("lead_links").select("*").eq("lead_id", id).order("created_at"),
     getHqLocation(),
   ]);
 
@@ -72,5 +76,6 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     customStatuses: (customStatuses as CustomLeadStatus[]) ?? [],
     hq,
     duplicates,
+    links: (links as LeadLink[]) ?? [],
   };
 }

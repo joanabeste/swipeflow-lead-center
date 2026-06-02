@@ -54,6 +54,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
       customStatuses={data.customStatuses}
       hq={data.hq}
       duplicates={data.duplicates}
+      links={data.links}
       backHref={backHref}
       extraRightColumn={rightColumn}
     />

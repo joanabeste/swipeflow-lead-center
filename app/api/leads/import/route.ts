@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { normalizeLeadRow } from "@/lib/csv/normalizer";
+import { normalizeLeadRow, normalizeUrl } from "@/lib/csv/normalizer";
 import { validateCsvSize, createImportLog } from "@/lib/csv/import-helpers";
 import { ingestLeads } from "@/lib/leads/ingest";
+import { findExistingLeadForManual } from "@/lib/leads/find-existing";
+import { detectLinkType } from "@/lib/leads/link-platforms";
+import { authorizeLeadsApi } from "@/lib/leads/api-auth";
 
 // Service-Role-Client + node:crypto → Node-Runtime erzwingen (kein Edge).
 export const runtime = "nodejs";
@@ -44,24 +46,14 @@ interface IncomingLead {
   register_id?: string;
   description?: string;
   contacts?: IncomingContact[];
+  /** Zusätzliche Webseiten/Profile (Facebook, Instagram, …). Typ wird sonst erkannt. */
+  links?: { url?: string; type?: string; label?: string }[];
   /** Optional vorbelegte Ampel-Bewertung (Webdesign): "green" | "amber" | "red". */
   traffic_light_rating?: string;
   traffic_light_reason?: string;
 }
 
 const VALID_TRAFFIC_LIGHT = new Set(["green", "amber", "red"]);
-
-function authorized(request: Request): boolean {
-  const header = request.headers.get("authorization") ?? "";
-  const expected = process.env.LEADS_IMPORT_API_KEY;
-  if (!expected) return false;
-  const got = header.startsWith("Bearer ") ? header.slice(7) : "";
-  // timingSafeEqual wirft bei Laengendifferenz → vorher abfangen.
-  const a = Buffer.from(got);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(a, b);
-}
 
 /** Uebernimmt nur Strings; alles andere wird zu null (defensiv gegen Fremd-Payloads). */
 function str(value: unknown): string | null {
@@ -70,7 +62,7 @@ function str(value: unknown): string | null {
 
 export async function POST(request: Request) {
   // 1. Auth
-  if (!authorized(request)) {
+  if (!authorizeLeadsApi(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -153,9 +145,42 @@ export async function POST(request: Request) {
     sourceType: "manual",
   });
 
+  // Links/Profile setzen — für NEUE wie BESTEHENDE Leads (nach ingestLeads existieren
+  // beide). Pro eingehendem Lead den DB-Lead per Match auflösen und idempotent upserten.
+  let linksImported = 0;
+  for (const lead of leadsRaw as IncomingLead[]) {
+    const incoming = Array.isArray(lead.links) ? lead.links : [];
+    if (incoming.length === 0) continue;
+    const match = await findExistingLeadForManual(db, {
+      company_name: str(lead.company_name),
+      website: str(lead.website),
+      email: str(lead.email),
+      phone: str(lead.phone),
+      city: str(lead.city),
+    });
+    if (!match) continue;
+    const rows = incoming
+      .map((lnk) => {
+        const url = normalizeUrl(str(lnk?.url));
+        if (!url) return null;
+        return {
+          lead_id: match.leadId,
+          url,
+          type: str(lnk?.type) ?? detectLinkType(url),
+          label: str(lnk?.label),
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
+    if (rows.length === 0) continue;
+    const { error } = await db
+      .from("lead_links")
+      .upsert(rows, { onConflict: "lead_id,url", ignoreDuplicates: true });
+    if (!error) linksImported += rows.length;
+  }
+
   console.log(
     `[leads/import] source=${source} log=${log.id} imported=${result.imported} ` +
-      `duplicates=${result.duplicates} errors=${result.errors}`,
+      `duplicates=${result.duplicates} links=${linksImported} errors=${result.errors}`,
   );
 
   // 6. Antwort
@@ -170,6 +195,7 @@ export async function POST(request: Request) {
       archived: result.archived,
       errors: result.errors,
       contacts_imported: result.contacts_imported,
+      links_imported: linksImported,
       error_details: result.errorDetails,
     },
     { status: 201 },

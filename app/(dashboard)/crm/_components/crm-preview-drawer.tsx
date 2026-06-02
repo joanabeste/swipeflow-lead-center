@@ -227,6 +227,7 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClo
             todos={data.todos}
             duplicates={data.duplicates}
             importInfo={data.importInfo}
+            links={data.links}
             onBack={handleClose}
             forceStackedLayout={true}
             screenshotCard={

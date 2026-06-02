@@ -325,6 +325,22 @@ export interface CustomLeadStatus {
   updated_at: string;
 }
 
+export type LeadLinkType =
+  | "facebook" | "instagram" | "linkedin" | "xing"
+  | "youtube" | "tiktok" | "twitter"
+  | "google_maps" | "directory"
+  | "website" | "other";
+
+/** Zusätzliche Webseite/Profil eines Leads (Tabelle lead_links). */
+export interface LeadLink {
+  id: string;
+  lead_id: string;
+  type: LeadLinkType;
+  url: string;
+  label: string | null;
+  created_at: string;
+}
+
 export interface LeadNote {
   id: string;
   lead_id: string;

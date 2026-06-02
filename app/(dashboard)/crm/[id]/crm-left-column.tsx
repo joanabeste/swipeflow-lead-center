@@ -1,11 +1,12 @@
 "use client";
 
-import type { Lead, LeadContact, LeadJobPosting, LeadEnrichment } from "@/lib/types";
+import type { Lead, LeadContact, LeadJobPosting, LeadEnrichment, LeadLink } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { CrmAssigneeCard } from "./_components/crm-assignee-card";
 import { CrmCompanyCard } from "./_components/crm-company-card";
+import { CrmLinksCard } from "./_components/crm-links-card";
 import { CrmContactsCard } from "./_components/crm-contacts-card";
 import { CrmDealsCard } from "./_components/crm-deals-card";
 import { CrmJobsCard } from "./_components/crm-jobs-card";
@@ -17,6 +18,7 @@ interface Props {
   lead: Lead;
   contacts: LeadContact[];
   jobs: LeadJobPosting[];
+  links: LeadLink[];
   latestEnrichment: LeadEnrichment | null;
   hq: HqLocation;
   senderName: string | null;
@@ -31,12 +33,13 @@ interface Props {
 }
 
 export function CrmLeftColumn({
-  lead, contacts, jobs, latestEnrichment, hq, senderName, deals, dealStages, team,
+  lead, contacts, jobs, links, latestEnrichment, hq, senderName, deals, dealStages, team,
   industries, caseStudies, landingPages, screenshotCard, middleSlot,
 }: Props) {
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
+      <CrmLinksCard leadId={lead.id} links={links} />
       {middleSlot}
       <CrmContactsCard
         leadId={lead.id}

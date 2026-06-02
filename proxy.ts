@@ -44,7 +44,13 @@ export async function proxy(request: NextRequest) {
     apiPath.startsWith("/api/cron/") ||
     apiPath.startsWith("/api/phonemondo/") ||
     apiPath === "/api/webex/sync-recordings" ||
-    apiPath === "/api/leads/import"
+    // Externe Lead-APIs (Bearer LEADS_IMPORT_API_KEY): /api/leads (Liste),
+    // /api/leads/import und /api/leads/<id> (GET/PATCH). Die session-
+    // authentifizierten Unterrouten /api/leads/<id>/preview|geocode|
+    // screenshot-url tragen einen weiteren Pfad-Abschnitt → die Regex greift
+    // dort nicht und sie bleiben hinter dem Session-Gate.
+    apiPath === "/api/leads" ||
+    /^\/api\/leads\/[^/]+$/.test(apiPath)
   ) {
     return NextResponse.next({ request: { headers: request.headers } });
   }

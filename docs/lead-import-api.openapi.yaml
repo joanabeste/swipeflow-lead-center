@@ -1,18 +1,21 @@
 openapi: 3.1.0
 info:
-  title: Lead Center – Lead Import API
-  version: 1.0.0
+  title: Lead Center – Lead API
+  version: 1.1.0
   description: |
-    Externe HTTP-Schnittstelle, über die ein anderes System (z. B. Claude Cowork) neue Leads
-    ins Lead-Center importiert — gebündelt wie ein CSV-Import.
+    Externe HTTP-Schnittstelle, über die ein anderes System (z. B. Claude Cowork) Leads ins
+    Lead-Center **importiert**, **ausliest** und **aktualisiert**.
 
-    Jeder Aufruf erzeugt einen Import-Batch (`import_logs`-Eintrag, `import_type: "api"`); alle
-    angelegten Leads teilen dessen `source_import_id` und erscheinen mit Status `"imported"`
-    ("neue Leads") als eine Gruppe in der Import-Historie (`/import`).
+    Import (`POST /api/leads/import`): jeder Aufruf erzeugt einen Import-Batch
+    (`import_logs`-Eintrag, `import_type: "api"`); alle angelegten Leads teilen dessen
+    `source_import_id` und erscheinen mit Status `"imported"` ("neue Leads") als eine Gruppe in
+    der Import-Historie (`/import`). Duplikate werden **strikt übersprungen**: existiert bereits
+    ein Lead mit gleicher Domain, E-Mail, Telefonnummer oder (fuzzy) Firmenname, wird er nicht
+    verändert — nur komplett neue Firmen werden angelegt.
 
-    Duplikate werden **strikt übersprungen**: existiert bereits ein Lead mit gleicher Domain,
-    E-Mail, Telefonnummer oder (fuzzy) Firmenname, wird er nicht verändert — nur komplett neue
-    Firmen werden angelegt.
+    Lesen (`GET /api/leads`, `GET /api/leads/{id}`) und Aktualisieren (`PATCH /api/leads/{id}`)
+    teilen sich denselben Bearer-Token. `PATCH` ändert nur whitelistete Stammdaten-Felder
+    (kein status/assigned_to/deleted_at).
 
 servers:
   - url: https://your-domain.example
@@ -107,6 +110,133 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /api/leads:
+    get:
+      operationId: listLeads
+      summary: Leads auflisten (filterbar, paginiert)
+      description: |
+        Listet Leads ohne gelöschte, neueste zuerst. Für die neuen Leads: `status=imported`.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string }
+          description: 'Status-Filter, z. B. `imported` (neue Leads), `qualified`, `customer`.'
+          example: imported
+        - name: vertical
+          in: query
+          schema: { type: string }
+          description: Sparte/Filter.
+        - name: q
+          in: query
+          schema: { type: string }
+          description: Suche über Firmenname / Website / Ort / E-Mail / Telefon.
+        - name: include
+          in: query
+          schema: { type: string }
+          description: 'Kommasepariert: `contacts` und/oder `links` → reichert jeden Lead an.'
+          example: contacts,links
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Liste passender Leads.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadListResponse'
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500':
+          description: Interner Fehler / DB-Fehler.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/leads/{id}:
+    get:
+      operationId: getLead
+      summary: Einzelnen Lead lesen (inkl. Kontakte + Links)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lead inkl. Kontakte + Links.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadDetailResponse'
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Kein (nicht gelöschter) Lead mit dieser ID.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    patch:
+      operationId: updateLead
+      summary: Stammdaten eines Leads aktualisieren
+      description: |
+        Aktualisiert nur whitelistete Stammdaten-Felder (siehe `LeadUpdate`). Andere Keys
+        (status, assigned_to, deleted_at, crm_status_id …) werden ignoriert. Telefon-Änderung
+        setzt `phone_source="manual"`, Adress-Änderung setzt die Geokoordinaten zurück.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeadUpdate'
+            examples:
+              telefonUndBranche:
+                value:
+                  phone: 0571 999999
+                  industry: Maschinenbau
+      responses:
+        '200':
+          description: Aktualisiert (auch bei No-Op).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateResult'
+        '400':
+          description: Kaputtes JSON oder Body ist kein Objekt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          description: Bearer-Token fehlt oder ist falsch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Lead nicht gefunden.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
 components:
   securitySchemes:
@@ -208,6 +338,14 @@ components:
             nicht abgelehnt).
           items:
             $ref: '#/components/schemas/ContactInput'
+        links:
+          type: array
+          description: |
+            Zusätzliche Webseiten/Profile (Facebook, Instagram, LinkedIn, Google Maps,
+            Branchenverzeichnis, …). Werden auch an bereits bestehende (Duplikat-)Leads
+            angehängt; idempotent pro (lead_id, url).
+          items:
+            $ref: '#/components/schemas/LinkInput'
 
     ContactInput:
       type: object
@@ -221,10 +359,29 @@ components:
           description: Optionale Rolle/Funktion.
           example: Geschäftsführer
 
+    LinkInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: Volle URL der Webseite/des Profils.
+          example: https://facebook.com/beispiel
+        type:
+          type: string
+          description: |
+            Optional. Wird sonst aus der URL erkannt. Bekannte Werte: facebook, instagram,
+            linkedin, xing, youtube, tiktok, twitter, google_maps, directory, website, other.
+          example: facebook
+        label:
+          type: string
+          description: Optionaler Anzeigename.
+          example: Firmen-Facebook
+
     ImportResult:
       type: object
       required:
-        [success, import_log_id, imported, skipped, duplicates, updated, archived, errors, contacts_imported, error_details]
+        [success, import_log_id, imported, skipped, duplicates, updated, archived, errors, contacts_imported, links_imported, error_details]
       properties:
         success:
           type: boolean
@@ -253,6 +410,9 @@ components:
           description: Abgelehnte Zeilen (z. B. fehlender `company_name`).
         contacts_imported:
           type: integer
+        links_imported:
+          type: integer
+          description: Angelegte Links (neue + an bestehende Leads angehängte).
         error_details:
           type: array
           items:
@@ -277,3 +437,106 @@ components:
       properties:
         error:
           type: string
+
+    Lead:
+      type: object
+      description: |
+        Lead-Datensatz. `GET /api/leads` liefert eine kuratierte Feld-Auswahl,
+        `GET /api/leads/{id}` den vollständigen Datensatz. Zusätzliche Felder möglich.
+      additionalProperties: true
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, example: imported }
+        company_name: { type: string, example: Beispiel GmbH }
+        website: { type: [string, "null"], example: beispiel.de }
+        phone: { type: [string, "null"], example: "+49571123456" }
+        email: { type: [string, "null"], example: info@beispiel.de }
+        city: { type: [string, "null"], example: Espelkamp }
+        vertical: { type: [string, "null"] }
+        source_type: { type: [string, "null"], example: manual }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        contacts:
+          type: array
+          description: Nur bei `include=contacts`.
+          items: { $ref: '#/components/schemas/LeadContact' }
+        links:
+          type: array
+          description: Nur bei `include=links`.
+          items: { $ref: '#/components/schemas/LeadLink' }
+
+    LeadContact:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role: { type: [string, "null"] }
+        email: { type: [string, "null"] }
+        phone: { type: [string, "null"] }
+        salutation: { type: [string, "null"] }
+
+    LeadLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { type: string, example: facebook }
+        url: { type: string, example: https://facebook.com/beispiel }
+        label: { type: [string, "null"] }
+
+    LeadListResponse:
+      type: object
+      required: [leads, total, limit, offset]
+      properties:
+        leads:
+          type: array
+          items: { $ref: '#/components/schemas/Lead' }
+        total:
+          type: integer
+          description: Gesamtzahl passender Leads (unabhängig von limit/offset).
+        limit: { type: integer }
+        offset: { type: integer }
+
+    LeadDetailResponse:
+      type: object
+      required: [lead, contacts, links]
+      properties:
+        lead: { $ref: '#/components/schemas/Lead' }
+        contacts:
+          type: array
+          items: { $ref: '#/components/schemas/LeadContact' }
+        links:
+          type: array
+          items: { $ref: '#/components/schemas/LeadLink' }
+
+    LeadUpdate:
+      type: object
+      description: |
+        Zu ändernde Stammdaten-Felder (Whitelist). Alle anderen Keys werden ignoriert.
+      properties:
+        company_name: { type: string }
+        website: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        street: { type: string }
+        city: { type: string }
+        zip: { type: string }
+        state: { type: string }
+        country: { type: string }
+        industry: { type: string }
+        company_size: { type: string }
+        legal_form: { type: string }
+        register_id: { type: string }
+        career_page_url: { type: string }
+        description: { type: string }
+        traffic_light_rating: { type: string, enum: [green, amber, red] }
+        traffic_light_score: { type: number }
+        traffic_light_source: { type: string }
+        traffic_light_rated_at: { type: string, format: date-time }
+
+    UpdateResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive, Search, Send,
 } from "lucide-react";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus, LeadLink } from "@/lib/types";
 import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead, bulkUpdateStatus } from "./actions";
@@ -19,6 +19,7 @@ import { DEFAULT_ENRICHMENT_CONFIG, LEAD_STATUS_OPTIONS as statusOptions } from 
 import { useServiceMode } from "@/lib/service-mode";
 import { LeadMasterDataForm } from "./_components/lead-master-data-form";
 import { CrmContactsCard } from "../crm/[id]/_components/crm-contacts-card";
+import { CrmLinksCard } from "../crm/[id]/_components/crm-links-card";
 import { CrmJobsCard } from "../crm/[id]/_components/crm-jobs-card";
 import { LeadLocationCard } from "./_components/lead-location-card";
 import { CrmDuplicateWarning } from "../crm/[id]/_components/crm-duplicate-warning";
@@ -33,6 +34,7 @@ interface Props {
   changes: LeadChange[];
   contacts: LeadContact[];
   jobPostings: LeadJobPosting[];
+  links?: LeadLink[];
   latestEnrichment: LeadEnrichment | null;
   /** Wird für das Aussortier-Banner gebraucht (zeigt Label + Wiederherstellen). */
   customStatuses?: CustomLeadStatus[];
@@ -54,6 +56,7 @@ export function LeadProfilePanel({
   lead, changes, contacts, jobPostings, latestEnrichment, hq,
   customStatuses = [],
   duplicates = [],
+  links = [],
   backHref = "/leads",
   backLabel = "Zurück zur Liste",
   onBack,
@@ -178,6 +181,7 @@ export function LeadProfilePanel({
         jobs={jobPostings}
         companyName={lead.company_name}
       />
+      <CrmLinksCard leadId={lead.id} links={links} />
       <CrmJobsCard
         leadId={lead.id}
         jobs={jobPostings}

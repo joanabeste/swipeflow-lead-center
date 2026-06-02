@@ -53,6 +53,7 @@ export default async function CrmLeadPage({
       todos={data.todos}
       duplicates={data.duplicates}
       importInfo={data.importInfo}
+      links={data.links}
       backHref={backHref}
     />
   );
