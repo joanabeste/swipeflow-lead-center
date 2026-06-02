@@ -3,6 +3,7 @@ import {
   findDbDuplicateForLead,
   isLeadArchived,
   isFuzzyMatch,
+  isDomainMatch,
   normalizeDomain,
   loadExistingLeadsIndex,
   type DuplicateMatch,
@@ -113,34 +114,30 @@ export interface DuplicateCandidate {
   company_name: string | null;
   website: string | null;
   city: string | null;
-  status: string | null;
+  /** Welches Signal den Treffer ausgelöst hat — für eine klare Begründung im UI. */
+  matchedOn: "domain" | "email" | "phone" | "name";
 }
-
-interface CandidateRow {
-  id: string;
-  company_name: string | null;
-  website: string | null;
-  city: string | null;
-  status: string | null;
-  crm_status_id: string | null;
-  lifecycle_stage: string | null;
-  deleted_at: string | null;
-}
-
-const CANDIDATE_COLS =
-  "id, company_name, website, city, status, email, phone, crm_status_id, lifecycle_stage, deleted_at";
 
 /**
- * Findet ANDERE bestehende Leads, die mutmaßlich dieselbe Firma sind wie
- * `lead` — fuer die Duplikat-Warnung im CRM-Lead-Detail.
+ * Findet ALLE anderen bestehenden Leads, die mutmaßlich dieselbe Firma sind wie
+ * `lead` — für die Duplikat-Warnung im CRM-Lead-Detail.
  *
- * Anders als `findExistingLeadForManual` (ein Treffer, fuer Neu-Anlage) liefert
- * dies eine LISTE und SCHLIESST den Lead selbst aus. Bewusst gezielte Queries
- * (exakte Domain/E-Mail/Telefon + Namens-ilike), damit der Aufruf auf dem
- * heissen Detail-Render-Pfad guenstig bleibt — kein Voll-Scan pro Aufruf.
- * Archivierte/aussortierte Leads werden gefiltert. Wird serverseitig pro
- * Seitenaufruf berechnet, also auch nach dem Anreichern frisch (z.B. wenn erst
- * dann die Domain bekannt wurde).
+ * Vollumfänglicher Check über DIESELBE Engine wie der Import-Dedup
+ * (`loadExistingLeadsIndex` + Matching-Primitive): beide Seiten werden
+ * normalisiert verglichen, daher robust gegen Format-Unterschiede —
+ *   • Domain inkl. Sub-Domain (`isDomainMatch`, z.B. karriere.firma.de ↔ firma.de)
+ *   • E-Mail (lowercase-normalisiert)
+ *   • Telefonnummer (normalisiert: +49-Form, Leer-/Sonderzeichen entfernt — matcht
+ *     also auch "0571 54683" gegen "+4957154683")
+ *   • Firmenname (Fuzzy) bei gleicher/unbekannter Stadt
+ * So warnt das CRM exakt vor dem, was auch der Import als Dublette werten würde.
+ *
+ * Schliesst den Lead selbst sowie archivierte/aussortierte Leads aus. Läuft
+ * serverseitig pro Seitenaufruf — also auch nach dem Anreichern frisch, wenn
+ * z.B. erst dann die Domain/Telefonnummer bekannt wurde.
+ *
+ * Kosten: lädt den Lead-Bestand (paginiert) wie die Merge-Seite. Bewusste
+ * Entscheidung zugunsten Vollständigkeit statt eines gedeckelten Schnell-Checks.
  */
 export async function findLeadDuplicates(
   db: SupabaseClient,
@@ -154,85 +151,41 @@ export async function findLeadDuplicates(
   },
   limit = 10,
 ): Promise<DuplicateCandidate[]> {
-  const byId = new Map<string, CandidateRow>();
-  const collect = (rows: CandidateRow[] | null) => {
-    for (const r of rows ?? []) byId.set(r.id, r);
-  };
+  const selfDomain = lead.website ? normalizeDomain(lead.website) : null;
+  const selfEmail = normalizeEmail(lead.email ?? null);
+  const selfPhone = normalizePhone(lead.phone ?? null);
+  const selfCity = lead.city?.toLowerCase() ?? null;
+  const selfName = lead.company_name ?? null;
 
-  // 1) Starke, exakte Signale (Domain / E-Mail / Telefon) in einer OR-Query.
-  const orParts: string[] = [];
-  const normEmail = normalizeEmail(lead.email ?? null);
-  if (normEmail) orParts.push(`email.eq.${normEmail}`);
-  const normPhone = normalizePhone(lead.phone ?? null);
-  if (normPhone) orParts.push(`phone.eq.${normPhone}`);
-  const domain = lead.website ? normalizeDomain(lead.website) : null;
-  if (domain) orParts.push(`website.eq.${domain}`);
-  if (orParts.length > 0) {
-    const { data } = await db
-      .from("leads")
-      .select(CANDIDATE_COLS)
-      .or(orParts.join(","))
-      .neq("id", lead.id)
-      .is("deleted_at", null)
-      .limit(50);
-    collect(data as CandidateRow[] | null);
-  }
+  // Kein Match-relevantes Feld → kein Check nötig.
+  if (!selfDomain && !selfEmail && !selfPhone && !selfName) return [];
 
-  // 2) Namens-Treffer: per ilike auf das erste echte Wort vorfiltern, dann
-  //    mit dem Fuzzy-Matcher (gleiche Stadt oder unbekannt) bestaetigen.
-  if (lead.company_name) {
-    const rawToken = lead.company_name
-      .trim()
-      .split(/[\s\-,.]+/)
-      .find((w) => w.length >= 3);
-    if (rawToken) {
-      const { data } = await db
-        .from("leads")
-        .select(CANDIDATE_COLS)
-        .ilike("company_name", `%${rawToken}%`)
-        .neq("id", lead.id)
-        .is("deleted_at", null)
-        .limit(50);
-      for (const r of (data as CandidateRow[] | null) ?? []) {
-        if (byId.has(r.id)) continue;
-        const sameCity =
-          !lead.city || !r.city || lead.city.toLowerCase() === r.city.toLowerCase();
-        if (sameCity && r.company_name && isFuzzyMatch(lead.company_name, r.company_name)) {
-          byId.set(r.id, r);
-        }
-      }
-    }
-  }
-
-  if (byId.size === 0) return [];
-
-  // Archivierte/aussortierte Leads ausschliessen (kein sinnvolles Merge-Ziel).
-  const { data: archivedRows } = await db
-    .from("custom_lead_statuses")
-    .select("id")
-    .eq("is_archived", true);
-  const archivedSet = new Set((archivedRows ?? []).map((r) => r.id as string));
+  const index = await loadExistingLeadsIndex(db);
 
   const out: DuplicateCandidate[] = [];
-  for (const r of byId.values()) {
-    if (
-      isLeadArchived(
-        {
-          lifecycle_stage: r.lifecycle_stage,
-          deleted_at: r.deleted_at,
-          crm_status_id: r.crm_status_id,
-        },
-        archivedSet,
-      )
-    ) {
-      continue;
+  for (const c of index.existingLeads) {
+    if (c.id === lead.id) continue;
+    if (isLeadArchived(c, index.archivedSet)) continue;
+
+    let matchedOn: DuplicateCandidate["matchedOn"] | null = null;
+    if (selfDomain && c.website && isDomainMatch(selfDomain, c.website)) {
+      matchedOn = "domain";
+    } else if (selfEmail && normalizeEmail(c.email) === selfEmail) {
+      matchedOn = "email";
+    } else if (selfPhone && normalizePhone(c.phone) === selfPhone) {
+      matchedOn = "phone";
+    } else if (selfName && c.company_name) {
+      const sameCity = !selfCity || !c.city || selfCity === c.city.toLowerCase();
+      if (sameCity && isFuzzyMatch(selfName, c.company_name)) matchedOn = "name";
     }
+    if (!matchedOn) continue;
+
     out.push({
-      id: r.id,
-      company_name: r.company_name,
-      website: r.website,
-      city: r.city,
-      status: r.status,
+      id: c.id,
+      company_name: c.company_name,
+      website: c.website,
+      city: c.city,
+      matchedOn,
     });
     if (out.length >= limit) break;
   }

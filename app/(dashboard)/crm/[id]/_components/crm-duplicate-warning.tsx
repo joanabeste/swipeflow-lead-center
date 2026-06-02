@@ -6,6 +6,14 @@ import { Copy, Loader2 } from "lucide-react";
 import { mergeDuplicateLead } from "../../../leads/actions";
 import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 
+// Klartext-Begründung, warum ein Lead als mögliches Duplikat gilt.
+const MATCH_LABEL: Record<DuplicateCandidate["matchedOn"], string> = {
+  domain: "gleiche Domain",
+  email: "gleiche E-Mail",
+  phone: "gleiche Telefonnummer",
+  name: "ähnlicher Name",
+};
+
 /**
  * Warnbanner im CRM-Lead-Detail: zeigt mutmaßliche Duplikate dieses Leads und
  * erlaubt das Zusammenführen direkt von hier. Die Kandidaten werden serverseitig
@@ -73,9 +81,14 @@ export function CrmDuplicateWarning({
               className="flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-white/60 px-2.5 py-1.5 dark:border-amber-900/40 dark:bg-black/10"
             >
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {c.company_name ?? "—"}
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {c.company_name ?? "—"}
+                  </p>
+                  <span className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    {MATCH_LABEL[c.matchedOn]}
+                  </span>
+                </div>
                 <p className="truncate text-xs text-gray-500 dark:text-gray-400">
                   {[c.website, c.city].filter(Boolean).join(" · ") || "–"}
                 </p>
