@@ -6,12 +6,17 @@ export function normalizePhone(raw: string | null): string | null {
   let phone = raw.trim().replace(/^['`´]+/, "");
   phone = phone.replace(/[\s\-\(\)\/]/g, "");
 
-  // Deutsche Nummern: 0xxx -> +49xxx
-  if (phone.startsWith("0") && !phone.startsWith("00")) {
+  // Inlandsnummer (0…) und internationale Wählform (00…) auf die +-Form bringen,
+  // damit Dedup format-unabhängig matcht:
+  //   0571…     → +49571…   (deutsche Inlandsnummer)
+  //   0049571…  → +49571…   (00 + Ländercode 49)
+  //   001…      → +1…       (sonstige Länder)
+  // Reihenfolge wichtig: 00 zuerst prüfen, sonst würde der Inlands-Zweig „0049…"
+  // zu „+49049…" verstümmeln.
+  if (phone.startsWith("00")) {
+    phone = "+" + phone.slice(2);
+  } else if (phone.startsWith("0")) {
     phone = "+49" + phone.slice(1);
-  }
-  if (phone.startsWith("0049")) {
-    phone = "+49" + phone.slice(4);
   }
 
   return phone || null;

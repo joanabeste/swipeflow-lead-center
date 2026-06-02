@@ -304,9 +304,16 @@ export async function mergeDuplicateLead(
     details: { survivor: survivorId, loser: loserId, source: "lead-detail" },
   });
 
+  // Survivor UND Verlierer auf beiden Detail-Routen revalidieren: der Verlierer ist
+  // jetzt archiviert (merged-duplicate). Wer dessen Detailseite offen hat, soll den
+  // frischen Stand sehen statt der Vor-Merge-Daten — analog zu dismissDuplicatePair,
+  // das ebenfalls beide Leads revalidiert.
   revalidatePath("/leads");
   revalidatePath("/crm");
   revalidatePath(`/crm/${survivorId}`);
+  revalidatePath(`/crm/${loserId}`);
+  revalidatePath(`/leads/${survivorId}`);
+  revalidatePath(`/leads/${loserId}`);
   return { success: true };
 }
 

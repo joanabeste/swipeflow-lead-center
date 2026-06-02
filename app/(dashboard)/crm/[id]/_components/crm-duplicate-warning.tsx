@@ -42,6 +42,18 @@ export function CrmDuplicateWarning({
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
 
+  // Nach einem Refetch (Drawer: notify() → Bundle neu laden; Vollseite: router.refresh()
+  // → frische Server-Props) liefert der Server die kanonische Kandidatenliste — Verlierer,
+  // bestätigte Nicht-Duplikate und archivierte Leads sind bereits ausgeschlossen. Den
+  // lokalen Stand daran angleichen, sonst zeigt das Banner nach dem Zusammenführen
+  // veraltete Einträge (oder verbirgt neu aufgetauchte Duplikate). Adjust-during-render
+  // statt useEffect: kein zusätzlicher Render-Pass, kein set-state-in-effect.
+  const [prevCandidates, setPrevCandidates] = useState(candidates);
+  if (candidates !== prevCandidates) {
+    setPrevCandidates(candidates);
+    setItems(candidates);
+  }
+
   if (items.length === 0) return null;
 
   function handleMerge(loserId: string, name: string | null) {
