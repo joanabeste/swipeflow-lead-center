@@ -2,7 +2,7 @@ import "server-only";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage, LeadTodo, LoadedNoteAttachment,
+  EmailMessage, LeadTodo, LoadedNoteAttachment, LeadImportInfo,
 } from "@/lib/types";
 import { getNoteAttachmentsForNotes } from "@/lib/notes/attachments";
 import { ensureLeadCoords } from "@/lib/geo/geocode";
@@ -50,6 +50,8 @@ export interface CrmDetailBundle {
   screenshotSignedUrl: string | null;
   /** Mutmaßliche Duplikate dieses Leads — für das Warnbanner (Detail + Vorschau). */
   duplicates: DuplicateCandidate[];
+  /** Herkunft des Leads — ältester „Importiert"-Eintrag in der Historie. */
+  importInfo: LeadImportInfo;
 }
 
 /**
@@ -228,6 +230,29 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     city: typedLead.city,
   });
 
+  // Lead-Herkunft (Import-Typ) für den ältesten Historien-Eintrag. Granularer Typ
+  // kommt aus import_logs.import_type (z.B. google_maps/api), Fallback lead.source_type.
+  let importType: string | null = null;
+  let importFileName: string | null = null;
+  if (typedLead.source_import_id) {
+    const { data: imp } = await db
+      .from("import_logs")
+      .select("import_type, file_name")
+      .eq("id", typedLead.source_import_id)
+      .maybeSingle();
+    if (imp) {
+      importType = (imp.import_type as string | null) ?? null;
+      importFileName = (imp.file_name as string | null) ?? null;
+    }
+  }
+  const importInfo: LeadImportInfo = {
+    at: typedLead.created_at,
+    importType,
+    sourceType: (typedLead.source_type as string | null) ?? null,
+    sourceUrl: (typedLead.source_url as string | null) ?? null,
+    fileName: importFileName,
+  };
+
   const notesTyped = ((notes ?? []) as LeadNote[]).map(withAuthor);
   const attachmentsByNote = await getNoteAttachmentsForNotes(notesTyped.map((n) => n.id));
   const notesWithAttachments = notesTyped.map((n) => ({
@@ -291,5 +316,6 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       ? await getScreenshotSignedUrl(typedLead.website_screenshot_path)
       : null,
     duplicates,
+    importInfo,
   };
 }

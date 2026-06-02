@@ -89,6 +89,11 @@ export async function updateLead(
     ...safe,
     updated_at: new Date().toISOString(),
   };
+  // Von Hand editierte Telefonnummer als 'manual' markieren → die Anreicherung
+  // überschreibt sie nie mehr (Guard in lib/enrichment/enrich-lead.ts).
+  if ("phone" in safe) {
+    finalUpdates.phone_source = "manual";
+  }
   if (addressChanged) {
     finalUpdates.latitude = null;
     finalUpdates.longitude = null;
@@ -280,8 +285,16 @@ export async function mergeDuplicateLead(
     };
   }
 
-  // Vermerk im Aktivitäten-Feed des behaltenen Leads (best-effort).
-  await insertMergeNote(db, survivorId, [loser ?? { company_name: null }]);
+  // Vermerk im Aktivitäten-Feed des behaltenen Leads (best-effort), inkl. Link
+  // zum archivierten Ursprungs-Lead (loserId).
+  await insertMergeNote(db, survivorId, [
+    {
+      id: loserId,
+      company_name: loser?.company_name ?? null,
+      website: loser?.website ?? null,
+      city: loser?.city ?? null,
+    },
+  ]);
 
   await logAudit({
     userId: ctx.user.id,
@@ -295,30 +308,6 @@ export async function mergeDuplicateLead(
   revalidatePath("/crm");
   revalidatePath(`/crm/${survivorId}`);
   return { success: true };
-}
-
-export async function findSimilarLeads(leadId: string) {
-  const db = createServiceClient();
-  const { data: lead } = await db.from("leads").select("company_name, website, city").eq("id", leadId).single();
-  if (!lead) return [];
-
-  // Nach ähnlichem Namen oder gleicher Domain suchen
-  const { data: candidates } = await db
-    .from("leads")
-    .select("id, company_name, website, city, status")
-    .neq("id", leadId)
-    .is("deleted_at", null)
-    .limit(100);
-
-  if (!candidates) return [];
-
-  const { isFuzzyMatch, isDomainMatch, normalizeDomain } = await import("@/lib/csv/dedup");
-
-  return candidates.filter((c) => {
-    if (lead.website && c.website && isDomainMatch(normalizeDomain(lead.website), normalizeDomain(c.website))) return true;
-    if (lead.company_name && c.company_name && isFuzzyMatch(lead.company_name, c.company_name)) return true;
-    return false;
-  }).slice(0, 10);
 }
 
 export async function searchLeads(query: string) {

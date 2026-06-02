@@ -7,7 +7,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import { ArrowLeft, Sparkles, AlertTriangle, RotateCcw, Trash2, Loader2, Archive } from "lucide-react";
 import type {
   CustomLeadStatus, Lead, LeadChange, LeadContact, LeadJobPosting, LeadNote, LeadCall, LeadEnrichment,
-  EmailMessage, LeadTodo,
+  EmailMessage, LeadTodo, LeadImportInfo,
 } from "@/lib/types";
 import { DEFAULT_ENRICHMENT_CONFIG } from "@/lib/types";
 import type { HqLocation } from "@/lib/app-settings";
@@ -65,6 +65,8 @@ interface Props {
   todos: LeadTodo[];
   /** Mutmaßliche Duplikate dieses Leads (serverseitig ermittelt). Leeres Array → kein Banner. */
   duplicates?: DuplicateCandidate[];
+  /** Lead-Herkunft → ältester „Importiert"-Eintrag in der Historie. */
+  importInfo?: LeadImportInfo | null;
   backHref?: string;
   /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
   onBack?: () => void;
@@ -77,6 +79,7 @@ export function CrmLeadDetail({
   lead, contacts, jobs, notes, calls, emails, enrichments, changes, auditLogs, statuses, hq, callProviders, senderName,
   deals, dealStages, team, industries, caseStudies, landingPages, todos,
   duplicates = [],
+  importInfo,
   backHref = "/crm",
   onBack,
   forceStackedLayout = false,
@@ -279,6 +282,7 @@ export function CrmLeadDetail({
               changes={changes}
               auditLogs={auditLogs}
               callProviders={callProviders}
+              importInfo={importInfo}
             />
             <LeadTodosCard leadId={lead.id} todos={todos} />
           </div>

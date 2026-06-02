@@ -87,6 +87,10 @@ export function isFuzzyMatch(nameA: string, nameB: string): boolean {
 export function isDomainMatch(domainA: string, domainB: string): boolean {
   const a = normalizeDomain(domainA);
   const b = normalizeDomain(domainB);
+  // Leere/ungültige Domains dürfen NIE matchen — sonst gälten zwei Leads OHNE
+  // Domain (oder mit Müll wie "http://", der zu "" normalisiert) fälschlich als
+  // Domain-Duplikat. "" === "" wäre sonst true.
+  if (!a || !b) return false;
   if (a === b) return true;
 
   // Sub-Domain-Match (z.B. karriere.firma.de vs firma.de)

@@ -192,6 +192,7 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClo
         {data && (
           <PreviewRefreshProvider onRefresh={handleRefresh}>
           <CrmLeadDetail
+            key={data.lead.id}
             lead={data.lead}
             contacts={data.contacts}
             jobs={data.jobs}
@@ -213,6 +214,7 @@ export function CrmPreviewDrawer({ previewId, siblingIds = [], onNavigate, onClo
             landingPages={data.landingPages}
             todos={data.todos}
             duplicates={data.duplicates}
+            importInfo={data.importInfo}
             onBack={handleClose}
             forceStackedLayout={true}
             screenshotCard={

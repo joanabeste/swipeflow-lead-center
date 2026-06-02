@@ -29,6 +29,7 @@ export default async function CrmLeadPage({
 
   return (
     <CrmLeadDetail
+      key={data.lead.id}
       lead={data.lead}
       screenshotCard={screenshotCard}
       callProviders={data.callProviders}
@@ -51,6 +52,7 @@ export default async function CrmLeadPage({
       landingPages={data.landingPages}
       todos={data.todos}
       duplicates={data.duplicates}
+      importInfo={data.importInfo}
       backHref={backHref}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Copy, Loader2 } from "lucide-react";
+import { Copy, Loader2, ExternalLink } from "lucide-react";
 import { mergeDuplicateLead } from "../../../leads/actions";
 import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 
@@ -99,6 +99,16 @@ export function CrmDuplicateWarning({
                   className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:text-amber-300 dark:hover:bg-amber-900/30"
                 >
                   Ansehen
+                </a>
+                <a
+                  href={`/crm/${c.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="In neuem Tab öffnen"
+                  aria-label="In neuem Tab öffnen"
+                  className="inline-flex items-center justify-center rounded-md border border-amber-300 px-2 py-1 text-amber-700 hover:bg-amber-100 dark:border-amber-900/50 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </a>
                 <button
                   onClick={() => handleMerge(c.id, c.company_name)}

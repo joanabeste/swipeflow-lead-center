@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus } from "@/lib/types";
 import { getHqLocation, type HqLocation } from "@/lib/app-settings";
+import { findLeadDuplicates, type DuplicateCandidate } from "@/lib/leads/find-existing";
 
 export interface LeadDetailBundle {
   lead: Lead;
@@ -11,6 +12,8 @@ export interface LeadDetailBundle {
   latestEnrichment: LeadEnrichment | null;
   customStatuses: CustomLeadStatus[];
   hq: HqLocation;
+  /** Mutmaßliche Duplikate dieses Leads — für das Warnbanner in der Neue-Leads-Ansicht. */
+  duplicates: DuplicateCandidate[];
 }
 
 /**
@@ -47,14 +50,27 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
   ]);
 
   if (!lead) return null;
+  const typedLead = lead as Lead;
+
+  // Mutmaßliche Duplikate (vollumfänglich: Domain/E-Mail/Telefon/Name, beide Seiten
+  // normalisiert) — pro Aufruf frisch, also auch nach dem Anreichern.
+  const duplicates = await findLeadDuplicates(db, {
+    id: typedLead.id,
+    company_name: typedLead.company_name,
+    website: typedLead.website,
+    email: typedLead.email,
+    phone: typedLead.phone,
+    city: typedLead.city,
+  });
 
   return {
-    lead: lead as Lead,
+    lead: typedLead,
     changes: (changes as LeadChange[]) ?? [],
     contacts: (contacts as LeadContact[]) ?? [],
     jobPostings: (jobPostings as LeadJobPosting[]) ?? [],
     latestEnrichment: (enrichments?.[0] as LeadEnrichment) ?? null,
     customStatuses: (customStatuses as CustomLeadStatus[]) ?? [],
     hq,
+    duplicates,
   };
 }

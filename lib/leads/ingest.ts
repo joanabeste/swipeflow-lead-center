@@ -210,6 +210,9 @@ export async function ingestLeads(
       company_name: row.company_name,
       website: row.website,
       phone: row.phone,
+      // Provenienz: importierte/gescrapte Nummern sind überschreibbar, sobald die
+      // Anreicherung eine offizielle Website-Nummer findet (enrich-lead.ts).
+      phone_source: row.phone ? "import" : null,
       email: row.email,
       street: row.street,
       city: row.city,

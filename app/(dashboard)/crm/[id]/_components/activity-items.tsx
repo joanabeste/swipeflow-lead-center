@@ -2,12 +2,15 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
   Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail, Paperclip, X,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange, LoadedNoteAttachment } from "@/lib/types";
+import type { LeadImportInfo } from "./types";
+import { importSourceLabel } from "./activity-helpers";
 import {
   NOTE_ATTACHMENT_ACCEPT,
   NOTE_ATTACHMENT_ALLOWED_MIMES,
@@ -27,6 +30,23 @@ interface PendingFile {
   id: string;
   file: File;
   previewUrl: string | null;
+}
+
+/** Ältester Historien-Eintrag: wie der Lead reinkam (Import-Typ/Quelle). */
+export function ImportItem({ info }: { info: LeadImportInfo }) {
+  const detail = info.sourceUrl || info.fileName;
+  return (
+    <div>
+      <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+        {importSourceLabel(info.importType, info.sourceType)}
+      </span>
+      {detail && (
+        <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400" title={detail}>
+          {detail}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
@@ -231,6 +251,26 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
 
   return (
     <div className="group relative">
+      {note.merged_from_company && (
+        <p className="mb-1">
+          {note.merged_from_lead_id ? (
+            <Link
+              href={`/crm/${note.merged_from_lead_id}`}
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-200 hover:underline dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
+              title="Ursprungs-Lead ansehen / wiederherstellen (trennen)"
+            >
+              ↪ übernommen von {note.merged_from_company}
+            </Link>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+              title="Diese Notiz stammt aus einem zusammengeführten Duplikat"
+            >
+              ↪ übernommen von {note.merged_from_company}
+            </span>
+          )}
+        </p>
+      )}
       {note.content && (
         <p className="whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
           {note.content}

@@ -8,7 +8,24 @@ export function actionVerb(kind: ActivityKind): string {
     case "status": return "hat den Status geändert";
     case "enrichment": return "Lead wurde angereichert";
     case "change": return "hat ein Feld aktualisiert";
+    case "import": return "Lead importiert";
     default: return "";
+  }
+}
+
+/** Lesbares Label für die Lead-Herkunft (Import-Typ) — granular vor grob. */
+export function importSourceLabel(importType: string | null, sourceType: string | null): string {
+  const t = importType ?? sourceType;
+  switch (t) {
+    case "google_maps": return "Google Maps";
+    case "instant_scraper": return "Instant Data Scraper";
+    case "ba_job_listing": return "Bundesagentur-Stellenanzeigen";
+    case "csv": return "CSV-Upload";
+    case "url": return "Einzel-URL";
+    case "directory": return "Verzeichnis-Import";
+    case "api": return "API";
+    case "manual": return "Manuell angelegt";
+    default: return t ?? "Unbekannte Quelle";
   }
 }
 
@@ -20,6 +37,7 @@ export function filterLabel(kind: ActivityKind): string {
     case "status": return "Status-Änderungen";
     case "enrichment": return "Anreicherungen";
     case "change": return "Änderungen";
+    case "import": return "Import";
     default: return "Aktivitäten";
   }
 }

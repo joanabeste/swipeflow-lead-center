@@ -326,6 +326,8 @@ export async function processJobListingImport(fileContent: string): Promise<{
       company_name: nl.company.companyName,
       email: nl.company.email,
       phone: nl.company.phone,
+      // Importierte (gescrapte) Nummer → überschreibbar durch offizielle Website-Nummer beim Anreichern.
+      phone_source: nl.company.phone ? "import" : null,
       website: nl.domain,
       career_page_url: nl.company.careerPage,
       city: nl.descData.city,

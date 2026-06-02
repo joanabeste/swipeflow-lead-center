@@ -138,6 +138,10 @@ export interface Lead {
   company_name: string;
   website: string | null;
   phone: string | null;
+  /** Provenienz der Telefonnummer: 'import' | 'enrichment' | 'manual'.
+   *  'manual' wird von der Anreicherung nie automatisch überschrieben (Migration 115).
+   *  Optional, da die Migration evtl. noch nicht ausgeführt ist. */
+  phone_source?: "import" | "enrichment" | "manual" | null;
   email: string | null;
   street: string | null;
   city: string | null;
@@ -328,6 +332,23 @@ export interface LeadNote {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** Bei Zusammenführung gesetzt: Ursprungs-Lead, aus dem diese Notiz übernommen wurde. */
+  merged_from_lead_id?: string | null;
+  /** Firmenname des Ursprungs-Leads (zum Zeitpunkt des Merges) — für die Herkunfts-Kennzeichnung. */
+  merged_from_company?: string | null;
+}
+
+/** Herkunft eines Leads — für den ältesten „Importiert"-Eintrag in der Historie. */
+export interface LeadImportInfo {
+  /** Zeitpunkt der Anlage (lead.created_at) — sortiert als ältester Eintrag. */
+  at: string;
+  /** Granularer Typ aus import_logs.import_type (google_maps, api, …) oder null. */
+  importType: string | null;
+  /** Grobe Quelle aus lead.source_type (Fallback, z.B. 'manual'). */
+  sourceType: string | null;
+  /** Quell-URL bzw. Dateiname des Imports, falls vorhanden. */
+  sourceUrl: string | null;
+  fileName: string | null;
 }
 
 export interface LeadNoteAttachment {
@@ -441,6 +462,9 @@ export interface LeadContact {
   phone: string | null;
   salutation: ContactSalutation | null;
   source_url: string | null;
+  /** Herkunft des Kontakts (DB-Spalte aus Migration 061). Optional, da nicht überall
+   *  selektiert. 'manual' wird u.a. für die beim Telefon-Swap bewahrte Altnummer genutzt. */
+  source?: "enrichment" | "manual" | "ba_import" | "csv_import" | null;
   created_at: string;
 }
 

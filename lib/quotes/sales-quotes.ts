@@ -45,6 +45,22 @@ export const SALES_QUOTES: SalesQuote[] = [
   { text: "Du verkaufst nicht, du löst Probleme. Finde das Problem.", tone: "motivation" },
   { text: "Nichts ist vorbei, solange der Lead nicht 'Stop' gesagt hat.", tone: "motivation" },
   { text: "Konstanz schlägt Intensität.", tone: "wisdom" },
+
+  // ─── Motivierende Klassiker ─────────────────────────────────
+  { text: "Ob du glaubst, du kannst es, oder du kannst es nicht — du wirst recht behalten.", author: "Henry Ford", tone: "classic" },
+  { text: "Nichts Großes wurde je ohne Begeisterung erreicht.", author: "Ralph Waldo Emerson", tone: "classic" },
+
+  // ─── Motivation von berühmten Leuten ────────────────────────
+  { text: "Deine Zeit ist begrenzt — verschwende sie nicht damit, das Leben eines anderen zu leben.", author: "Steve Jobs", tone: "motivation" },
+  { text: "Der beste Weg anzufangen ist, aufzuhören zu reden und einfach zu machen.", author: "Walt Disney", tone: "motivation" },
+  { text: "Es scheint immer unmöglich, bis es getan ist.", author: "Nelson Mandela", tone: "motivation" },
+  { text: "Glaube, dass du es kannst, und du bist schon halb am Ziel.", author: "Theodore Roosevelt", tone: "motivation" },
+  { text: "Es ist egal, wie langsam du gehst, solange du nicht stehen bleibst.", author: "Konfuzius", tone: "motivation" },
+  { text: "Genie ist ein Prozent Inspiration und neunundneunzig Prozent Schweiß.", author: "Thomas A. Edison", tone: "motivation" },
+  { text: "Der Wille zu gewinnen ist nichts gegen den Willen, sich vorzubereiten.", author: "Vince Lombardi", tone: "motivation" },
+  { text: "Erfolg ist kein Zufall — es ist harte Arbeit, Ausdauer und Liebe zu dem, was du tust.", author: "Pelé", tone: "motivation" },
+  { text: "Du wirst vielen Niederlagen begegnen, aber du darfst dich nicht besiegen lassen.", author: "Maya Angelou", tone: "motivation" },
+  { text: "Erfolg ist nicht endgültig, Misserfolg ist nicht fatal — es zählt der Mut weiterzumachen.", author: "Winston Churchill", tone: "motivation" },
 ];
 
 /**

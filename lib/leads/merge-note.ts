@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface MergedLoser {
+  id?: string | null;
   company_name?: string | null;
   city?: string | null;
   website?: string | null;
@@ -34,14 +35,55 @@ export async function insertMergeNote(
           .map(describeLoser)
           .join("; ")}.`;
 
+  // Verlinkt das Herkunfts-Badge dieser Merge-Notiz auf den (archivierten)
+  // Ursprungs-Lead, damit man ihn von hier aus ansehen/wiederherstellen ("trennen")
+  // kann. Bei mehreren Verlierern verweist es auf den ersten; die übrigen sind
+  // über ihre eigenen übernommenen Notizen erreichbar.
+  const primary = losers[0];
+
   try {
     const { error } = await db.from("lead_notes").insert({
       lead_id: survivorId,
       content,
       created_by: null, // → Aktivitäten-Feed zeigt "System"
+      merged_from_lead_id: primary.id ?? null,
+      merged_from_company: primary.company_name?.trim() || null,
     });
     if (error) console.error("[insertMergeNote]", error.message);
   } catch (e) {
     console.error("[insertMergeNote] unerwartet:", e);
+  }
+}
+
+/**
+ * Schreibt eine System-Notiz, dass die offizielle Website-Nummer (Impressum/
+ * Kontakt) die bisherige Lead-Nummer ersetzt hat — sichtbar im Aktivitäten-Feed
+ * (created_by=null → Autor "System"). Die alte Nummer wird zusätzlich als Kontakt
+ * bewahrt; hier wird der Tausch dokumentiert.
+ *
+ * Best-effort: wirft NIE. Ein Fehler beim Notiz-Schreiben darf die Anreicherung
+ * nicht beeinträchtigen.
+ */
+export async function insertPhoneSwapNote(
+  db: SupabaseClient,
+  leadId: string,
+  oldPhone: string | null,
+  newPhone: string,
+): Promise<void> {
+  if (!leadId || !newPhone) return;
+
+  const content =
+    `📞 Offizielle Website-Nummer übernommen: ${oldPhone ?? "—"} → ${newPhone} ` +
+    `(aus Impressum/Kontakt, Konfidenz hoch). Die bisherige Nummer wurde als Kontakt gesichert.`;
+
+  try {
+    const { error } = await db.from("lead_notes").insert({
+      lead_id: leadId,
+      content,
+      created_by: null, // → Aktivitäten-Feed zeigt "System"
+    });
+    if (error) console.error("[insertPhoneSwapNote]", error.message);
+  } catch (e) {
+    console.error("[insertPhoneSwapNote] unerwartet:", e);
   }
 }

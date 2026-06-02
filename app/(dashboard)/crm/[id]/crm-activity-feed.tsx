@@ -6,12 +6,12 @@ import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
 import { PersonAvatar } from "./_components/person-avatar";
-import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem } from "./_components/activity-items";
+import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem, ImportItem } from "./_components/activity-items";
 import { ComposeNote } from "./_components/compose-note";
 import { ComposeCall } from "./_components/compose-call";
 import { ComposeEmail } from "./_components/compose-email";
 import { actionVerb, filterLabel, formatRelative } from "./_components/activity-helpers";
-import type { ActivityKind, NoteRow, CallRow, EmailRow, AuditRow } from "./_components/types";
+import type { ActivityKind, NoteRow, CallRow, EmailRow, AuditRow, LeadImportInfo } from "./_components/types";
 
 interface Props {
   leadId: string;
@@ -28,6 +28,8 @@ interface Props {
   changes: LeadChange[];
   auditLogs: AuditRow[];
   callProviders: { phonemondo: boolean; webex: boolean };
+  /** Lead-Herkunft → ältester „Importiert"-Eintrag in der Historie. */
+  importInfo?: LeadImportInfo | null;
 }
 
 interface UnifiedItem {
@@ -40,7 +42,7 @@ interface UnifiedItem {
 }
 
 export function CrmActivityFeed({
-  leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders,
+  leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders, importInfo,
 }: Props) {
   const notify = usePreviewRefresh();
   const [filter, setFilter] = useState<ActivityKind>("all");
@@ -116,6 +118,18 @@ export function CrmActivityFeed({
       render: () => <ChangeItem change={ch} />,
     });
   }
+  // Ältester Eintrag: wie der Lead reinkam (Import-Typ/Quelle). at = lead.created_at
+  // → sortiert ganz nach unten als Ursprung der Historie.
+  if (importInfo) {
+    items.push({
+      id: "import",
+      kind: "import",
+      at: importInfo.at,
+      author: null,
+      authorAvatarUrl: null,
+      render: () => <ImportItem info={importInfo} />,
+    });
+  }
   items.sort((a, b) => (a.at < b.at ? 1 : -1));
   const filtered = filter === "all" ? items : items.filter((i) => i.kind === filter);
 
@@ -163,6 +177,7 @@ export function CrmActivityFeed({
             <option value="status">Nur Status-Wechsel</option>
             <option value="enrichment">Nur Anreicherung</option>
             <option value="change">Nur Feld-Änderungen</option>
+            <option value="import">Nur Import</option>
           </select>
         </label>
 

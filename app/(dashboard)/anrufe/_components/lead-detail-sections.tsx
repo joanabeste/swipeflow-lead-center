@@ -2,6 +2,7 @@ import {
   Briefcase, Building2, ExternalLink, Globe, Hash, History, Lock, Mail, MapPin,
   PhoneIncoming, PhoneOutgoing, ShieldCheck, Sparkles, StickyNote, Users, Zap,
 } from "lucide-react";
+import Link from "next/link";
 import type { ActiveLeadDetails, QueueLead } from "../actions";
 import { LastCallStatusPill } from "./call-status-badges";
 import { leadHomepageUrl } from "@/lib/leads/url";
@@ -285,6 +286,24 @@ export function LeadDetailSections({
                 <p className="mt-1.5 whitespace-pre-wrap text-sm text-gray-700 dark:text-gray-300">
                   {note.content}
                 </p>
+                {note.merged_from_company && (
+                  note.merged_from_lead_id ? (
+                    <Link
+                      href={`/crm/${note.merged_from_lead_id}`}
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-200 hover:underline dark:bg-amber-900/40 dark:text-amber-300 dark:hover:bg-amber-900/60"
+                      title="Ursprungs-Lead ansehen / wiederherstellen (trennen)"
+                    >
+                      ↪ übernommen von {note.merged_from_company}
+                    </Link>
+                  ) : (
+                    <span
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                      title="Diese Notiz stammt aus einem zusammengeführten Duplikat"
+                    >
+                      ↪ übernommen von {note.merged_from_company}
+                    </span>
+                  )
+                )}
               </li>
             ))}
           </ul>

@@ -45,6 +45,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
 
   return (
     <LeadProfilePanel
+      key={data.lead.id}
       lead={data.lead}
       changes={data.changes}
       contacts={data.contacts}
@@ -52,6 +53,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
       latestEnrichment={data.latestEnrichment}
       customStatuses={data.customStatuses}
       hq={data.hq}
+      duplicates={data.duplicates}
       backHref={backHref}
       extraRightColumn={rightColumn}
     />

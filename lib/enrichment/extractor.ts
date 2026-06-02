@@ -27,6 +27,16 @@ export interface EnrichmentResult {
     specializations: string[];
     // Firmenstammdaten aus Impressum
     company_phone: string | null;
+    /** Wie sicher ist die offizielle, vom Unternehmen selbst veröffentlichte Kontaktnummer?
+     *  "high":   eindeutig die vom Unternehmen selbst auf Impressum- oder Kontakt-Seite
+     *            veröffentlichte eigene Kontaktnummer — Festnetz ODER Mobil (kleine Betriebe
+     *            haben oft nur eine Mobilnummer). KEIN Fax, KEINE Mitarbeiter-Durchwahl von
+     *            einer Team-Seite, KEINE fremde Dienstleister-/Agenturnummer.
+     *  "medium": plausibel die Firmennummer, Quelle aber uneindeutig (nur Footer; Person/Firma unklar).
+     *  "low":    geraten/inferiert oder evtl. Fax / Team-Person / Dritt-Nummer.
+     *  null:     keine Firmennummer gefunden.
+     *  Nur "high" loest in enrich-lead.ts ein Ueberschreiben einer bestehenden Nummer aus. */
+    company_phone_confidence?: "high" | "medium" | "low" | null;
     company_email: string | null;
     street: string | null;
     zip: string | null;
@@ -69,7 +79,10 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
     if (includeField("company_size")) subFields.push('"company_size_estimate":""');
     if (includeField("founding_year")) subFields.push('"founding_year":""');
     if (includeField("industry")) subFields.push('"specializations":[]');
-    if (includeField("phone")) subFields.push('"company_phone":""');
+    if (includeField("phone")) {
+      subFields.push('"company_phone":""');
+      subFields.push('"company_phone_confidence":""');
+    }
     if (includeField("email")) subFields.push('"company_email":""');
     if (includeField("address")) {
       subFields.push('"street":""');
@@ -107,7 +120,16 @@ function buildPrompt(config: EnrichmentConfig, preData: { emails: string[]; phon
       "'low' wenn irgendetwas aus Domain, Footer ohne PLZ, Bildern oder Branchen-Slogans abgeleitet wurde. " +
       "Im Zweifel lieber 'low' und alle Adress-Felder auf null.",
     );
-    if (includeField("phone")) hints.push("company_phone: +49-Format.");
+    if (includeField("phone")) hints.push(
+      "company_phone: die offizielle Kontaktnummer, die das Unternehmen SELBST auf seiner Website veröffentlicht (+49-Format). " +
+      "Quelle AUSSCHLIESSLICH Impressum oder Kontakt-Seite — NICHT von Team-/Über-uns-/Personen-Seiten. " +
+      "Festnetz ODER Mobil ist gleichwertig gültig: bei kleinen Betrieben (Handwerk, KFZ, Praxen, Einzelunternehmen) IST die im Impressum genannte Mobilnummer die offizielle Geschäftsnummer — dann diese verwenden. " +
+      "AUSSCHLIESSEN: Fax/Telefax (bei 'Fax/Telefax' ignorieren, bei 'Tel/Fon/Telefon/Zentrale' bevorzugen) und erkennbar fremde Nummern (Webagentur/Hoster/Dienstleister, oft unter 'verantwortlich für den Inhalt' / 'technische Umsetzung' / 'Webdesign' / 'powered by'). " +
+      "Mehrere eigene Nummern → die als 'Tel/Telefon/Zentrale' bezeichnete bevorzugen; nur eine eigene Nummer → diese (auch mobil). " +
+      "company_phone_confidence: 'high' NUR wenn die Nummer eindeutig vom Unternehmen selbst auf Impressum/Kontakt veröffentlicht ist (Festnetz oder Mobil), kein Fax, keine fremde Dienstleister-Nummer. " +
+      "'medium' wenn plausibel, aber Quelle uneindeutig (nur Footer; Person/Firma unklar). " +
+      "'low' wenn geraten, oder evtl. Fax / Mitarbeiter-Durchwahl von Team-Seite / Dritt-Nummer. Im Zweifel 'low'.",
+    );
     if (allowlist && allowlist.length > 0) {
       hints.push(`FOKUS: Suche gezielt nur nach ${allowlist.join(", ")}. Ignoriere andere Firmendaten.`);
     }
@@ -360,6 +382,7 @@ export async function extractFromPages(
         founding_year: raw.additional_info?.founding_year ?? null,
         specializations: Array.isArray(raw.additional_info?.specializations) ? raw.additional_info.specializations : [],
         company_phone: raw.additional_info?.company_phone ?? null,
+        company_phone_confidence: raw.additional_info?.company_phone_confidence ?? null,
         company_email: raw.additional_info?.company_email ?? null,
         street: raw.additional_info?.street ?? null,
         zip: raw.additional_info?.zip ?? null,

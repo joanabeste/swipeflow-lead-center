@@ -70,6 +70,10 @@ export interface ActiveLeadNote {
   content: string;
   created_at: string;
   author_name: string | null;
+  /** Bei Zusammenführung gesetzt: Firmenname des Ursprungs-Leads (Herkunfts-Badge). */
+  merged_from_company: string | null;
+  /** Bei Zusammenführung gesetzt: ID des Ursprungs-Leads (Link-Ziel des Badges). */
+  merged_from_lead_id: string | null;
 }
 
 export interface ActiveLeadCall {
@@ -345,7 +349,7 @@ export async function loadActiveLeadDetails(leadId: string): Promise<ActiveLeadD
   const [notesRes, callsRes, jobsRes] = await Promise.all([
     db
       .from("lead_notes")
-      .select("id, content, created_at, created_by")
+      .select("id, content, created_at, created_by, merged_from_company, merged_from_lead_id")
       .eq("lead_id", leadId)
       .order("created_at", { ascending: false })
       .limit(3),
@@ -384,6 +388,8 @@ export async function loadActiveLeadDetails(leadId: string): Promise<ActiveLeadD
       content: n.content as string,
       created_at: n.created_at as string,
       author_name: n.created_by ? (authorMap.get(n.created_by as string) ?? null) : null,
+      merged_from_company: (n.merged_from_company as string | null) ?? null,
+      merged_from_lead_id: (n.merged_from_lead_id as string | null) ?? null,
     })),
     calls: (callsRes.data ?? []).map((c) => ({
       id: c.id as string,

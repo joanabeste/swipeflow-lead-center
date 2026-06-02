@@ -1,6 +1,9 @@
 import type { LeadNote, LeadCall, EmailMessage, LoadedNoteAttachment } from "@/lib/types";
 
-export type ActivityKind = "all" | "note" | "call" | "email" | "status" | "enrichment" | "change";
+export type ActivityKind = "all" | "note" | "call" | "email" | "status" | "enrichment" | "change" | "import";
+
+// In lib/types definiert (server-/client-neutral), hier re-exportiert für die Feed-Komponenten.
+export type { LeadImportInfo } from "@/lib/types";
 
 export interface AuthorProfile { name: string; avatar_url: string | null }
 

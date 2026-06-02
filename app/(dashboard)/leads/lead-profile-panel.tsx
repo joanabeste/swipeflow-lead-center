@@ -21,7 +21,8 @@ import { LeadMasterDataForm } from "./_components/lead-master-data-form";
 import { CrmContactsCard } from "../crm/[id]/_components/crm-contacts-card";
 import { CrmJobsCard } from "../crm/[id]/_components/crm-jobs-card";
 import { LeadLocationCard } from "./_components/lead-location-card";
-import { LeadDuplicatesCard } from "./_components/lead-duplicates-card";
+import { CrmDuplicateWarning } from "../crm/[id]/_components/crm-duplicate-warning";
+import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
 import { useToastContext } from "../toast-provider";
 
@@ -36,6 +37,8 @@ interface Props {
   /** Wird für das Aussortier-Banner gebraucht (zeigt Label + Wiederherstellen). */
   customStatuses?: CustomLeadStatus[];
   hq: HqLocation;
+  /** Mutmaßliche Duplikate dieses Leads (serverseitig ermittelt) — für das Warnbanner. */
+  duplicates?: DuplicateCandidate[];
   backHref?: string;
   backLabel?: string;
   /** Wenn gesetzt: ersetzt die Page-Navigation des Zurueck-Buttons (z.B. fuer Drawer-Close). */
@@ -50,6 +53,7 @@ interface Props {
 export function LeadProfilePanel({
   lead, changes, contacts, jobPostings, latestEnrichment, hq,
   customStatuses = [],
+  duplicates = [],
   backHref = "/leads",
   backLabel = "Zurück zur Liste",
   onBack,
@@ -186,7 +190,6 @@ export function LeadProfilePanel({
     <>
       {extraRightColumn}
       <LeadLocationCard lead={lead} hq={hq} />
-      <LeadDuplicatesCard leadId={lead.id} />
       {activityItems
         ? <LeadActivityTimeline items={activityItems} />
         : <LeadChangesList changes={changes} />}
@@ -383,6 +386,13 @@ export function LeadProfilePanel({
               Trotzdem fortfahren
             </button>
           )}
+        </div>
+      )}
+
+      {/* Duplikat-Warnung — andere Leads, die mutmaßlich dieselbe Firma sind. */}
+      {duplicates.length > 0 && (
+        <div className="mt-4">
+          <CrmDuplicateWarning leadId={lead.id} candidates={duplicates} />
         </div>
       )}
 

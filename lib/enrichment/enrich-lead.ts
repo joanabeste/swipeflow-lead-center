@@ -9,6 +9,8 @@ import { getWebdevScoringConfig } from "./webdev-scoring";
 import { getRecruitingScoringConfig, isHrContact } from "./recruiting-scoring";
 import { evaluateCancelRules } from "@/lib/cancel-rules/evaluator";
 import { guessSalutation } from "@/lib/contacts/salutation-from-name";
+import { insertPhoneSwapNote } from "@/lib/leads/merge-note";
+import { normalizePhone } from "@/lib/csv/normalizer";
 import { buildFactorSnapshot, type FactorSnapshot } from "./quality-score";
 import { evaluateTrafficLight, type TrafficLightResult } from "./traffic-light";
 import type { EnrichmentConfig, CancelRule, ServiceMode, TrafficLightRating } from "@/lib/types";
@@ -338,7 +340,36 @@ export async function enrichLead(
     };
 
     if (isFieldAllowed("company_size")) fillIfEmpty("company_size", ai.company_size_estimate);
-    if (isFieldAllowed("phone")) fillIfEmpty("phone", ai.company_phone);
+
+    // ── Telefonnummer: füllen ODER offizielle Website-Nummer übernehmen ───────
+    // Beim Scrapen/Import landet teils eine falsche Nummer im Lead (z.B. Privat-
+    // nummer), während die offizielle Firmennummer im Impressum steht. Regeln:
+    //  - Lead-Telefon leer            → jede gefundene Nummer eintragen (wie bisher).
+    //  - Lead-Telefon gesetzt, KI-Konfidenz 'high', Nummer unterscheidet sich,
+    //    bestehende Nummer NICHT 'manual' → ersetzen; alte Nummer als Kontakt
+    //    sichern + Feld-Änderung + System-Notiz (siehe nach dem leads-Update).
+    //  - 'manual' / Konfidenz < 'high' / identisch → bestehende Nummer behalten.
+    let phoneSwap: { oldPhone: string | null; newPhone: string } | null = null;
+    if (isFieldAllowed("phone") && ai.company_phone) {
+      const existing = lead.phone as string | null;
+      const newPhone = ai.company_phone;
+      if (!existing) {
+        leadUpdates.phone = newPhone;
+        leadUpdates.phone_source = "enrichment";
+      } else {
+        const conf = ai.company_phone_confidence ?? null;
+        const source = (lead as { phone_source?: string | null }).phone_source ?? null;
+        const isManual = source === "manual";
+        const differs = normalizePhone(existing) !== normalizePhone(newPhone);
+        if (conf === "high" && differs && !isManual) {
+          leadUpdates.phone = newPhone;
+          leadUpdates.phone_source = "enrichment";
+          phoneSwap = { oldPhone: existing, newPhone };
+        }
+        // sonst: bestehende Nummer (manual / low/medium / identisch) behalten.
+      }
+    }
+
     if (isFieldAllowed("email")) fillIfEmpty("email", ai.company_email);
     if (isFieldAllowed("address")) {
       // Adresse nur uebernehmen, wenn die KI sich sicher ist. 'medium'/'low' verwerfen
@@ -463,6 +494,34 @@ export async function enrichLead(
     }
 
     await db.from("leads").update(leadUpdates).eq("id", leadId);
+
+    // Telefon-Swap dokumentieren + alte Nummer bewahren (nur wenn ersetzt wurde).
+    if (phoneSwap) {
+      // 1) Alte Nummer als Kontakt erhalten — bleibt anrufbar. source 'manual',
+      //    damit der Re-Enrich-Cleanup (nur source='enrichment') sie nicht löscht.
+      await db.from("lead_contacts").insert({
+        lead_id: leadId,
+        name: lead.company_name,
+        role: "Frühere Telefonnummer (ersetzt durch Website-Nummer)",
+        email: null,
+        phone: phoneSwap.oldPhone,
+        salutation: null,
+        source_url: null,
+        source: "manual" as const,
+      });
+      // 2) Feld-Änderung in die Historie — enrich-lead schreibt direkt auf leads
+      //    (nicht über updateLead), daher entsteht der lead_changes-Eintrag sonst
+      //    nicht. → Feed zeigt "System hat ein Feld aktualisiert · phone: X → Y".
+      await db.from("lead_changes").insert({
+        lead_id: leadId,
+        user_id: null,
+        field_name: "phone",
+        old_value: phoneSwap.oldPhone,
+        new_value: phoneSwap.newPhone,
+      });
+      // 3) System-Notiz in den Aktivitäten-Feed (best-effort, wirft nie).
+      await insertPhoneSwapNote(db, leadId, phoneSwap.oldPhone, phoneSwap.newPhone);
+    }
 
     // 7. Enrichment-Log abschließen — inkl. Phasen-Latenz und Token-Counts
     await db
