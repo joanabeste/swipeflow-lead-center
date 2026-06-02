@@ -39,6 +39,9 @@ yarn-error.log*
 # cowork lead-research memory (local only)
 /.cowork-leads
 
+# gescrapte Import-Payloads (lokal, enthalten Echtdaten — nie committen)
+/outputs_import_payload.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
