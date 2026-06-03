@@ -235,12 +235,15 @@ export interface PreviewInput {
   billing_street: string;
   billing_zip: string;
   billing_city: string;
+  billing_email?: string;
   sepa_account_holder?: string;
   sepa_iban?: string;
 }
 
-/** Rendert den Vertrag (view) mit den in Schritt 1 eingegebenen Daten —
- *  damit der Kunde in Schritt 2 genau seine Angaben im Vertrag sieht. */
+/** Rendert den Vertrag (view) mit den in Schritt 1 eingegebenen Daten — damit der
+ *  Kunde in Schritt 2 genau seine Angaben im Vertrag sieht. Speichert die Eingaben
+ *  zugleich als Zwischenstand (IBAN verschlüsselt), damit sie nicht verloren gehen,
+ *  falls der Vertrag noch nicht unterschrieben wird (und im Admin sichtbar sind). */
 export async function renderContractPreview(
   token: string,
   input: PreviewInput,
@@ -266,6 +269,7 @@ export async function renderContractPreview(
     billing_street: req(input.billing_street) || contract.billing_street,
     billing_zip: req(input.billing_zip) || contract.billing_zip,
     billing_city: req(input.billing_city) || contract.billing_city,
+    billing_email: req(input.billing_email) || contract.billing_email,
     sepa_account_holder:
       contract.payment_method === "sepa" ? req(input.sepa_account_holder) || null : null,
   };
@@ -274,6 +278,31 @@ export async function renderContractPreview(
     contract.payment_method === "sepa" && req(input.sepa_iban)
       ? normalizeIban(input.sepa_iban as string)
       : null;
+
+  // Zwischenstand speichern. Nur befüllte Felder schreiben, damit ein späterer
+  // Aufruf mit leerem Feld bereits gespeicherte Werte (v. a. die IBAN) nicht
+  // überschreibt. Die IBAN wird nur bei gültigem Wert verschlüsselt abgelegt.
+  const persist: Record<string, unknown> = {};
+  if (req(input.billing_company)) persist.billing_company = req(input.billing_company);
+  if (req(input.billing_street)) persist.billing_street = req(input.billing_street);
+  if (req(input.billing_zip)) persist.billing_zip = req(input.billing_zip);
+  if (req(input.billing_city)) persist.billing_city = req(input.billing_city);
+  if (req(input.billing_email)) persist.billing_email = req(input.billing_email);
+  if (contract.payment_method === "sepa") {
+    if (req(input.sepa_account_holder)) persist.sepa_account_holder = req(input.sepa_account_holder);
+    if (ibanPlain && isValidIban(ibanPlain)) {
+      persist.sepa_iban_encrypted = encryptSecret(ibanPlain);
+      persist.sepa_iban_last4 = ibanLast4(ibanPlain);
+    }
+  }
+  if (Object.keys(persist).length > 0) {
+    const { error: persistErr } = await db
+      .from("contracts")
+      .update(persist)
+      .eq("id", contract.id)
+      .in("status", ["sent", "viewed"]);
+    if (persistErr) console.error("[renderContractPreview:persist]", persistErr);
+  }
 
   const creditor = await loadCreditor();
   const html = renderContractHtml(

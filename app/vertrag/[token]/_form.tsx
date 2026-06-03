@@ -15,6 +15,8 @@ interface Prefill {
   zip: string;
   city: string;
   email: string;
+  holder: string;
+  iban: string;
 }
 
 interface Costs {
@@ -55,8 +57,8 @@ export function PublicContractView({
   const [city, setCity] = useState(prefill.city);
   const [email, setEmail] = useState(prefill.email);
 
-  const [holder, setHolder] = useState("");
-  const [iban, setIban] = useState("");
+  const [holder, setHolder] = useState(prefill.holder);
+  const [iban, setIban] = useState(prefill.iban);
   const [mandate, setMandate] = useState(false);
 
   const [acceptContractAndCosts, setAcceptContractAndCosts] = useState(false);
@@ -110,6 +112,7 @@ export function PublicContractView({
       billing_street: street,
       billing_zip: zip,
       billing_city: city,
+      billing_email: email,
       sepa_account_holder: paymentMethod === "sepa" ? holder : undefined,
       sepa_iban: paymentMethod === "sepa" ? iban : undefined,
     });

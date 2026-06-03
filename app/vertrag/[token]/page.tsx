@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
-import { buildRenderInput } from "@/lib/contracts/render";
+import { buildRenderInput, decryptIban } from "@/lib/contracts/render";
 import { loadCreditor } from "@/lib/contracts/settings";
 import { renderContractHtml } from "@/lib/contracts/template";
 import { isExpired, type ContractRow, type ContractLead } from "@/lib/contracts/types";
@@ -64,6 +64,10 @@ export default async function PublicContractPage({ params }: { params: Promise<{
     zip: contract.billing_zip || lead?.zip || "",
     city: contract.billing_city || lead?.city || "",
     email: contract.billing_email || lead?.email || "",
+    // Bereits gespeicherte SEPA-Daten vorbefüllen, damit ein Zwischenstand beim
+    // erneuten Öffnen nicht neu eingegeben werden muss (IBAN wird entschlüsselt).
+    holder: contract.sepa_account_holder || "",
+    iban: contract.payment_method === "sepa" ? decryptIban(contract) || "" : "",
   };
 
   return (
