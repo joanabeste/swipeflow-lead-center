@@ -4,6 +4,8 @@ import type { Lead, LeadStatus, CustomLeadStatus } from "@/lib/types";
 import { LeadTableWrapper } from "./lead-table-wrapper";
 import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
 import { loadTablePrefs } from "@/lib/table-prefs";
+import { normalizePhone } from "@/lib/csv/normalizer";
+import { canonicalPhoneDigits, leadsHasPhoneNorm } from "@/lib/leads/phone-search";
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -61,9 +63,29 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   if (params.q) {
     const safeQ = escapeIlikeWildcards(params.q);
-    query = query.or(
-      `company_name.ilike.%${safeQ}%,website.ilike.%${safeQ}%,city.ilike.%${safeQ}%`,
-    );
+    const orParts = [
+      `company_name.ilike.%${safeQ}%`,
+      `website.ilike.%${safeQ}%`,
+      `city.ilike.%${safeQ}%`,
+      `phone.ilike.%${safeQ}%`,
+    ];
+    if (/\d/.test(params.q)) {
+      // (a) Migrationsunabhängig: Teilstring in normalisierter +49-Form, damit
+      //     "0571…" auch "+49571…" findet (Bestand mischt 0… und +49…).
+      const normPhone = normalizePhone(params.q)?.replace(/^\+/, "");
+      if (normPhone) {
+        const safeNorm = escapeIlikeWildcards(normPhone);
+        if (safeNorm !== safeQ) orParts.push(`phone.ilike.%${safeNorm}%`);
+      }
+      // (b) Voll format-unabhängig über die generierte Spalte phone_norm
+      //     (Migration 122): Trenner/Präfixe egal. Fehlt die Spalte noch, wird die
+      //     Klausel ausgelassen (kein Page-Bruch).
+      if (await leadsHasPhoneNorm(supabase)) {
+        const canon = canonicalPhoneDigits(params.q);
+        if (canon) orParts.push(`phone_norm.ilike.%${escapeIlikeWildcards(canon)}%`);
+      }
+    }
+    query = query.or(orParts.join(","));
   }
 
   if (params.status) {

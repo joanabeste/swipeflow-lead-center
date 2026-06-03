@@ -269,7 +269,7 @@ export function LeadTable({
       <div className="flex items-center gap-3">
         <SearchBox
           defaultValue={currentQuery}
-          placeholder="Suche nach Firmenname, Domain oder Ort…"
+          placeholder="Suche nach Firmenname, Domain, Ort oder Telefon…"
           onSubmit={(v) => updateParams({ q: v, page: "1" })}
         />
 

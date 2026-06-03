@@ -266,7 +266,7 @@ export function CrmManager({
         <div className="flex-1 min-w-[240px]">
           <SearchBox
             defaultValue={currentQuery}
-            placeholder="Firmenname, Domain, Ort…"
+            placeholder="Firmenname, Domain, Ort, Telefon…"
             onSubmit={(v) => updateParams({ q: v, page: "1" })}
           />
         </div>

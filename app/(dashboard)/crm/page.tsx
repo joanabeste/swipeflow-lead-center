@@ -3,6 +3,8 @@ import type { CustomLeadStatus, Lead, ServiceMode } from "@/lib/types";
 import { CrmManager, type CrmLead } from "./crm-manager";
 import { loadTablePrefs } from "@/lib/table-prefs";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
+import { normalizePhone } from "@/lib/csv/normalizer";
+import { canonicalPhoneDigits, leadsHasPhoneNorm } from "@/lib/leads/phone-search";
 import { listTeamMembers } from "../deals/actions";
 
 const PAGE_SIZE = 50;
@@ -216,7 +218,29 @@ export default async function CrmPage({
   if (sp.q) {
     const safeQ = escapeIlikeWildcards(sp.q);
     const like = `%${safeQ}%`;
-    query = query.or(`company_name.ilike.${like},website.ilike.${like},city.ilike.${like}`);
+    const orParts = [
+      `company_name.ilike.${like}`,
+      `website.ilike.${like}`,
+      `city.ilike.${like}`,
+      `phone.ilike.${like}`,
+    ];
+    if (/\d/.test(sp.q)) {
+      // (a) Migrationsunabhängig: Teilstring in normalisierter +49-Form, damit
+      //     "0571…" auch "+49571…" findet (Bestand mischt 0… und +49…).
+      const normPhone = normalizePhone(sp.q)?.replace(/^\+/, "");
+      if (normPhone) {
+        const safeNorm = escapeIlikeWildcards(normPhone);
+        if (safeNorm !== safeQ) orParts.push(`phone.ilike.%${safeNorm}%`);
+      }
+      // (b) Voll format-unabhängig über die generierte Spalte phone_norm
+      //     (Migration 122): Trenner/Präfixe egal. Fehlt die Spalte noch, wird die
+      //     Klausel ausgelassen (kein Page-Bruch).
+      if (await leadsHasPhoneNorm(db)) {
+        const canon = canonicalPhoneDigits(sp.q);
+        if (canon) orParts.push(`phone_norm.ilike.%${escapeIlikeWildcards(canon)}%`);
+      }
+    }
+    query = query.or(orParts.join(","));
   }
 
   // Spalten-Filter — Spaltenname strikt aus Whitelist, Wert escaped.
