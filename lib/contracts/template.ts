@@ -8,7 +8,7 @@
 import { formatEuro, splitInstallments } from "./format";
 import type { ContractType } from "./types";
 
-export const TEMPLATE_VERSION = "webdesign-v3";
+export const TEMPLATE_VERSION = "webdesign-v4";
 export const RECRUITING_TEMPLATE_VERSION = "recruiting-v2";
 export const CONTENT_TEMPLATE_VERSION = "content-v1";
 
@@ -131,9 +131,9 @@ function zahlungsbedingungen(input: ContractRenderInput): string {
       base === last
         ? `${input.installmentCount} aufeinanderfolgenden Monatsraten à ${formatEuro(base)}`
         : `${input.installmentCount} aufeinanderfolgenden Monatsraten (${input.installmentCount - 1} × ${formatEuro(base)}, letzte Rate ${formatEuro(last)})`;
-    satz = `Die Vergütung für die Erstellung der Webseite wird in ${rateText} gezahlt und ${methodWord}. Die erste Rate ist mit Abnahme der Webseite fällig.`;
+    satz = `Die Vergütung für die Erstellung der Webseite wird in ${rateText} gezahlt und ${methodWord}. Die erste Rate ist mit Unterzeichnung dieses Vertrages fällig und vor Beginn der Umsetzung (Projektstart) zu zahlen.`;
   } else {
-    satz = `Die Vergütung für die Erstellung der Webseite ist mit Abnahme der Webseite in einer Summe fällig und wird ${methodWord}.`;
+    satz = `Die Vergütung für die Erstellung der Webseite ist mit Unterzeichnung dieses Vertrages fällig und vor Beginn der Umsetzung (Projektstart) in einer Summe zu zahlen; sie wird ${methodWord}.`;
   }
 
   const hostingZusatz =
