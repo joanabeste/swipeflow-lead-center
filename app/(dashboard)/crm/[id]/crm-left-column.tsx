@@ -6,7 +6,6 @@ import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { CrmAssigneeCard } from "./_components/crm-assignee-card";
 import { CrmCompanyCard } from "./_components/crm-company-card";
-import { CrmLinksCard } from "./_components/crm-links-card";
 import { CrmContactsCard } from "./_components/crm-contacts-card";
 import { CrmDealsCard } from "./_components/crm-deals-card";
 import { CrmJobsCard } from "./_components/crm-jobs-card";
@@ -33,13 +32,16 @@ interface Props {
 }
 
 export function CrmLeftColumn({
-  lead, contacts, jobs, links, latestEnrichment, hq, senderName, deals, dealStages, team,
+  lead, contacts, jobs, latestEnrichment, hq, senderName, deals, dealStages, team,
   industries, caseStudies, landingPages, screenshotCard, middleSlot,
 }: Props) {
   return (
     <>
       <CrmCompanyCard lead={lead} latestEnrichment={latestEnrichment} />
-      <CrmLinksCard leadId={lead.id} links={links} />
+      {/* „Profile & Links"-Karte vorerst ausgeblendet (Wunsch: nur DB, kein UI).
+          lead_links + Speicher-Actions/API/Import/Merge bleiben aktiv; die `links`-
+          Prop fliesst weiter rein, wird hier aber nicht gerendert. Zum Reaktivieren:
+          CrmLinksCard wieder importieren + <CrmLinksCard leadId={lead.id} links={links} /> einsetzen. */}
       {middleSlot}
       <CrmContactsCard
         leadId={lead.id}

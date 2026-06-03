@@ -21,7 +21,6 @@ import { DEFAULT_ENRICHMENT_CONFIG, LEAD_STATUS_OPTIONS as statusOptions } from 
 import { useServiceMode } from "@/lib/service-mode";
 import { LeadMasterDataForm } from "./_components/lead-master-data-form";
 import { CrmContactsCard } from "../crm/[id]/_components/crm-contacts-card";
-import { CrmLinksCard } from "../crm/[id]/_components/crm-links-card";
 import { CrmJobsCard } from "../crm/[id]/_components/crm-jobs-card";
 import { LeadLocationCard } from "./_components/lead-location-card";
 import { CrmDuplicateWarning } from "../crm/[id]/_components/crm-duplicate-warning";
@@ -58,7 +57,6 @@ export function LeadProfilePanel({
   lead, changes, contacts, jobPostings, latestEnrichment, hq,
   customStatuses = [],
   duplicates = [],
-  links = [],
   backHref = "/leads",
   backLabel = "Zurück zur Liste",
   onBack,
@@ -205,7 +203,9 @@ export function LeadProfilePanel({
         jobs={jobPostings}
         companyName={lead.company_name}
       />
-      <CrmLinksCard leadId={lead.id} links={links} />
+      {/* „Profile & Links"-Karte vorerst ausgeblendet (Wunsch: nur DB, kein UI).
+          lead_links + Speicher-Actions/API/Import/Merge bleiben aktiv; die `links`-
+          Prop bleibt am Interface, wird hier aber nicht gerendert. */}
       <CrmJobsCard
         leadId={lead.id}
         jobs={jobPostings}
