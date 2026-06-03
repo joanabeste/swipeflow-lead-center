@@ -4,7 +4,7 @@ import { ArrowLeft, Eye, Pencil } from "lucide-react";
 import { loadContract, loadContractEvents } from "@/lib/contracts/data";
 import { buildContractLink } from "@/lib/email/central";
 import { formatEuro } from "@/lib/contracts/format";
-import { CONTRACT_TYPE_LABELS, EVENT_LABELS, isExpired, type ContractStatus } from "@/lib/contracts/types";
+import { CONTRACT_TYPE_LABELS, EVENT_LABELS, isExpired, isContractEditable, isLinkActive, type ContractStatus } from "@/lib/contracts/types";
 import { StatusBadge } from "../_components/status-badge";
 import { ContractActions } from "../_components/contract-actions";
 
@@ -57,7 +57,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
               >
                 <Eye className="h-4 w-4" /> Vorschau
               </Link>
-              {contract.status === "draft" && (
+              {isContractEditable(contract) && (
                 <Link
                   href={`/vertraege/${contract.id}/bearbeiten`}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/15"
@@ -71,6 +71,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
               status={contract.status as ContractStatus}
               expired={expired}
               link={link}
+              linkActive={isLinkActive(contract)}
             />
           </div>
         </div>

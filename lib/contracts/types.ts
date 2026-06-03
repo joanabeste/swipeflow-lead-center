@@ -125,3 +125,19 @@ export function isExpired(contract: Pick<ContractRow, "expires_at" | "status">):
   if (contract.status === "signed" || contract.status === "cancelled") return false;
   return new Date(contract.expires_at).getTime() < Date.now();
 }
+
+/** "Link aktiv": Signier-Link wurde erzeugt, aber nie per E-Mail versendet
+ *  (sent_at kennzeichnet ausschließlich echten E-Mail-Versand). */
+export function isLinkActive(contract: Pick<ContractRow, "status" | "sent_at">): boolean {
+  return contract.status === "sent" && !contract.sent_at;
+}
+
+/** Konditionen dürfen bearbeitet werden: noch nicht per Mail raus / unterschrieben. */
+export function isContractEditable(contract: Pick<ContractRow, "status" | "sent_at">): boolean {
+  return contract.status === "draft" || isLinkActive(contract);
+}
+
+/** Vertrag darf endgültig gelöscht werden. */
+export function isContractDeletable(contract: Pick<ContractRow, "status" | "sent_at">): boolean {
+  return contract.status === "draft" || contract.status === "cancelled" || isLinkActive(contract);
+}

@@ -19,11 +19,13 @@ export function ContractActions({
   status,
   expired,
   link,
+  linkActive,
 }: {
   id: string;
   status: ContractStatus;
   expired: boolean;
   link: string | null;
+  linkActive: boolean;
 }) {
   const router = useRouter();
   const { addToast } = useToastContext();
@@ -96,7 +98,10 @@ export function ContractActions({
   }
 
   async function remove() {
-    if (!window.confirm("Diesen Vertrag endgültig löschen? Das kann nicht rückgängig gemacht werden.")) return;
+    const msg = linkActive
+      ? "Diesen Vertrag endgültig löschen? Der aktive Link wird damit ungültig. Das kann nicht rückgängig gemacht werden."
+      : "Diesen Vertrag endgültig löschen? Das kann nicht rückgängig gemacht werden.";
+    if (!window.confirm(msg)) return;
     setError(null);
     setBusy("delete");
     const res = await deleteContract(id);
@@ -113,7 +118,7 @@ export function ContractActions({
   const canExtend = expired && (status === "sent" || status === "viewed");
   const canCancel = status !== "cancelled";
   const canDownload = status === "signed";
-  const canDelete = status === "draft" || status === "cancelled";
+  const canDelete = status === "draft" || status === "cancelled" || linkActive;
 
   return (
     <div className="flex flex-col items-end gap-2">

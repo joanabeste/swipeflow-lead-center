@@ -21,6 +21,7 @@ import {
 } from "@/lib/contracts/settings";
 import { templateVersion } from "@/lib/contracts/template";
 import { findExistingLeadForManual } from "@/lib/leads/find-existing";
+import { isContractEditable, isContractDeletable, isLinkActive } from "@/lib/contracts/types";
 import type { ContractRow, ContractLead, ContractEventType, ContractType, PaymentMode, PaymentMethod } from "@/lib/contracts/types";
 
 const LINK_VALID_DAYS = 30;
@@ -335,7 +336,9 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
 
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
-  if (contract.status !== "draft") return { error: "Nur Entwürfe können bearbeitet werden." };
+  if (!isContractEditable(contract)) {
+    return { error: "Nur Entwürfe oder Verträge mit aktivem Link können bearbeitet werden." };
+  }
 
   const isRecruiting = contract.type === "recruiting";
   const isContent = contract.type === "content";
@@ -349,20 +352,26 @@ export async function updateContractDraft(id: string, input: UpdateDraftInput): 
   const typeCols = typeSpecificColumns(contract.type, input);
   if ("error" in typeCols) return typeCols;
 
+  const cols = {
+    setup_price_cents: Math.round(input.setup_price_cents),
+    monthly_maint_cents: isRecruiting ? 0 : Math.round(input.monthly_maint_cents),
+    payment_mode: paymentMode,
+    installment_count: paymentMode === "raten" ? (input.installment_count ?? null) : null,
+    payment_method: input.payment_method,
+    withdrawal_right: !!input.withdrawal_right,
+    ...typeCols,
+  };
+  const update: Record<string, unknown> = { ...cols, ...normBilling(input.billing) };
+
+  // Bei bereits aktivem Link den eingefrorenen Snapshot mitziehen, damit der
+  // Audit-Datensatz die aktuellen Konditionen widerspiegelt (gerendert wird ohnehin live).
+  if (isLinkActive(contract)) {
+    const creditor = await loadCreditor();
+    update.terms_snapshot = buildTermsSnapshot({ ...contract, ...cols }, creditor.id);
+  }
+
   const db = createServiceClient();
-  const { error } = await db
-    .from("contracts")
-    .update({
-      setup_price_cents: Math.round(input.setup_price_cents),
-      monthly_maint_cents: isRecruiting ? 0 : Math.round(input.monthly_maint_cents),
-      payment_mode: paymentMode,
-      installment_count: paymentMode === "raten" ? input.installment_count : null,
-      payment_method: input.payment_method,
-      withdrawal_right: !!input.withdrawal_right,
-      ...typeCols,
-      ...normBilling(input.billing),
-    })
-    .eq("id", id);
+  const { error } = await db.from("contracts").update(update).eq("id", id);
   if (error) {
     console.error("[updateContractDraft]", error);
     return { error: `DB-Fehler: ${error.message}` };
@@ -517,15 +526,16 @@ export async function cancelContract(id: string): Promise<Result> {
   return { success: true };
 }
 
-/** Löscht einen Vertrag endgültig — nur für Entwürfe oder stornierte Verträge.
+/** Löscht einen Vertrag endgültig — für Entwürfe, stornierte Verträge oder
+ *  reine Link-Verträge (Link aktiv, aber noch nicht per Mail raus / unterschrieben).
  *  Entfernt zugehörige Storage-Dateien; contract_events folgen per CASCADE. */
 export async function deleteContract(id: string): Promise<Result> {
   const ctx = await checkSection("can_vertraege");
   if (!ctx) return { error: "Nicht berechtigt." };
   const contract = await loadRow(id);
   if (!contract) return { error: "Vertrag nicht gefunden." };
-  if (contract.status !== "draft" && contract.status !== "cancelled") {
-    return { error: "Nur Entwürfe oder stornierte Verträge können gelöscht werden." };
+  if (!isContractDeletable(contract)) {
+    return { error: "Nur Entwürfe, stornierte oder Verträge mit aktivem Link können gelöscht werden." };
   }
 
   const db = createServiceClient();

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { loadContract } from "@/lib/contracts/data";
+import { isContractEditable } from "@/lib/contracts/types";
 import { EditContractForm } from "../../_components/edit-contract-form";
 import type { TermsState, AddressState } from "../../_components/contract-terms-fields";
 
@@ -10,7 +11,7 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
   const loaded = await loadContract(id);
   if (!loaded) notFound();
   const { contract, lead } = loaded;
-  if (contract.status !== "draft") redirect(`/vertraege/${id}`);
+  if (!isContractEditable(contract)) redirect(`/vertraege/${id}`);
 
   const campaignDays =
     contract.campaign_start && contract.campaign_end
@@ -58,7 +59,11 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
       </Link>
       <div>
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Vertrag bearbeiten</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Konditionen des Entwurfs anpassen.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {isContractEditable(contract) && contract.status !== "draft"
+            ? "Konditionen anpassen. Der bereits aktive Link zeigt die Änderungen sofort an."
+            : "Konditionen des Entwurfs anpassen."}
+        </p>
       </div>
       <EditContractForm id={id} type={contract.type} initial={initial} initialAddress={initialAddress} />
     </div>
