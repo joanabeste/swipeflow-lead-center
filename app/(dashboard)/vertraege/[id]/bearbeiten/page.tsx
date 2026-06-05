@@ -35,7 +35,7 @@ export default async function VertragBearbeitenPage({ params }: { params: Promis
     adBudgetEur: String(contract.ad_budget_cents / 100),
     applicantGuarantee: contract.applicant_guarantee,
     contentPlatforms: contract.content_platforms ?? "",
-    postsPerWeek: contract.posts_per_week != null ? String(contract.posts_per_week) : "",
+    postsPerMonth: contract.posts_per_week != null ? String(contract.posts_per_week) : "",
     onsiteProduction: contract.onsite_production,
     onsiteIntervalMonths: contract.onsite_interval_months != null ? String(contract.onsite_interval_months) : "",
     minTermMonths: String(contract.min_term_months),

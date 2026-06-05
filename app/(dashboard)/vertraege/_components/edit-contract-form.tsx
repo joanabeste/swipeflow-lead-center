@@ -40,7 +40,8 @@ export function EditContractForm({
       campaign_end: terms.campaignEnd || null,
       applicant_guarantee: terms.applicantGuarantee,
       content_platforms: terms.contentPlatforms || null,
-      posts_per_week: terms.postsPerWeek ? Number(terms.postsPerWeek) : null,
+      // DB-Spalte bleibt posts_per_week (kein Schema-Rename) — Wert ist nun „pro Monat".
+      posts_per_week: terms.postsPerMonth ? Number(terms.postsPerMonth) : null,
       onsite_production: terms.onsiteProduction,
       onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
       min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,

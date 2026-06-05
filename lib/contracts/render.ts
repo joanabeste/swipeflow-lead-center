@@ -75,7 +75,7 @@ export function buildRenderInput(
     campaignEnd: contract.campaign_end ?? "",
     applicantGuarantee: contract.applicant_guarantee,
     contentPlatforms: contract.content_platforms ?? "",
-    postsPerWeek: contract.posts_per_week,
+    postsPerMonth: contract.posts_per_week,
     onsiteProduction: contract.onsite_production,
     onsiteIntervalMonths: contract.onsite_interval_months,
     minTermMonths: contract.min_term_months,

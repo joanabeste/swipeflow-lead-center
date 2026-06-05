@@ -50,7 +50,7 @@ export interface ContractRenderInput {
 
   // Social-Media-Content-Felder (nur bei type='content')
   contentPlatforms: string;
-  postsPerWeek: number | null;
+  postsPerMonth: number | null;
   onsiteProduction: boolean;
   onsiteIntervalMonths: number | null;
   minTermMonths: number;
@@ -668,9 +668,9 @@ function recruitingBody(input: ContractRenderInput): string {
 
 // § 1: Posting-Frequenz mit Spielraum-Formulierung.
 function contentFrequenz(input: ContractRenderInput): string {
-  const n = input.postsPerWeek;
+  const n = input.postsPerMonth;
   if (!n || n < 1) return "in der Regel nach individueller Absprache";
-  return `in der Regel ${n} ${n === 1 ? "Beitrag" : "Beiträge"} pro Woche`;
+  return `in der Regel ${n} ${n === 1 ? "Beitrag" : "Beiträge"} pro Monat`;
 }
 
 // § 3: Vor-Ort-Content-Produktion — optional; bei Deaktivierung stabile

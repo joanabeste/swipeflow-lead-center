@@ -32,7 +32,7 @@ const DEFAULT_TERMS: TermsState = {
   adBudgetEur: "1200",
   applicantGuarantee: false,
   contentPlatforms: "Instagram und Facebook",
-  postsPerWeek: "1",
+  postsPerMonth: "4",
   onsiteProduction: false,
   onsiteIntervalMonths: "3",
   minTermMonths: "0",
@@ -95,13 +95,14 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // Ohne Suchbegriff nur echte Kunden zeigen — CRM-Leads erst bei aktiver Suche.
     const list = q
       ? customers.filter(
           (c) =>
             (c.company_name ?? "").toLowerCase().includes(q) ||
             (c.email ?? "").toLowerCase().includes(q),
         )
-      : customers;
+      : customers.filter((c) => c.lifecycle_stage === "customer");
     return list.slice(0, 8);
   }, [customers, query]);
 
@@ -142,7 +143,8 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
       campaign_end: terms.campaignEnd || null,
       applicant_guarantee: terms.applicantGuarantee,
       content_platforms: terms.contentPlatforms || null,
-      posts_per_week: terms.postsPerWeek ? Number(terms.postsPerWeek) : null,
+      // DB-Spalte bleibt posts_per_week (kein Schema-Rename) — Wert ist nun „pro Monat".
+      posts_per_week: terms.postsPerMonth ? Number(terms.postsPerMonth) : null,
       onsite_production: terms.onsiteProduction,
       onsite_interval_months: terms.onsiteIntervalMonths ? Number(terms.onsiteIntervalMonths) : null,
       min_term_months: terms.minTermMonths ? Number(terms.minTermMonths) : 0,
@@ -205,7 +207,9 @@ export function NewContractForm({ customers }: { customers: ContractPickerLead[]
               </div>
               <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 dark:border-[#2c2c2e]">
                 {results.length === 0 ? (
-                  <p className="px-3 py-3 text-sm text-gray-400">Keine Treffer.</p>
+                  <p className="px-3 py-3 text-sm text-gray-400">
+                    {query.trim() ? "Keine Treffer." : "Tippe, um Kunden oder Leads im CRM zu suchen…"}
+                  </p>
                 ) : (
                   <ul className="divide-y divide-gray-100 dark:divide-[#2c2c2e]/60">
                     {results.map((c) => (

@@ -96,7 +96,7 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
                 <Row label="Einrichtungsgebühr" value={`${formatEuro(contract.setup_price_cents)} netto`} />
               )}
               <Row label="Plattformen" value={contract.content_platforms || "Instagram und Facebook"} />
-              <Row label="Frequenz" value={contract.posts_per_week ? `${contract.posts_per_week} Beitrag/Woche` : "nach Absprache"} />
+              <Row label="Frequenz" value={contract.posts_per_week ? `${contract.posts_per_week} Beiträge/Monat` : "nach Absprache"} />
               <Row label="Vor-Ort-Produktion" value={contract.onsite_production ? (contract.onsite_interval_months ? `alle ${contract.onsite_interval_months} Monate` : "nach Bedarf") : "Nein"} />
               <Row label="Vertragsbeginn" value={fmtDate(contract.campaign_start)} />
               <Row label="Mindestlaufzeit" value={contract.min_term_months > 0 ? `${contract.min_term_months} Monate` : "keine"} />

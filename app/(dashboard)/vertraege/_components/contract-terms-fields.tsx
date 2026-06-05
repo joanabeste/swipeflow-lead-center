@@ -18,7 +18,7 @@ export interface TermsState {
   applicantGuarantee: boolean;
   // Content (campaignStart wird als Vertragsbeginn wiederverwendet)
   contentPlatforms: string;
-  postsPerWeek: string;
+  postsPerMonth: string;
   onsiteProduction: boolean;
   onsiteIntervalMonths: string;
   minTermMonths: string;
@@ -86,8 +86,8 @@ export function ContractTermsFields({
             <Field label="Plattformen">
               <input value={value.contentPlatforms} onChange={(e) => set({ contentPlatforms: e.target.value })} className={inputCls} placeholder="Instagram und Facebook" />
             </Field>
-            <Field label="Beiträge pro Woche">
-              <input inputMode="numeric" value={value.postsPerWeek} onChange={(e) => set({ postsPerWeek: e.target.value })} className={`${inputCls} max-w-[120px]`} />
+            <Field label="Beiträge pro Monat">
+              <input inputMode="numeric" value={value.postsPerMonth} onChange={(e) => set({ postsPerMonth: e.target.value })} className={`${inputCls} max-w-[120px]`} />
             </Field>
           </div>
           <Field label="Vor-Ort-Content-Produktion">
