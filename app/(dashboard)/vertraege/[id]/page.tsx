@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Eye, Pencil } from "lucide-react";
+import { ArrowLeft, CalendarClock, Clock } from "lucide-react";
 import { loadContract, loadContractEvents } from "@/lib/contracts/data";
 import { buildContractLink } from "@/lib/email/central";
 import { formatEuro } from "@/lib/contracts/format";
-import { CONTRACT_TYPE_LABELS, EVENT_LABELS, isExpired, isContractEditable, isLinkActive, type ContractStatus } from "@/lib/contracts/types";
+import { CONTRACT_TYPE_LABELS, EVENT_LABELS, isExpired, isContractEditable, isLinkActive, daysUntilExpiry, type ContractStatus } from "@/lib/contracts/types";
 import { StatusBadge } from "../_components/status-badge";
 import { ContractActions } from "../_components/contract-actions";
 
@@ -30,50 +30,60 @@ export default async function VertragDetailPage({ params }: { params: Promise<{ 
   const link = contract.token ? buildContractLink(contract.token) : null;
   const customerName = contract.billing_company || lead?.company_name || "Unbenannter Kunde";
 
+  // Erstellt-Zeitpunkt ohne Sekunden (ruhigere Meta-Zeile).
+  const createdLabel = new Date(contract.created_at).toLocaleString("de-DE", {
+    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+  // Ablauf-Dringlichkeit: rot wenn abgelaufen, gelb wenn ≤ 5 Tage Restlaufzeit.
+  const daysLeft = daysUntilExpiry(contract);
+  const expirySoon = !expired && daysLeft != null && daysLeft >= 1 && daysLeft <= 5;
+  const expiryColor = expired
+    ? "text-red-600 dark:text-red-400"
+    : expirySoon
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-gray-500 dark:text-gray-400";
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <Link href="/vertraege" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400">
         <ArrowLeft className="h-4 w-4" /> Zurück zur Übersicht
       </Link>
 
-      <header className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <StatusBadge status={contract.status as ContractStatus} expired={expired} emailed={!!contract.sent_at} />
-              <span className="text-[11px] uppercase tracking-wider text-gray-400">{CONTRACT_TYPE_LABELS[contract.type]}</span>
-            </div>
-            <h1 className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">{customerName}</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Erstellt {fmtDateTime(contract.created_at)}
-              {contract.expires_at ? ` · Link gültig bis ${new Date(contract.expires_at).toLocaleDateString("de-DE")}` : ""}
-            </p>
+      <header className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
+        <div className="p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={contract.status as ContractStatus} expired={expired} emailed={!!contract.sent_at} />
+            <span className="inline-flex items-center rounded-full border border-gray-200 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:border-white/10 dark:text-gray-400">
+              {CONTRACT_TYPE_LABELS[contract.type]}
+            </span>
           </div>
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap justify-end gap-2">
-              <Link
-                href={`/vertraege/${contract.id}/vorschau`}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/15"
-              >
-                <Eye className="h-4 w-4" /> Vorschau
-              </Link>
-              {isContractEditable(contract) && (
-                <Link
-                  href={`/vertraege/${contract.id}/bearbeiten`}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-gray-100 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-200 dark:bg-white/10 dark:text-gray-200 dark:hover:bg-white/15"
-                >
-                  <Pencil className="h-4 w-4" /> Bearbeiten
-                </Link>
-              )}
-            </div>
-            <ContractActions
-              id={contract.id}
-              status={contract.status as ContractStatus}
-              expired={expired}
-              link={link}
-              linkActive={isLinkActive(contract)}
-            />
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">{customerName}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+            <span className="inline-flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+              <CalendarClock className="h-3.5 w-3.5 text-gray-400" /> Erstellt {createdLabel}
+            </span>
+            {contract.expires_at && (
+              <span className={`inline-flex items-center gap-1.5 ${expiryColor}`}>
+                <Clock className="h-3.5 w-3.5 opacity-70" />
+                {expired ? "Link abgelaufen am" : "Link gültig bis"} {fmtDate(contract.expires_at)}
+                {expirySoon && (
+                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    noch {daysLeft} {daysLeft === 1 ? "Tag" : "Tage"}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
+        </div>
+        <div className="border-t border-gray-100 px-6 py-4 dark:border-white/5">
+          <ContractActions
+            id={contract.id}
+            status={contract.status as ContractStatus}
+            expired={expired}
+            link={link}
+            linkActive={isLinkActive(contract)}
+            editable={isContractEditable(contract)}
+          />
         </div>
       </header>
 

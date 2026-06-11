@@ -126,6 +126,12 @@ export function isExpired(contract: Pick<ContractRow, "expires_at" | "status">):
   return new Date(contract.expires_at).getTime() < Date.now();
 }
 
+/** Volle Resttage bis zum Ablauf des Signier-Links (aufgerundet), null ohne Ablaufdatum. */
+export function daysUntilExpiry(contract: Pick<ContractRow, "expires_at">): number | null {
+  if (!contract.expires_at) return null;
+  return Math.ceil((new Date(contract.expires_at).getTime() - Date.now()) / 86_400_000);
+}
+
 /** "Link aktiv": Signier-Link wurde erzeugt, aber nie per E-Mail versendet
  *  (sent_at kennzeichnet ausschließlich echten E-Mail-Versand). */
 export function isLinkActive(contract: Pick<ContractRow, "status" | "sent_at">): boolean {

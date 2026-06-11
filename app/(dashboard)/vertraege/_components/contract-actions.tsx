@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Send, Link2, Clock, Ban, Download, Check, Trash2, ExternalLink } from "lucide-react";
+import { Send, Link2, Clock, Ban, Download, Check, Trash2, ExternalLink, Eye, Pencil } from "lucide-react";
 import { sendContract, createContractLink, extendContract, cancelContract, deleteContract, getContractPdfUrl } from "../actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import type { ContractStatus } from "@/lib/contracts/types";
 import { useToastContext } from "../../toast-provider";
 
@@ -20,12 +21,15 @@ export function ContractActions({
   expired,
   link,
   linkActive,
+  editable,
 }: {
   id: string;
   status: ContractStatus;
   expired: boolean;
   link: string | null;
   linkActive: boolean;
+  /** Vertrag bearbeitbar → blendet den „Bearbeiten"-Link in die Leiste ein. */
+  editable: boolean;
 }) {
   const router = useRouter();
   const { addToast } = useToastContext();
@@ -126,21 +130,24 @@ export function ContractActions({
   const canDelete = status === "draft" || status === "cancelled" || linkActive;
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      <div className="flex flex-wrap justify-end gap-2">
+    <div>
+      {/* Eine zusammenhängende Aktionsleiste: Primäraktion → Link/Dokument-Aktionen
+          → Trenner → destruktive Aktionen. Linksbündig, damit die Hierarchie klar
+          lesbar ist und destruktive Aktionen räumlich abgesetzt sind. */}
+      <div className="flex flex-wrap items-center gap-2">
         {canSend && (
           <Button onClick={() => run("send", () => sendContract(id))} busy={busy === "send"} variant="primary">
             <Send className="h-4 w-4" /> {isResend ? "Erneut senden" : "Senden"}
           </Button>
         )}
-        {canSend && !link && (
-          <Button onClick={createAndCopyLink} busy={busy === "createLink"} variant="secondary">
-            <Link2 className="h-4 w-4" /> Link erstellen & kopieren
-          </Button>
-        )}
         {link && (
           <Button onClick={openLink} variant="secondary">
             <ExternalLink className="h-4 w-4" /> Zum Unterzeichnen öffnen
+          </Button>
+        )}
+        {canSend && !link && (
+          <Button onClick={createAndCopyLink} busy={busy === "createLink"} variant="secondary">
+            <Link2 className="h-4 w-4" /> Link erstellen & kopieren
           </Button>
         )}
         {link && (
@@ -153,10 +160,23 @@ export function ContractActions({
             <Clock className="h-4 w-4" /> Verlängern
           </Button>
         )}
+
+        <Link href={`/vertraege/${id}/vorschau`} className={buttonClasses("secondary", "sm")}>
+          <Eye className="h-4 w-4" /> Vorschau
+        </Link>
+        {editable && (
+          <Link href={`/vertraege/${id}/bearbeiten`} className={buttonClasses("secondary", "sm")}>
+            <Pencil className="h-4 w-4" /> Bearbeiten
+          </Link>
+        )}
         {canDownload && (
           <Button onClick={() => run("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
             <Download className="h-4 w-4" /> PDF
           </Button>
+        )}
+
+        {(canCancel || canDelete) && (
+          <span className="mx-1 h-6 w-px self-center bg-gray-200 dark:bg-white/10" aria-hidden />
         )}
         {canCancel && (
           <Button onClick={cancel} busy={busy === "cancel"} variant="danger">
@@ -169,7 +189,7 @@ export function ContractActions({
           </Button>
         )}
       </div>
-      {error && <p className="max-w-xs text-right text-xs text-red-500">{error}</p>}
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
