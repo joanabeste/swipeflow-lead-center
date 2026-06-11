@@ -572,6 +572,26 @@ export function StatusChangeItem({
   );
 }
 
+/** „Ins CRM verschoben" — wer den Lead aus „Neue Leads" ins CRM gepackt hat (+ Ziel-Status). */
+export function MovedToCrmItem({
+  log, statuses,
+}: { log: AuditRow; statuses: CustomLeadStatus[] }) {
+  const statusId = (log.details?.crm_status_id as string | null) ?? null;
+  return (
+    <div className="inline-flex items-center gap-1.5 text-sm">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+        Ins CRM verschoben
+      </span>
+      {statusId && (
+        <>
+          <ArrowRight className="h-3 w-3 text-gray-400" />
+          <CrmStatusBadge statusId={statusId} statuses={statuses} fallback="—" />
+        </>
+      )}
+    </div>
+  );
+}
+
 export function EnrichmentItem({ enrichment }: { enrichment: LeadEnrichment }) {
   if (enrichment.status === "completed" && !enrichment.error_message) return null;
   return <p className="text-xs text-red-600">{enrichment.error_message}</p>;

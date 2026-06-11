@@ -6,7 +6,7 @@ import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
 import { PersonAvatar } from "./_components/person-avatar";
-import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem, ImportItem } from "./_components/activity-items";
+import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem, ImportItem, MovedToCrmItem } from "./_components/activity-items";
 import { ComposeNote } from "./_components/compose-note";
 import { ComposeCall } from "./_components/compose-call";
 import { ComposeEmail } from "./_components/compose-email";
@@ -100,6 +100,13 @@ export function CrmActivityFeed({
         author: log.profiles?.name ?? null,
         authorAvatarUrl: log.profiles?.avatar_url ?? null,
         render: () => <StatusChangeItem log={log} statuses={statuses} kind="crm" />,
+      });
+    } else if (log.action === "lead.moved_to_crm") {
+      items.push({
+        id: `a-${log.id}`, kind: "status", at: log.created_at,
+        author: log.profiles?.name ?? null,
+        authorAvatarUrl: log.profiles?.avatar_url ?? null,
+        render: () => <MovedToCrmItem log={log} statuses={statuses} />,
       });
     } else if (log.action === "lead.bulk_status_update") {
       items.push({

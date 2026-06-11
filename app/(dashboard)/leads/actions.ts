@@ -626,27 +626,47 @@ export async function bulkUpdateStatus(
 
   if (error) return { error: error.message };
 
-  // Ampel-Notiz beim Eintritt ins CRM. Idempotent: nur beim echten Uebergang
-  // (vorher nicht im CRM) und nur wenn eine Ampel-Bewertung vorliegt. Best-effort
-  // — ein Fehler hier bricht die CRM-Uebernahme nicht ab.
+  // Beim echten Uebergang "nicht im CRM -> im CRM": (1) die Webdesign-Ampel-
+  // Begruendung als System-Notiz sichern und (2) pro Lead einen Audit-Eintrag
+  // schreiben, damit in der Lead-Historie sichtbar ist, WER den Lead ins CRM
+  // verschoben hat. Der aggregierte lead.bulk_status_update-Eintrag (unten) hat
+  // keine entity_id und taucht daher nicht pro Lead auf. Idempotent (nur beim
+  // echten Uebergang) und best-effort — Fehler brechen die CRM-Uebernahme nicht ab.
   try {
     const IN_CRM_STATUS = new Set(["qualified", "exported"]);
-    const noteRows = (priorAmpelRows ?? [])
-      .map((row) => {
-        const r = row as {
-          id: string;
-          status: string | null;
-          crm_status_id: string | null;
-          traffic_light_rating: string | null;
-          traffic_light_score: number | null;
-          traffic_light_reason: string | null;
-        };
-        const wasInCrm = r.crm_status_id != null || IN_CRM_STATUS.has(r.status ?? "");
-        const newCrmStatusId =
-          resolvedCrmStatusId === undefined ? r.crm_status_id : resolvedCrmStatusId;
-        const isInCrm = newCrmStatusId != null || IN_CRM_STATUS.has(status);
-        if (wasInCrm || !isInCrm || !r.traffic_light_rating) return null;
-        return {
+    const noteRows: { lead_id: string; content: string; created_by: null }[] = [];
+    const movedAudit: {
+      user_id: string | null;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      details: Record<string, unknown>;
+    }[] = [];
+    for (const row of priorAmpelRows ?? []) {
+      const r = row as {
+        id: string;
+        status: string | null;
+        crm_status_id: string | null;
+        traffic_light_rating: string | null;
+        traffic_light_score: number | null;
+        traffic_light_reason: string | null;
+      };
+      const wasInCrm = r.crm_status_id != null || IN_CRM_STATUS.has(r.status ?? "");
+      const newCrmStatusId =
+        resolvedCrmStatusId === undefined ? r.crm_status_id : resolvedCrmStatusId;
+      const isInCrm = newCrmStatusId != null || IN_CRM_STATUS.has(status);
+      if (wasInCrm || !isInCrm) continue; // kein echter Uebergang ins CRM
+
+      movedAudit.push({
+        user_id: user?.id ?? null,
+        action: "lead.moved_to_crm",
+        entity_type: "lead",
+        entity_id: r.id,
+        details: { crm_status_id: newCrmStatusId ?? null, status },
+      });
+
+      if (r.traffic_light_rating) {
+        noteRows.push({
           lead_id: r.id,
           content: formatTrafficLightNote(
             r.traffic_light_rating,
@@ -656,15 +676,19 @@ export async function bulkUpdateStatus(
           // System-Notiz: created_by=null -> der Aktivitaeten-Feed zeigt "System"
           // statt des handelnden Nutzers (item.author ?? "System").
           created_by: null,
-        };
-      })
-      .filter((n): n is NonNullable<typeof n> => n !== null);
+        });
+      }
+    }
+    if (movedAudit.length > 0) {
+      const { error: auditErr } = await db.from("audit_logs").insert(movedAudit);
+      if (auditErr) console.error("[bulkUpdateStatus:movedToCrm]", auditErr);
+    }
     if (noteRows.length > 0) {
       const { error: noteErr } = await db.from("lead_notes").insert(noteRows);
       if (noteErr) console.error("[bulkUpdateStatus:ampelNote]", noteErr);
     }
   } catch (e) {
-    console.error("[bulkUpdateStatus:ampelNote] unerwartet:", e);
+    console.error("[bulkUpdateStatus:moveToCrm] unerwartet:", e);
   }
 
   // Override-Log: cancelled/filtered -> aktiv = passives Signal "Cancel war falsch"

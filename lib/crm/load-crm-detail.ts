@@ -94,7 +94,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       .select("id, action, details, created_at, user_id")
       .eq("entity_type", "lead")
       .eq("entity_id", id)
-      .in("action", ["lead.crm_status_changed", "lead.bulk_status_update"])
+      .in("action", ["lead.crm_status_changed", "lead.bulk_status_update", "lead.moved_to_crm"])
       .order("created_at", { ascending: false })
       .limit(200),
     db.from("lead_todos").select("*").eq("lead_id", id).order("due_date", { ascending: true }),
