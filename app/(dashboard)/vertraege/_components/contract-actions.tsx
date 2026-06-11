@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Link2, Clock, Ban, Download, Check, Trash2 } from "lucide-react";
+import { Send, Link2, Clock, Ban, Download, Check, Trash2, ExternalLink } from "lucide-react";
 import { sendContract, createContractLink, extendContract, cancelContract, deleteContract, getContractPdfUrl } from "../actions";
 import { Button } from "@/components/ui/button";
 import type { ContractStatus } from "@/lib/contracts/types";
@@ -47,6 +47,11 @@ export function ContractActions({
       return;
     }
     router.refresh();
+  }
+
+  function openLink() {
+    if (!link) return;
+    window.open(toAbsolute(link), "_blank");
   }
 
   function copyLink() {
@@ -131,6 +136,11 @@ export function ContractActions({
         {canSend && !link && (
           <Button onClick={createAndCopyLink} busy={busy === "createLink"} variant="secondary">
             <Link2 className="h-4 w-4" /> Link erstellen & kopieren
+          </Button>
+        )}
+        {link && (
+          <Button onClick={openLink} variant="secondary">
+            <ExternalLink className="h-4 w-4" /> Zum Unterzeichnen öffnen
           </Button>
         )}
         {link && (
