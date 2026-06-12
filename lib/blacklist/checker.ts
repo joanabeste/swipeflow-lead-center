@@ -14,15 +14,17 @@ export function checkLead(
 
   // Manuelle Blacklist-Einträge prüfen
   for (const entry of entries) {
-    const leadValue = getMatchField(lead, entry.match_type)?.toLowerCase();
-    if (!leadValue) continue;
+    const rawLeadValue = getMatchField(lead, entry.match_type);
+    if (!rawLeadValue) continue;
 
-    const entryValue = entry.match_value.toLowerCase();
-    // Firmennamen: "enthält"-Match (z.B. "Siemens" matched "Siemens Energy GmbH")
-    // Domain/Register-ID: exakter Match
+    // Firmenname: gezielt Konzerne filtern — nur ganze Wörter (Klammer-Inhaber &
+    // Bindestrich-Nachnamen ausgenommen) UND nur, wenn der Name eine Rechtsform
+    // einer Kapitalgesellschaft trägt. So matcht "Henkel" → "Henkel AG", aber
+    // nicht "… (Rebekka Wildenmann-Henkel)" oder das Einzelunternehmen "Praxis Henkel".
+    // Domain/Register-ID: exakter Match (case-insensitive).
     const matches = entry.match_type === "name"
-      ? leadValue.includes(entryValue)
-      : leadValue === entryValue;
+      ? matchesCompanyName(rawLeadValue, entry.match_value)
+      : rawLeadValue.toLowerCase() === entry.match_value.toLowerCase();
 
     if (matches) {
       reasons.push(
@@ -87,4 +89,58 @@ function getMatchField(
     default:
       return null;
   }
+}
+
+// Rechtsformen einer Kapitalgesellschaft — das "Konzern-Signal" für name-Treffer.
+// Token-Gleichheit (kein Substring) → "Tagespflege" enthält kein "ag". Zentral &
+// leicht erweiterbar.
+const CORPORATE_LEGAL_FORMS = new Set([
+  "ag", "se", "kgaa", "gmbh", "mbh", "ggmbh", "ug", "kg", "ohg",
+  "ltd", "plc", "inc", "sa", "nv", "bv", "srl", "spa",
+]);
+
+/**
+ * Zerlegt einen Namen in normalisierte Tokens.
+ * - lowercase (Unicode-/Umlaut-sicher; KEINE Diakritika-Entfernung)
+ * - stripParens (nur Firmenname-Seite): `(...)`-Segmente entfernen → schneidet den
+ *   in Klammern angehängten Inhaber weg ("… (Rebekka Wildenmann-Henkel)").
+ * - Split auf alles außer Buchstaben/Ziffern UND Bindestrich → interner Bindestrich
+ *   bleibt erhalten, "wildenmann-henkel" ist EIN Token (≠ "henkel").
+ */
+function tokenize(raw: string, stripParens: boolean): string[] {
+  let s = raw.toLowerCase();
+  if (stripParens) s = s.replace(/\([^)]*\)/g, " ").replace(/[()]/g, " ");
+  return s
+    .split(/[^\p{L}\p{N}-]+/u)
+    .map((t) => t.replace(/^-+|-+$/g, ""))
+    .filter((t) => t.length > 0);
+}
+
+function hasCorporateLegalForm(tokens: string[]): boolean {
+  return tokens.some((t) => CORPORATE_LEGAL_FORMS.has(t));
+}
+
+/**
+ * Firmenname-Blacklist-Match für die Konzern-Filterung.
+ * Trifft nur, wenn (1) der Firmenname eine Rechtsform einer Kapitalgesellschaft
+ * trägt UND (2) der Eintragswert als zusammenhängende ganze Wortfolge im Namen
+ * vorkommt. Exportiert für Unit-Tests.
+ */
+export function matchesCompanyName(companyName: string, entryValue: string): boolean {
+  const company = tokenize(companyName, true);
+  const entry = tokenize(entryValue, false);
+  if (company.length === 0 || entry.length === 0) return false;
+
+  // Konzern-Gate: ohne Rechtsform kein Treffer (Einzelunternehmen etc. bleiben drin).
+  if (!hasCorporateLegalForm(company)) return false;
+
+  // Marke als konsekutiver Token-Lauf (Phrase, richtige Reihenfolge, Token-Gleichheit).
+  for (let i = 0; i + entry.length <= company.length; i++) {
+    let ok = true;
+    for (let j = 0; j < entry.length; j++) {
+      if (company[i + j] !== entry[j]) { ok = false; break; }
+    }
+    if (ok) return true;
+  }
+  return false;
 }

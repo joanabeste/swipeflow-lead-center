@@ -184,6 +184,13 @@ export function BlacklistManager({ entries, rules }: Props) {
               </button>
             </form>
           )}
+          {showAddForm && (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Hinweis: „Firmenname“ greift nur bei Firmen mit Rechtsform (AG, GmbH, KGaA, …) und nur auf
+              ganze Wörter — Einzelunternehmen oder Inhaber-Nachnamen (z. B. „… (Wildenmann-Henkel)“)
+              werden nicht gefiltert. Domain/Register-ID matchen exakt.
+            </p>
+          )}
 
           {entryState?.error && (
             <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">{entryState.error}</div>
