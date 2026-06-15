@@ -1,14 +1,17 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus, LeadLink } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, CustomLeadStatus, LeadLink, LeadNote, LeadNoteWithDetails } from "@/lib/types";
 import { getHqLocation, type HqLocation } from "@/lib/app-settings";
 import { findLeadDuplicates, type DuplicateCandidate } from "@/lib/leads/find-existing";
+import { getNoteAttachmentsForNotes } from "@/lib/notes/attachments";
 
 export interface LeadDetailBundle {
   lead: Lead;
   changes: LeadChange[];
   contacts: LeadContact[];
   jobPostings: LeadJobPosting[];
+  /** Notizen inkl. Autor + Anhänge — für die Notiz-Karte in der Neue-Leads-Ansicht. */
+  notes: LeadNoteWithDetails[];
   latestEnrichment: LeadEnrichment | null;
   customStatuses: CustomLeadStatus[];
   hq: HqLocation;
@@ -38,6 +41,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     { data: changes },
     { data: contacts },
     { data: jobPostings },
+    { data: notes },
     { data: enrichments },
     { data: customStatuses },
     { data: links },
@@ -47,6 +51,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     db.from("lead_changes").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(50),
     db.from("lead_contacts").select("*").eq("lead_id", id).order("created_at"),
     db.from("lead_job_postings").select("*").eq("lead_id", id).order("created_at"),
+    db.from("lead_notes").select("*").eq("lead_id", id).order("created_at", { ascending: false }),
     db.from("lead_enrichments").select("*").eq("lead_id", id).order("created_at", { ascending: false }).limit(1),
     db.from("custom_lead_statuses").select("*"),
     db.from("lead_links").select("*").eq("lead_id", id).order("created_at"),
@@ -55,6 +60,24 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
 
   if (!lead) return null;
   const typedLead = lead as Lead;
+
+  // Autoren der Notizen auflösen — created_by verweist auf auth.users, nicht profiles.
+  const notesRaw = (notes ?? []) as LeadNote[];
+  const noteUserIds = new Set<string>();
+  for (const n of notesRaw) if (n.created_by) noteUserIds.add(n.created_by);
+  const { data: profileRows } = noteUserIds.size > 0
+    ? await db.from("profiles").select("id, name, avatar_url").in("id", Array.from(noteUserIds))
+    : { data: [] as { id: string; name: string; avatar_url: string | null }[] };
+  const profileById = new Map<string, { name: string; avatar_url: string | null }>();
+  for (const p of profileRows ?? []) {
+    profileById.set(p.id as string, { name: p.name as string, avatar_url: (p.avatar_url as string | null) ?? null });
+  }
+  const attachmentsByNote = await getNoteAttachmentsForNotes(notesRaw.map((n) => n.id));
+  const notesWithDetails: LeadNoteWithDetails[] = notesRaw.map((n) => ({
+    ...n,
+    profiles: n.created_by ? profileById.get(n.created_by) ?? null : null,
+    attachments: attachmentsByNote.get(n.id) ?? [],
+  }));
 
   // Mutmaßliche Duplikate (vollumfänglich: Domain/E-Mail/Telefon/Name, beide Seiten
   // normalisiert) — pro Aufruf frisch, also auch nach dem Anreichern.
@@ -72,6 +95,7 @@ export async function loadLeadDetail(id: string): Promise<LeadDetailBundle | nul
     changes: (changes as LeadChange[]) ?? [],
     contacts: (contacts as LeadContact[]) ?? [],
     jobPostings: (jobPostings as LeadJobPosting[]) ?? [],
+    notes: notesWithDetails,
     latestEnrichment: (enrichments?.[0] as LeadEnrichment) ?? null,
     customStatuses: (customStatuses as CustomLeadStatus[]) ?? [],
     hq,

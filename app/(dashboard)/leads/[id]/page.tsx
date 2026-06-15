@@ -50,6 +50,7 @@ export default async function LeadDetailPage({ params, searchParams }: Props) {
       changes={data.changes}
       contacts={data.contacts}
       jobPostings={data.jobPostings}
+      notes={data.notes}
       latestEnrichment={data.latestEnrichment}
       customStatuses={data.customStatuses}
       hq={data.hq}

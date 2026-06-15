@@ -1,16 +1,13 @@
-import type { LeadNote, LeadCall, EmailMessage, LoadedNoteAttachment } from "@/lib/types";
+import type { LeadCall, EmailMessage, LeadNoteWithDetails, NoteAuthorProfile } from "@/lib/types";
 
 export type ActivityKind = "all" | "note" | "call" | "email" | "status" | "enrichment" | "change" | "import";
 
 // In lib/types definiert (server-/client-neutral), hier re-exportiert für die Feed-Komponenten.
 export type { LeadImportInfo } from "@/lib/types";
 
-export interface AuthorProfile { name: string; avatar_url: string | null }
+export type AuthorProfile = NoteAuthorProfile;
 
-export type NoteRow = LeadNote & {
-  profiles: AuthorProfile | null;
-  attachments: LoadedNoteAttachment[];
-};
+export type NoteRow = LeadNoteWithDetails;
 export type CallRow = LeadCall & { profiles: AuthorProfile | null };
 export type EmailRow = EmailMessage & {
   profiles: AuthorProfile | null;

@@ -389,6 +389,19 @@ export interface LoadedNoteAttachment {
   signed_url: string | null;
 }
 
+/** Autor einer Aktivität (Notiz/Anruf/…) — aufgelöst aus profiles. */
+export interface NoteAuthorProfile {
+  name: string;
+  avatar_url: string | null;
+}
+
+/** Notiz inkl. aufgelöstem Autor und geladenen Anhängen — gemeinsame Sicht für
+ *  CRM-Detail (NoteRow) und Neue-Leads-Detail (LeadNotesCard). */
+export type LeadNoteWithDetails = LeadNote & {
+  profiles: NoteAuthorProfile | null;
+  attachments: LoadedNoteAttachment[];
+};
+
 /** Aufgabe / Wiedervorlage zu einem Lead. due_date ist Pflicht (Sales-Rhythmus
  *  setzt immer ein Datum voraus). done_at IS NULL = offen. */
 export interface LeadTodo {

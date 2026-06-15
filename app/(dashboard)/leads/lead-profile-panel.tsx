@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, AlertTriangle, RotateCcw, Sparkles, Loader2, Trash2, Activity, ChevronDown, Archive, Search, Send,
 } from "lucide-react";
-import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus, LeadLink } from "@/lib/types";
+import type { Lead, LeadChange, LeadContact, LeadJobPosting, LeadEnrichment, LeadStatus, CustomLeadStatus, LeadLink, LeadNoteWithDetails } from "@/lib/types";
 import { bulkRestoreCrmStatus, bulkArchiveLeads } from "./actions";
 import type { HqLocation } from "@/lib/app-settings";
 import { updateLead, deleteLead, bulkUpdateStatus } from "./actions";
@@ -26,6 +26,7 @@ import { LeadLocationCard } from "./_components/lead-location-card";
 import { CrmDuplicateWarning } from "../crm/[id]/_components/crm-duplicate-warning";
 import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 import { LeadActivityTimeline, LeadChangesList, type ActivityItem } from "./_components/lead-history-list";
+import { LeadNotesCard } from "./_components/lead-notes-card";
 import { useToastContext } from "../toast-provider";
 
 export type { ActivityItem };
@@ -35,6 +36,7 @@ interface Props {
   changes: LeadChange[];
   contacts: LeadContact[];
   jobPostings: LeadJobPosting[];
+  notes?: LeadNoteWithDetails[];
   links?: LeadLink[];
   latestEnrichment: LeadEnrichment | null;
   /** Wird für das Aussortier-Banner gebraucht (zeigt Label + Wiederherstellen). */
@@ -55,6 +57,7 @@ interface Props {
 
 export function LeadProfilePanel({
   lead, changes, contacts, jobPostings, latestEnrichment, hq,
+  notes = [],
   customStatuses = [],
   duplicates = [],
   backHref = "/leads",
@@ -217,6 +220,7 @@ export function LeadProfilePanel({
   const rightContent = (
     <>
       {extraRightColumn}
+      <LeadNotesCard leadId={lead.id} notes={notes} />
       <LeadLocationCard lead={lead} hq={hq} />
       {activityItems
         ? <LeadActivityTimeline items={activityItems} />
