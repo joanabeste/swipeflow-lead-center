@@ -55,7 +55,7 @@ export const WIDGET_REGISTRY: WidgetMeta[] = [
   // Nicht default-sichtbar, aber über Edit-Mode hinzufügbar:
   { key: "call-stats-7d", label: "Anrufe (7 Tage, simpel)", description: "Tägliche Anruf-Statistik ohne Filter", defaultVisible: false, defaultOrder: 32, defaultWidth: "full" },
   { key: "crm-status-distribution", label: "CRM-Status-Verteilung", description: "Qualifizierte Leads nach Vertriebsphase", defaultVisible: false, defaultOrder: 27, defaultWidth: "full" },
-  { key: "todays-calls", label: "Heutige Anrufe", description: "Calls aller Nutzer seit 00:00", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
+  { key: "todays-calls", label: "Heutige Anrufe", description: "KPIs + Aufschlüsselung nach Person & Status, Verlauf seit 00:00", defaultVisible: false, defaultOrder: 28, defaultWidth: "half" },
   { key: "enrichment-trend-7d", label: "Anreicherungen (7 Tage)", description: "Erfolg/Fehler der letzten 7 Tage", defaultVisible: false, defaultOrder: 45, defaultWidth: "full" },
   { key: "follow-up-reminder", label: "Überfällige Follow-Ups", description: "Todo-Leads ohne Kontakt seit > 7 Tagen", defaultVisible: false, defaultOrder: 29, defaultWidth: "half" },
   { key: "team-leaderboard", label: "Team-Leaderboard heute", description: "Anrufe pro Nutzer als Scoreboard", defaultVisible: false, defaultOrder: 33, defaultWidth: "half" },

@@ -2,6 +2,7 @@ import {
   AlertCircle, PhoneIncoming, PhoneMissed, PhoneOutgoing, Play,
 } from "lucide-react";
 import type { ActiveCall } from "../_lib/types";
+import { callStatusDisplay } from "@/lib/calls/status-display";
 
 export function StatusDot({ label, color }: { label: string; color: string | null }) {
   return (
@@ -16,15 +17,7 @@ export function StatusDot({ label, color }: { label: string; color: string | nul
 }
 
 export function LastCallStatusPill({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    initiated: { label: "gewählt", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-    ringing: { label: "klingelt", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-    answered: { label: "angenommen", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
-    missed: { label: "verpasst", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
-    failed: { label: "fehlgeschlagen", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
-    ended: { label: "beendet", cls: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" },
-  };
-  const m = map[status] ?? { label: status, cls: "bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400" };
+  const m = callStatusDisplay(status);
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${m.cls}`}>{m.label}</span>;
 }
 

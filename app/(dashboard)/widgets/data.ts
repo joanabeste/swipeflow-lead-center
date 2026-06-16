@@ -1,6 +1,9 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import type { ServiceMode } from "@/lib/types";
 import { toBerlinDayKey } from "@/lib/date/day-key";
+import { startOfDayInAppTz } from "@/lib/zeit/timezone";
+import { CALL_STATUS_ORDER } from "@/lib/calls/status-display";
+import { loadTodaysCalls, TODAY_CALLS_PAGE_SIZE } from "@/lib/calls/today";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 
 /** Lädt einmal alle für Dashboard-Widgets nötigen Daten zentral. */
@@ -10,8 +13,9 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // (totals, imported, enriched, enrichment_pending) bleibt unverteilt, weil
   // neue Leads beim Import noch keine Vertikale haben (vertical IS NULL).
   const vertical = MODE_TO_VERTICAL[serviceMode];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // "Heute" = ab 00:00 Berlin-Zeit (Server laeuft in UTC). Betrifft konsistent
+  // alle Tages-Queries (todaysCalls, teamCallsToday, myDay).
+  const today = startOfDayInAppTz();
   const todayIso = today.toISOString();
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600_000);
   sevenDaysAgo.setHours(0, 0, 0, 0);
@@ -38,17 +42,16 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .is("deleted_at", null)
       .order("updated_at", { ascending: false })
       .limit(10),
-    // Anrufe heute (alle User)
-    db.from("lead_calls").select("id, lead_id, direction, status, started_at, phone_number, created_by, leads(company_name)")
-      .gte("started_at", todayIso)
-      .order("started_at", { ascending: false })
-      .limit(20),
   ];
 
   const [
     totals, imported, enriched, enrichmentPending, qualified, exported, cancelled, filtered,
-    enrichmentCompleted, enrichmentFailed, recentLeads, recentLogs, crmQueue, todaysCalls,
+    enrichmentCompleted, enrichmentFailed, recentLeads, recentLogs, crmQueue,
   ] = await Promise.all(baseQueries);
+
+  // Erste Seite der heutigen Anrufe (Firma + Anrufer aufgelöst). Weitere Seiten
+  // lädt das Widget bei Bedarf über /api/calls/today nach.
+  const todaysCallsList = await loadTodaysCalls(db, { offset: 0, limit: TODAY_CALLS_PAGE_SIZE });
 
   // Webdev-spezifisch
   let noSslCount = 0, notMobileCount = 0, outdatedDesignCount = 0;
@@ -121,7 +124,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
 
   // Offene Aufgaben (Wiedervorlagen) — für Dashboard-Widget.
   // Zeigt überfällige + heutige + nächste 7 Tage. Lead-Daten parallel via Lookup.
-  const todayDateOnly = new Date(today).toISOString().slice(0, 10);
+  const todayDateOnly = toBerlinDayKey(today);
   const sevenDaysAheadKey = new Date(Date.now() + 7 * 24 * 3600_000).toISOString().slice(0, 10);
   const { data: openTodoRows } = await db
     .from("lead_todos")
@@ -157,20 +160,6 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
         city: lead.city,
       };
     });
-
-  // Namen für Call-Ersteller
-  const callRows = (todaysCalls.data ?? []) as Array<{
-    id: string; lead_id: string; direction: string; status: string;
-    started_at: string; phone_number: string | null;
-    created_by: string | null;
-    leads: { company_name: string } | { company_name: string }[] | null;
-  }>;
-  const callUserIds = Array.from(new Set(callRows.map((c) => c.created_by).filter(Boolean))) as string[];
-  const { data: callProfiles } = callUserIds.length > 0
-    ? await db.from("profiles").select("id, name").in("id", callUserIds)
-    : { data: [] as { id: string; name: string }[] };
-  const callerNameById = new Map<string, string>();
-  for (const p of callProfiles ?? []) callerNameById.set(p.id, p.name);
 
   // Calls 7d — aggregiere pro Tag in Berlin-Zeit (siehe day-key.ts)
   const dayBuckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
@@ -247,14 +236,33 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   const teamCallsRows = (teamCallsToday.data ?? []) as Array<{
     created_by: string | null; direction: string; status: string; started_at: string;
   }>;
-  const leaderboardAgg = new Map<string, { total: number; answered: number }>();
+  const leaderboardAgg = new Map<string, { total: number; answered: number; missed: number }>();
   for (const c of teamCallsRows) {
     if (!c.created_by) continue;
-    const cur = leaderboardAgg.get(c.created_by) ?? { total: 0, answered: 0 };
+    const cur = leaderboardAgg.get(c.created_by) ?? { total: 0, answered: 0, missed: 0 };
     cur.total++;
     if (c.status === "answered") cur.answered++;
+    else if (c.status === "missed") cur.missed++;
     leaderboardAgg.set(c.created_by, cur);
   }
+
+  // Tages-Zusammenfassung für die „Heutige Anrufe"-Karte (KPI-Kopf + Aufschlüsselung).
+  // Basis = ALLE heutigen Calls (teamCallsRows), nicht die auf 20 limitierte Liste.
+  const statusCountMap = new Map<string, number>();
+  let todayTotal = 0, todayAnswered = 0, todayMissed = 0, todayFailed = 0;
+  for (const c of teamCallsRows) {
+    todayTotal++;
+    statusCountMap.set(c.status, (statusCountMap.get(c.status) ?? 0) + 1);
+    if (c.status === "answered") todayAnswered++;
+    else if (c.status === "missed") todayMissed++;
+    else if (c.status === "failed") todayFailed++;
+  }
+  // byStatus in sinnvoller Reihenfolge; unbekannte Status hinten anhängen.
+  const orderedStatuses = [
+    ...CALL_STATUS_ORDER.filter((s) => statusCountMap.has(s)),
+    ...Array.from(statusCountMap.keys()).filter((s) => !CALL_STATUS_ORDER.includes(s as typeof CALL_STATUS_ORDER[number])),
+  ];
+  const byStatus = orderedStatuses.map((status) => ({ status, count: statusCountMap.get(status) ?? 0 }));
   const leaderboardUserIds = Array.from(leaderboardAgg.keys());
   const leaderboardNames = new Map<string, string>();
   if (leaderboardUserIds.length > 0) {
@@ -275,6 +283,32 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
+
+  // „Heutige Anrufe"-Karte: Aufschlüsselung nach Person (alle Personen, nicht
+  // nur Top 5 — die Karte zeigt das vollständige Bild des Tages).
+  const byPerson = leaderboardUserIds
+    .map((id) => {
+      const agg = leaderboardAgg.get(id)!;
+      return {
+        userId: id,
+        name: leaderboardNames.get(id) ?? "Unbekannt",
+        total: agg.total,
+        answered: agg.answered,
+        missed: agg.missed,
+        rate: agg.total > 0 ? Math.round((agg.answered / agg.total) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  const todaysCallSummary = {
+    total: todayTotal,
+    answered: todayAnswered,
+    missed: todayMissed,
+    failed: todayFailed,
+    reachRate: todayTotal > 0 ? Math.round((todayAnswered / todayTotal) * 100) : 0,
+    byStatus,
+    byPerson,
+  };
 
   // Deal-Summary: nur open-stages zählen + Amount summieren.
   const stagesRows = (dealStages.data ?? []) as Array<{
@@ -415,11 +449,10 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       id: string; company_name: string; city: string | null;
       phone: string | null; crm_status_id: string | null; updated_at: string;
     }>,
-    todaysCalls: callRows.map((c) => ({
-      ...c,
-      companyName: Array.isArray(c.leads) ? c.leads[0]?.company_name ?? "" : c.leads?.company_name ?? "",
-      callerName: c.created_by ? callerNameById.get(c.created_by) ?? null : null,
-    })),
+    todaysCalls: todaysCallsList,
+    // Gesamtzahl heutiger Anrufe (alle, nicht nur die auf 20 limitierte Liste).
+    todaysCallsTotal: todaysCallSummary.total,
+    todaysCallSummary,
     myDay: {
       callsToday: myCallsToday.count ?? 0,
       notesToday: myNotesToday.count ?? 0,
