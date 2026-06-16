@@ -21,9 +21,14 @@ export default async function LeadsPage({ searchParams }: Props) {
 
   // Suspense-Key: bei Filter-/Seitenwechsel zeigt die Grenze wieder das
   // Skeleton, statt die alte Tabelle bis zum Eintreffen der neuen Daten
-  // einzufrieren.
+  // einzufrieren. NUR datenrelevante Params einrechnen — reine Ansichts-Params
+  // wie `preview` (Schnellansicht-Drawer, rein client-seitig) dürfen NICHT zum
+  // Key-Wechsel führen, sonst remountet beim Lead-Wechsel im Auge die ganze
+  // Tabelle (Skeleton-Flash + unnötige Query).
   const sectionKey = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v != null) as [string, string][],
+    Object.entries(params).filter(
+      ([k, v]) => v != null && k !== "preview",
+    ) as [string, string][],
   ).toString();
 
   return (
