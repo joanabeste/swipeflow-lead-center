@@ -1,153 +1,15 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import type { Lead, LeadStatus, CustomLeadStatus } from "@/lib/types";
-import { LeadTableWrapper } from "./lead-table-wrapper";
-import { getAllEnrichmentDefaults } from "@/lib/enrichment/defaults";
-import { loadTablePrefs } from "@/lib/table-prefs";
-import { normalizePhone } from "@/lib/csv/normalizer";
-import { canonicalPhoneDigits, leadsHasPhoneNorm } from "@/lib/leads/phone-search";
+import { LeadTableSection } from "./lead-table-section";
+import { LeadTableSkeleton } from "./lead-table-skeleton";
 
 interface Props {
   searchParams: Promise<Record<string, string | undefined>>;
 }
 
-const PAGE_SIZE = 50;
-
-// Whitelist erlaubter Spalten fuer Header-Filter (filter_<col>=<val>).
-// Defensive Absicherung gegen PostgREST-Filter-Injection: NUR diese Spalten
-// duerfen ueber URL-Filter angesprochen werden. Auth-/Status-Felder wie
-// crm_status_id, assigned_to, deleted_at etc. sind hier bewusst NICHT enthalten.
-// "traffic_light" wird in der Logik unten auf traffic_light_rating gemappt.
-const ALLOWED_FILTER_COLUMNS = new Set<string>([
-  "company_name",
-  "website",
-  "city",
-  "zip",
-  "industry",
-  "company_size",
-  "legal_form",
-  "phone",
-  "email",
-  "source_type",
-  "traffic_light",
-]);
-
-// Escape Wildcards und Trenner, damit Benutzereingaben in .ilike()/.or()
-// nicht als PostgREST-Pattern interpretiert werden. Komma trennt or-Filter,
-// % und _ sind SQL-LIKE-Wildcards. Max 100 Zeichen.
-function escapeIlikeWildcards(s: string): string {
-  return s
-    .slice(0, 100)
-    .replace(/\\/g, "\\\\")
-    .replace(/%/g, "\\%")
-    .replace(/_/g, "\\_")
-    .replace(/,/g, " ")
-    .replace(/[()]/g, " ");
-}
-
 export default async function LeadsPage({ searchParams }: Props) {
   const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page ?? "1", 10));
-  const offset = (page - 1) * PAGE_SIZE;
-  const sort = params.sort ?? "updated_at";
-  const order = (params.order ?? "desc") as "asc" | "desc";
   const includeCrm = params.include_crm === "1";
-
-  const supabase = await createClient();
-  const initialColumnPrefs = await loadTablePrefs("leads");
-
-  let query = supabase
-    .from("leads")
-    .select("*", { count: "exact" })
-    .is("deleted_at", null);
-
-  if (params.q) {
-    const safeQ = escapeIlikeWildcards(params.q);
-    const orParts = [
-      `company_name.ilike.%${safeQ}%`,
-      `website.ilike.%${safeQ}%`,
-      `city.ilike.%${safeQ}%`,
-      `phone.ilike.%${safeQ}%`,
-    ];
-    if (/\d/.test(params.q)) {
-      // (a) Migrationsunabhängig: Teilstring in normalisierter +49-Form, damit
-      //     "0571…" auch "+49571…" findet (Bestand mischt 0… und +49…).
-      const normPhone = normalizePhone(params.q)?.replace(/^\+/, "");
-      if (normPhone) {
-        const safeNorm = escapeIlikeWildcards(normPhone);
-        if (safeNorm !== safeQ) orParts.push(`phone.ilike.%${safeNorm}%`);
-      }
-      // (b) Voll format-unabhängig über die generierte Spalte phone_norm
-      //     (Migration 122): Trenner/Präfixe egal. Fehlt die Spalte noch, wird die
-      //     Klausel ausgelassen (kein Page-Bruch).
-      if (await leadsHasPhoneNorm(supabase)) {
-        const canon = canonicalPhoneDigits(params.q);
-        if (canon) orParts.push(`phone_norm.ilike.%${escapeIlikeWildcards(canon)}%`);
-      }
-    }
-    query = query.or(orParts.join(","));
-  }
-
-  if (params.status) {
-    query = query.eq("status", params.status as LeadStatus);
-  }
-
-  // Standardmäßig keine CRM-Leads zeigen (die sind im CRM-Bereich zuhause).
-  // Kriterium "im CRM": crm_status_id gesetzt ODER status in (qualified, exported).
-  // Zusätzlich nur echte Leads (lifecycle_stage='lead') — Pipeline (deal),
-  // Kunden (customer) und archivierte (archived) gehören nicht in "Neue Leads".
-  // Spalte ist NOT NULL DEFAULT 'lead' (Migration 071), daher exakter Match.
-  // Override via URL-Param: ?include_crm=1
-  if (!includeCrm) {
-    query = query
-      .is("crm_status_id", null)
-      .not("status", "in", '("qualified","exported")')
-      .eq("lifecycle_stage", "lead");
-  }
-
-  // Spalten-Filter anwenden — Spaltenname strikt aus Whitelist, Wert escaped.
-  const columnFilters: Record<string, string> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (key.startsWith("filter_") && value) {
-      const col = key.replace("filter_", "");
-      if (!ALLOWED_FILTER_COLUMNS.has(col)) {
-        console.warn(`[leads] Ignoriere unerlaubten Filter-Spaltennamen: ${col}`);
-        continue;
-      }
-      columnFilters[col] = value;
-      if (col === "traffic_light") {
-        // Ampel: exakter Match auf die echte Spalte (nicht ilike).
-        query = query.eq("traffic_light_rating", value);
-      } else {
-        query = query.ilike(col, `%${escapeIlikeWildcards(value)}%`);
-      }
-    }
-  }
-
-  // "traffic_light" sortiert über den invertierten Score (grün hoch → rot niedrig);
-  // unbewertete Leads landen ans Ende.
-  const sortColumn = sort === "traffic_light" ? "traffic_light_score" : sort;
-  const orderOpts =
-    sort === "traffic_light"
-      ? { ascending: order === "asc", nullsFirst: false }
-      : { ascending: order === "asc" };
-
-  const { data: leads, count } = await query
-    .order(sortColumn, orderOpts)
-    // Stabiler Tiebreaker (eindeutige id) — verhindert nicht-deterministisches
-    // Umsortieren bei Gleichständen (z. B. gleicher updated_at aus Batch-Import).
-    .order("id", { ascending: true })
-    .range(offset, offset + PAGE_SIZE - 1);
-
-  const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
-
-  const enrichmentDefaults = await getAllEnrichmentDefaults();
-
-  const { data: customStatuses } = await supabase
-    .from("custom_lead_statuses")
-    .select("*")
-    .eq("is_active", true)
-    .order("display_order", { ascending: true });
 
   // Toggle-Link baut URL mit gedrehtem include_crm-Param.
   const toggleParams = new URLSearchParams();
@@ -157,18 +19,19 @@ export default async function LeadsPage({ searchParams }: Props) {
   if (!includeCrm) toggleParams.set("include_crm", "1");
   const toggleHref = `/leads${toggleParams.toString() ? `?${toggleParams.toString()}` : ""}`;
 
+  // Suspense-Key: bei Filter-/Seitenwechsel zeigt die Grenze wieder das
+  // Skeleton, statt die alte Tabelle bis zum Eintreffen der neuen Daten
+  // einzufrieren.
+  const sectionKey = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v != null) as [string, string][],
+  ).toString();
+
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {includeCrm ? "Alle Leads" : "Neue Leads"}
-          </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {count ?? 0} Leads
-            {!includeCrm && " — im CRM liegende sind ausgeblendet"}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {includeCrm ? "Alle Leads" : "Neue Leads"}
+        </h1>
         <Link
           href={toggleHref}
           className="text-xs font-medium text-primary hover:underline"
@@ -177,19 +40,9 @@ export default async function LeadsPage({ searchParams }: Props) {
         </Link>
       </div>
 
-      <LeadTableWrapper
-        leads={(leads as Lead[]) ?? []}
-        totalPages={totalPages}
-        currentPage={page}
-        currentSort={sort}
-        currentOrder={order}
-        currentQuery={params.q ?? ""}
-        currentStatus={params.status ?? ""}
-        currentFilters={columnFilters}
-        initialColumnPrefs={initialColumnPrefs}
-        enrichmentDefaults={enrichmentDefaults}
-        customStatuses={(customStatuses as CustomLeadStatus[]) ?? []}
-      />
+      <Suspense key={sectionKey} fallback={<LeadTableSkeleton />}>
+        <LeadTableSection params={params} />
+      </Suspense>
     </div>
   );
 }

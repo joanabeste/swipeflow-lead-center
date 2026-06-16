@@ -5,6 +5,7 @@ import { loadTablePrefs } from "@/lib/table-prefs";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { normalizePhone } from "@/lib/csv/normalizer";
 import { canonicalPhoneDigits, leadsHasPhoneNorm } from "@/lib/leads/phone-search";
+import { CRM_LIST_COLS } from "@/lib/leads/api-fields";
 import { listTeamMembers } from "../deals/actions";
 
 const PAGE_SIZE = 50;
@@ -95,9 +96,14 @@ export default async function CrmPage({
     return Array.from(new Set((data ?? []).map((r) => r.lead_id)));
   }
 
-  // Alle Leads mit Notizen (für activity-Filter)
-  const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
-  const notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
+  // Alle Leads mit Notizen — nur laden, wenn der Notizen-Aktivitätsfilter aktiv
+  // ist (sonst ungenutzt). Spart bei jedem normalen CRM-Aufruf eine bis zu
+  // 10.000-Zeilen-Query.
+  let notedLeadIds: string[] = [];
+  if (sp.activity === "noted" || sp.activity === "unnoted") {
+    const { data: notedRows } = await db.from("lead_notes").select("lead_id").limit(10000);
+    notedLeadIds = Array.from(new Set((notedRows ?? []).map((r) => r.lead_id)));
+  }
 
   // Offene Aufgaben (für todo-Filter + Spalte „Nächste Aktion").
   const { data: openTodoRows } = await db
@@ -114,7 +120,7 @@ export default async function CrmPage({
 
   let query = db
     .from("leads")
-    .select("*", { count: "exact" })
+    .select(CRM_LIST_COLS, { count: "exact" })
     .is("deleted_at", null);
 
   // CRM-Scope: qualified ODER hat mind. einen Call
@@ -265,7 +271,7 @@ export default async function CrmPage({
     .order("id", { ascending: true })
     .range(offset, offset + PAGE_SIZE - 1);
 
-  const leadList = (leads ?? []) as Lead[];
+  const leadList = (leads ?? []) as unknown as Lead[];
   const leadIds = leadList.map((l) => l.id);
 
   const [{ data: callDetails }, { data: noteCounts }] = await Promise.all([
