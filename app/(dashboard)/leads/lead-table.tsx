@@ -209,17 +209,21 @@ export function LeadTable({
   }
 
   // Preview-Drawer: ?preview=<lead-id> im Query-State.
+  // Bewusst KEIN router.push — der `preview`-Param ist reine Client-Ansicht und
+  // darf die Server Components (Lead-Tabelle) nicht neu rendern. Mit der nativen
+  // History-API aktualisieren wir nur die URL; useSearchParams() spiegelt das,
+  // ohne RSC-Refetch → kein Skeleton-Flash der Tabelle beim Lead-Wechsel.
   const previewId = searchParams.get("preview");
   function openPreview(leadId: string) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("preview", leadId);
-    router.push(`/leads?${params.toString()}`, { scroll: false });
+    window.history.pushState(null, "", `?${params.toString()}`);
   }
   function closePreview() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("preview");
     const qs = params.toString();
-    router.push(qs ? `/leads?${qs}` : "/leads", { scroll: false });
+    window.history.pushState(null, "", qs ? `?${qs}` : window.location.pathname);
   }
 
   function updateParams(updates: Record<string, string>) {

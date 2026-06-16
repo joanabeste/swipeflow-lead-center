@@ -19,9 +19,6 @@ interface Props {
   /** Aktuell sichtbare Lead-Liste in Sortier-Reihenfolge. Wird fuer
    *  Prev/Next-Navigation und Idle-Prefetch der Nachbarn genutzt. */
   siblingIds?: string[];
-  /** Basis-URL fuer Navigation (Pagination/Filter ohne `preview` Param).
-   *  Default: /leads */
-  basePath?: string;
   onClose: () => void;
 }
 
@@ -37,7 +34,7 @@ const SLIDE_OUT_MS = 200;
  * Snappy Close: lokaler `closing`-State steuert die CSS-Slide-Animation
  *   sofort; die URL-Aktualisierung folgt erst nach Animationsende.
  */
-export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/leads", onClose }: Props) {
+export function LeadPreviewDrawer({ previewId, siblingIds = [], onClose }: Props) {
   const router = useRouter();
   const [data, setData] = useState<LeadDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
@@ -150,12 +147,14 @@ export function LeadPreviewDrawer({ previewId, siblingIds = [], basePath = "/lea
   const prevId = idx > 0 ? siblingIds[idx - 1] : null;
   const nextId = idx >= 0 && idx < siblingIds.length - 1 ? siblingIds[idx + 1] : null;
 
-  const goTo = useCallback(
-    (id: string) => {
-      router.push(`${basePath}?preview=${id}`, { scroll: false });
-    },
-    [router, basePath],
-  );
+  const goTo = useCallback((id: string) => {
+    // History-API statt router.push: nur die URL ändern, keine Server-Navigation
+    // — sonst remountet/flackert die Tabelle hinter dem Drawer. Bestehende
+    // Filter/Seite/Sortierung bleiben erhalten (nur `preview` wird getauscht).
+    const params = new URLSearchParams(window.location.search);
+    params.set("preview", id);
+    window.history.pushState(null, "", `?${params.toString()}`);
+  }, []);
 
   // Keyboard-Shortcuts ←/→ wenn der Drawer offen ist und der Fokus nicht in
   // einem Input liegt.
