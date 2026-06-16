@@ -422,12 +422,10 @@ export function LeadProfilePanel({
         </div>
       )}
 
-      {/* Duplikat-Warnung — andere Leads, die mutmaßlich dieselbe Firma sind. */}
-      {duplicates.length > 0 && (
-        <div className="mt-4">
-          <CrmDuplicateWarning leadId={lead.id} candidates={duplicates} />
-        </div>
-      )}
+      {/* Duplikat-Warnung — andere Leads, die mutmaßlich dieselbe Firma sind.
+          Lazy geladen (/api/leads/[id]/duplicates) → blendet sich selbst aus,
+          solange keine Treffer vorliegen. `duplicates` ist nur Initial-Seed. */}
+      <CrmDuplicateWarning leadId={lead.id} candidates={duplicates} />
 
       <div className="mt-6">
         {resizableRightColumn ? (

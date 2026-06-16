@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { Copy, Loader2, ExternalLink, Check } from "lucide-react";
 import { mergeDuplicateLead, dismissDuplicatePair } from "../../../leads/actions";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
@@ -16,19 +16,23 @@ const MATCH_LABEL: Record<DuplicateCandidate["matchedOn"], string> = {
 
 /**
  * Warnbanner im CRM-Lead-Detail: zeigt mutmaßliche Duplikate dieses Leads und
- * erlaubt das Zusammenführen direkt von hier. Die Kandidaten werden serverseitig
- * pro Seitenaufruf ermittelt (siehe findLeadDuplicates) — also auch nach dem
- * Anreichern frisch, falls dort z.B. erst die Domain bekannt wurde.
+ * erlaubt das Zusammenführen direkt von hier.
+ *
+ * Die Kandidaten werden LAZY ueber `/api/leads/[id]/duplicates` nachgeladen —
+ * findLeadDuplicates laedt den kompletten Lead-Bestand und wuerde sonst den
+ * Erst-Render des Detail-Panels blockieren. `candidates` dient nur als
+ * Initial-Seed (i.d.R. leer). Das Banner blendet sich selbst aus, solange keine
+ * Treffer vorliegen.
  *
  * Merge-Semantik: der angesehene Lead (`leadId`) bleibt erhalten, das Duplikat
  * wird über die sichere `merge_lead`-RPC umgehängt + archiviert.
  */
 export function CrmDuplicateWarning({
   leadId,
-  candidates,
+  candidates = [],
 }: {
   leadId: string;
-  candidates: DuplicateCandidate[];
+  candidates?: DuplicateCandidate[];
 }) {
   // notify() = im Drawer: re-fetcht das offene Lead-Bundle (Notizen, Anrufe,
   // Kontakte, zusammengeführte Telefon-/Domain-Daten …) UND aktualisiert die
@@ -42,17 +46,26 @@ export function CrmDuplicateWarning({
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
 
-  // Nach einem Refetch (Drawer: notify() → Bundle neu laden; Vollseite: router.refresh()
-  // → frische Server-Props) liefert der Server die kanonische Kandidatenliste — Verlierer,
-  // bestätigte Nicht-Duplikate und archivierte Leads sind bereits ausgeschlossen. Den
-  // lokalen Stand daran angleichen, sonst zeigt das Banner nach dem Zusammenführen
-  // veraltete Einträge (oder verbirgt neu aufgetauchte Duplikate). Adjust-during-render
-  // statt useEffect: kein zusätzlicher Render-Pass, kein set-state-in-effect.
-  const [prevCandidates, setPrevCandidates] = useState(candidates);
-  if (candidates !== prevCandidates) {
-    setPrevCandidates(candidates);
-    setItems(candidates);
-  }
+  // Duplikat-Pruefung lazy nachladen (teurer Voll-Index-Scan, siehe Doc oben).
+  // Liefert die kanonische Liste — Verlierer, bestätigte Nicht-Duplikate und
+  // archivierte Leads sind serverseitig bereits ausgeschlossen.
+  const reload = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/leads/${leadId}/duplicates`, { cache: "no-store" });
+      if (!r.ok) return;
+      const j = (await r.json()) as { duplicates?: DuplicateCandidate[] };
+      setItems(j.duplicates ?? []);
+    } catch {
+      /* Warnung ist nicht kritisch — bei Netzfehler einfach nichts zeigen. */
+    }
+  }, [leadId]);
+
+  useEffect(() => {
+    // Externer Datenladevorgang (Fetch) — setState erfolgt erst nach await,
+    // nicht synchron. Disable analog zum Pattern im Preview-Drawer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void reload();
+  }, [reload]);
 
   if (items.length === 0) return null;
 
@@ -75,6 +88,7 @@ export function CrmDuplicateWarning({
       }
       setItems((prev) => prev.filter((c) => c.id !== loserId));
       notify();
+      void reload();
     });
   }
 
@@ -97,11 +111,12 @@ export function CrmDuplicateWarning({
       }
       setItems((prev) => prev.filter((c) => c.id !== otherId));
       notify();
+      void reload();
     });
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+    <div className="mt-4 flex items-start gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-900/20">
       <Copy className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-amber-800 dark:text-amber-300">

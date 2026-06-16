@@ -15,7 +15,7 @@ import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import { listCaseStudies, listIndustries, listLandingPagesForLead } from "@/lib/landing-pages/server";
 import type { CaseStudy, Industry, LandingPage } from "@/lib/landing-pages/types";
 import { getScreenshotSignedUrl } from "@/lib/enrichment/screenshot";
-import { findLeadDuplicates, type DuplicateCandidate } from "@/lib/leads/find-existing";
+import type { DuplicateCandidate } from "@/lib/leads/find-existing";
 
 type AuthorProfile = { name: string; avatar_url: string | null };
 
@@ -222,18 +222,6 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     };
   });
 
-  // Mutmaßliche Duplikate (vollumfänglich: Domain/E-Mail/Telefon/Name, beide Seiten
-  // normalisiert) — pro Aufruf frisch, also auch nach dem Anreichern. Fließt sowohl
-  // in die Detail-Seite als auch in den Vorschau-Drawer (beide nutzen dieses Bundle).
-  const duplicates = await findLeadDuplicates(db, {
-    id: typedLead.id,
-    company_name: typedLead.company_name,
-    website: typedLead.website,
-    email: typedLead.email,
-    phone: typedLead.phone,
-    city: typedLead.city,
-  });
-
   // Lead-Herkunft (Import-Typ) für den ältesten Historien-Eintrag. Granularer Typ
   // kommt aus import_logs.import_type (z.B. google_maps/api), Fallback lead.source_type.
   let importType: string | null = null;
@@ -319,7 +307,9 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
     screenshotSignedUrl: typedLead.website_screenshot_path
       ? await getScreenshotSignedUrl(typedLead.website_screenshot_path)
       : null,
-    duplicates,
+    // Duplikate werden lazy clientseitig geladen (/api/leads/[id]/duplicates),
+    // damit der teure Voll-Index-Scan den Erst-Render nicht blockiert.
+    duplicates: [],
     importInfo,
     links: (links ?? []) as LeadLink[],
   };
