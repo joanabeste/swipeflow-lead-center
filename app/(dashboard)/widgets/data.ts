@@ -4,6 +4,7 @@ import { toBerlinDayKey } from "@/lib/date/day-key";
 import { startOfDayInAppTz } from "@/lib/zeit/timezone";
 import { CALL_STATUS_ORDER } from "@/lib/calls/status-display";
 import { loadTodaysCalls, TODAY_CALLS_PAGE_SIZE } from "@/lib/calls/today";
+import { loadCallStats } from "@/lib/calls/call-stats";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 
 /** Lädt einmal alle für Dashboard-Widgets nötigen Daten zentral. */
@@ -77,10 +78,15 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // Zusatz-Daten für neue Widgets (parallel, nur einmal)
   const [
     myCallsToday, myNotesToday, myCrmTodos,
-    calls7d, enrichments7d, crmStatusDistRaw, customStatuses,
+    enrichments7d, crmStatusDistRaw, customStatuses,
     // Neue Widgets:
-    followupCandidates, teamCallsToday, openDealsRaw, dealStages, emails7d,
-    calls90d, dealsClosed12m,
+    followupCandidates, openDealsRaw, dealStages, emails7d,
+    dealsClosed12m,
+    // Anruf-Statistik (heute / 7 / 90 Tage, pro Person/Status) aus EINER
+    // DB-seitigen Aggregation — umgeht das PostgREST-1000-Zeilen-Limit, das die
+    // Anrufzahlen vorher still gedeckelt hat. Fällt auf paginiertes Laden
+    // zurück, falls die RPC (Migration 125) noch nicht eingespielt ist.
+    callStats,
   ] = await Promise.all([
     db.from("lead_calls").select("*", { count: "exact", head: true })
       .eq("created_by", userId).gte("started_at", todayIso),
@@ -88,8 +94,6 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .eq("created_by", userId).gte("created_at", todayIso),
     db.from("leads").select("*", { count: "exact", head: true })
       .eq("status", "qualified").eq("crm_status_id", "todo").eq("vertical", vertical).is("deleted_at", null),
-    db.from("lead_calls").select("direction, status, started_at")
-      .gte("started_at", sevenDaysIso),
     db.from("lead_enrichments").select("status, created_at")
       .gte("created_at", sevenDaysIso),
     db.from("leads").select("crm_status_id")
@@ -102,9 +106,6 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     db.from("leads").select("id, company_name, city, phone, updated_at")
       .eq("status", "qualified").eq("crm_status_id", "todo").eq("vertical", vertical).is("deleted_at", null)
       .order("updated_at", { ascending: true }).limit(50),
-    // Team-Leaderboard heute: alle Calls heute mit Ersteller.
-    db.from("lead_calls").select("created_by, direction, status, started_at")
-      .gte("started_at", todayIso),
     // Offene Deals gruppiert nach Stage (open kind), mit Amount.
     db.from("deals").select("stage_id, amount_cents").is("deleted_at", null),
     db.from("deal_stages").select("id, label, color, kind, display_order")
@@ -112,14 +113,13 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     // E-Mails 7 Tage: sent/failed pro Tag.
     db.from("email_messages").select("status, sent_at")
       .gte("sent_at", sevenDaysIso),
-    // Anrufe 90 Tage (für filterbares Trend-Widget + Pro-Nutzer-Statistik).
-    db.from("lead_calls").select("created_by, direction, status, started_at")
-      .gte("started_at", ninetyDaysAgoIso),
     // Abgeschlossene Deals der letzten 12 Monate (für Trend-Widget).
     db.from("deals").select("stage_id, amount_cents, actual_close_date")
       .gte("actual_close_date", twelveMonthsAgoIso)
       .not("actual_close_date", "is", null)
       .is("deleted_at", null),
+    // Anrufe (heute/7/90 Tage) DB-seitig aggregiert — siehe Kommentar oben.
+    loadCallStats(db, ninetyDaysAgoIso),
   ]);
 
   // Offene Aufgaben (Wiedervorlagen) — für Dashboard-Widget.
@@ -174,18 +174,18 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       };
     });
 
-  // Calls 7d — aggregiere pro Tag in Berlin-Zeit (siehe day-key.ts)
+  // Calls 7d — aus der aggregierten Anruf-Statistik (callStats), pro Berlin-Tag.
   const dayBuckets: Record<string, { outbound: number; inbound: number; missed: number }> = {};
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
     dayBuckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0 };
   }
-  for (const c of (calls7d.data ?? []) as Array<{ direction: string; status: string; started_at: string }>) {
-    const key = toBerlinDayKey(c.started_at);
-    if (!dayBuckets[key]) continue;
-    if (c.status === "missed") dayBuckets[key].missed++;
-    else if (c.direction === "inbound") dayBuckets[key].inbound++;
-    else dayBuckets[key].outbound++;
+  for (const r of callStats) {
+    const b = dayBuckets[r.day];
+    if (!b) continue;
+    if (r.status === "missed") b.missed += r.cnt;
+    else if (r.direction === "inbound") b.inbound += r.cnt;
+    else b.outbound += r.cnt;
   }
   const callsByDay = Object.entries(dayBuckets).map(([date, v]) => ({ date, ...v }));
   const callsTotal7d = callsByDay.reduce((s, d) => s + d.outbound + d.inbound + d.missed, 0);
@@ -245,30 +245,30 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     .filter((l) => !l.lastCallAt || l.lastCallAt < sevenDaysAgoIsoForFollowup)
     .slice(0, 8);
 
-  // Team-Leaderboard heute: Anrufe pro User.
-  const teamCallsRows = (teamCallsToday.data ?? []) as Array<{
-    created_by: string | null; direction: string; status: string; started_at: string;
-  }>;
+  // Team-Leaderboard heute: Anrufe pro User — aus callStats (Berlin-Tag = heute).
+  const todayKey = toBerlinDayKey(today);
+  const todayStats = callStats.filter((r) => r.day === todayKey);
   const leaderboardAgg = new Map<string, { total: number; answered: number; missed: number }>();
-  for (const c of teamCallsRows) {
-    if (!c.created_by) continue;
-    const cur = leaderboardAgg.get(c.created_by) ?? { total: 0, answered: 0, missed: 0 };
-    cur.total++;
-    if (c.status === "answered") cur.answered++;
-    else if (c.status === "missed") cur.missed++;
-    leaderboardAgg.set(c.created_by, cur);
+  for (const r of todayStats) {
+    if (!r.created_by) continue;
+    const cur = leaderboardAgg.get(r.created_by) ?? { total: 0, answered: 0, missed: 0 };
+    cur.total += r.cnt;
+    if (r.status === "answered") cur.answered += r.cnt;
+    else if (r.status === "missed") cur.missed += r.cnt;
+    leaderboardAgg.set(r.created_by, cur);
   }
 
   // Tages-Zusammenfassung für die „Heutige Anrufe"-Karte (KPI-Kopf + Aufschlüsselung).
-  // Basis = ALLE heutigen Calls (teamCallsRows), nicht die auf 20 limitierte Liste.
+  // Basis = ALLE heutigen Calls (todayStats), nicht die auf 20 limitierte Liste.
   const statusCountMap = new Map<string, number>();
   let todayTotal = 0, todayAnswered = 0, todayMissed = 0, todayFailed = 0;
-  for (const c of teamCallsRows) {
-    todayTotal++;
-    statusCountMap.set(c.status, (statusCountMap.get(c.status) ?? 0) + 1);
-    if (c.status === "answered") todayAnswered++;
-    else if (c.status === "missed") todayMissed++;
-    else if (c.status === "failed") todayFailed++;
+  for (const r of todayStats) {
+    const st = r.status ?? "";
+    todayTotal += r.cnt;
+    statusCountMap.set(st, (statusCountMap.get(st) ?? 0) + r.cnt);
+    if (r.status === "answered") todayAnswered += r.cnt;
+    else if (r.status === "missed") todayMissed += r.cnt;
+    else if (r.status === "failed") todayFailed += r.cnt;
   }
   // byStatus in sinnvoller Reihenfolge; unbekannte Status hinten anhängen.
   const orderedStatuses = [
@@ -351,34 +351,36 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // mit direction-Breakdown; der Client filtert/aggregiert später auf
   // 7/30/90 Tage bzw. wöchentliche Bündel.
   const callsByDay90Buckets: Record<string, { outbound: number; inbound: number; missed: number; byUser: Record<string, number> }> = {};
+  const dayKeys90: string[] = [];
   for (let i = 89; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 3600_000);
-    callsByDay90Buckets[toBerlinDayKey(d)] = { outbound: 0, inbound: 0, missed: 0, byUser: {} };
+    const key = toBerlinDayKey(d);
+    dayKeys90.push(key);
+    callsByDay90Buckets[key] = { outbound: 0, inbound: 0, missed: 0, byUser: {} };
   }
-  for (const c of (calls90d.data ?? []) as Array<{ created_by: string | null; direction: string; status: string; started_at: string }>) {
-    const key = toBerlinDayKey(c.started_at);
-    const bucket = callsByDay90Buckets[key];
+  for (const r of callStats) {
+    const bucket = callsByDay90Buckets[r.day];
     if (!bucket) continue;
-    if (c.status === "missed") bucket.missed++;
-    else if (c.direction === "inbound") bucket.inbound++;
-    else bucket.outbound++;
-    if (c.created_by) bucket.byUser[c.created_by] = (bucket.byUser[c.created_by] ?? 0) + 1;
+    if (r.status === "missed") bucket.missed += r.cnt;
+    else if (r.direction === "inbound") bucket.inbound += r.cnt;
+    else bucket.outbound += r.cnt;
+    if (r.created_by) bucket.byUser[r.created_by] = (bucket.byUser[r.created_by] ?? 0) + r.cnt;
   }
   const callsByDay90 = Object.entries(callsByDay90Buckets).map(([date, v]) => ({ date, ...v }));
 
-  // Team-Anrufe pro Nutzer: aus den 90-Tage-Calls je Nutzer in den Fenstern
-  // 7/30/90 Tage zaehlen (rollierend). Client schaltet zwischen den Fenstern um.
-  const cutoff7 = Date.now() - 7 * 24 * 3600_000;
-  const cutoff30 = Date.now() - 30 * 24 * 3600_000;
+  // Team-Anrufe pro Nutzer: je Nutzer in den Fenstern 7/30/90 Tage zaehlen.
+  // Fenster = letzte N Kalendertage (konsistent mit den Chart-Slices, die genau
+  // diese Tagesbuckets verwenden). Client schaltet zwischen den Fenstern um.
+  const days7 = new Set(dayKeys90.slice(-7));
+  const days30 = new Set(dayKeys90.slice(-30));
   const teamCallAgg = new Map<string, { d7: number; d30: number; d90: number }>();
-  for (const c of (calls90d.data ?? []) as Array<{ created_by: string | null; started_at: string }>) {
-    if (!c.created_by) continue;
-    const t = new Date(c.started_at).getTime();
-    const cur = teamCallAgg.get(c.created_by) ?? { d7: 0, d30: 0, d90: 0 };
-    cur.d90++;
-    if (t >= cutoff30) cur.d30++;
-    if (t >= cutoff7) cur.d7++;
-    teamCallAgg.set(c.created_by, cur);
+  for (const r of callStats) {
+    if (!r.created_by) continue;
+    const cur = teamCallAgg.get(r.created_by) ?? { d7: 0, d30: 0, d90: 0 };
+    cur.d90 += r.cnt;
+    if (days30.has(r.day)) cur.d30 += r.cnt;
+    if (days7.has(r.day)) cur.d7 += r.cnt;
+    teamCallAgg.set(r.created_by, cur);
   }
   const teamCallUserIds = Array.from(teamCallAgg.keys());
   const teamCallNames = new Map<string, string>();
