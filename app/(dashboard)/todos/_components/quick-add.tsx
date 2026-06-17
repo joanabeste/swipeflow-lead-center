@@ -2,9 +2,10 @@
 
 import { useState, useRef, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, AtSign, Calendar } from "lucide-react";
+import { Plus, Loader2, AtSign, CalendarClock } from "lucide-react";
 import { addStandaloneTodo } from "../actions";
-import { parseQuickAddInput, todayKey } from "../_lib/date-utils";
+import { parseQuickAddInput, relativeDueLabel, todayKey } from "../_lib/date-utils";
+import { DateTimePopover } from "./date-time-popover";
 import { useToastContext } from "../../toast-provider";
 
 interface LeadCatalogEntry {
@@ -24,10 +25,19 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
   const [text, setText] = useState("");
   const [pickedLead, setPickedLead] = useState<LeadCatalogEntry | null>(null);
   const [showLeadPicker, setShowLeadPicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  // Derived: Titel + Datum aus dem aktuellen Text live previewen
-  const parsed = useMemo(() => parseQuickAddInput(text || ""), [text]);
+  // Datum/Uhrzeit: solange nicht manuell angefasst, folgt es dem geparsten Text.
+  const [touched, setTouched] = useState(false);
+  const [draftDate, setDraftDate] = useState(todayKey());
+  const [draftTime, setDraftTime] = useState<string | null>(null);
+
+  // Text ohne @-Mention → daraus Titel + (Live-)Datum/Uhrzeit parsen
+  const cleanText = useMemo(() => text.replace(/@[^\s]*/g, "").trim(), [text]);
+  const parsed = useMemo(() => parseQuickAddInput(cleanText), [cleanText]);
+  const effDate = touched ? draftDate : parsed.date;
+  const effTime = touched ? draftTime : parsed.time;
 
   // @-Mention: wenn der User „@" tippt, öffnen wir die Lead-Suche
   const mentionMatch = text.match(/@([^\s]*)$/);
@@ -56,49 +66,61 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
 
   function pickLead(lead: LeadCatalogEntry) {
     setPickedLead(lead);
-    // Mention aus dem Text entfernen
-    if (mentionMatch) {
-      setText(text.slice(0, mentionMatch.index ?? 0).trim());
-    }
+    if (mentionMatch) setText(text.slice(0, mentionMatch.index ?? 0).trim());
     setShowLeadPicker(false);
     inputRef.current?.focus();
   }
 
+  function openLeadPicker() {
+    // „@" ans Textende setzen, damit die bestehende Mention-Suche greift
+    const base = text.replace(/@[^\s]*$/, "").trimEnd();
+    setText(base ? `${base} @` : "@");
+    setShowLeadPicker(true);
+    inputRef.current?.focus();
+  }
+
+  function reset() {
+    setText("");
+    setPickedLead(null);
+    setTouched(false);
+    setDraftTime(null);
+    setShowDatePicker(false);
+  }
+
   function submit() {
-    const cleanText = text.replace(/@[^\s]*/g, "").trim();
-    if (!cleanText) return;
-    if (!pickedLead) {
-      addToast("Bitte einen Lead via @-Erwähnung wählen.", "error");
+    if (!cleanText) {
+      inputRef.current?.focus();
       return;
     }
-    const { title, date } = parseQuickAddInput(cleanText);
+    if (!pickedLead) {
+      addToast("Bitte einen Lead via @-Erwähnung wählen.", "error");
+      openLeadPicker();
+      return;
+    }
+    const { title } = parseQuickAddInput(cleanText);
     if (!title.trim()) return;
 
     startTransition(async () => {
-      const res = await addStandaloneTodo(title, date, pickedLead.id);
+      const res = await addStandaloneTodo(title, effDate, pickedLead.id, effTime);
       if (res.error) {
         addToast(res.error, "error");
         return;
       }
       addToast("ToDo angelegt", "success");
-      setText("");
-      setPickedLead(null);
+      reset();
       router.refresh();
     });
   }
 
-  const dateLabel =
-    parsed.date === todayKey()
-      ? "Heute"
-      : (() => {
-          const [y, m, d] = parsed.date.split("-");
-          return `${d}.${m}.${y}`;
-        })();
+  const rel = relativeDueLabel(effDate, todayKey());
+  const dateChipLabel = effTime ? `${rel.text} · ${effTime}` : rel.text;
+
+  const disabledReason = !cleanText ? "Titel eingeben" : !pickedLead ? "Lead zuordnen (Pflicht)" : "";
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <div className="flex items-center gap-2">
-        <Plus className="h-4 w-4 text-primary" />
+        <Plus className="h-4 w-4 shrink-0 text-primary" />
         <input
           ref={inputRef}
           value={text}
@@ -119,35 +141,62 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
               inputRef.current?.blur();
             }
           }}
-          placeholder='Was steht an? z.B. "Anrufen morgen @acme" — n drücken zum Fokussieren'
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
+          placeholder='Was steht an? z.B. "Anrufen morgen 14:30 @acme" — n zum Fokussieren'
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400 dark:placeholder:text-gray-600"
           disabled={pending}
         />
+
+        {/* Lead-Chip (Pflicht) */}
         {pickedLead ? (
           <button
             onClick={() => setPickedLead(null)}
-            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/20"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/20"
             title="Lead entfernen"
           >
             <AtSign className="h-3 w-3" />
-            {pickedLead.company_name.length > 28
-              ? pickedLead.company_name.slice(0, 26) + "…"
-              : pickedLead.company_name}
+            {pickedLead.company_name.length > 24 ? pickedLead.company_name.slice(0, 22) + "…" : pickedLead.company_name}
             <span className="text-primary/60">×</span>
           </button>
         ) : (
-          <span className="text-[11px] text-gray-400">@-Lead wählen</span>
+          <button
+            onClick={openLeadPicker}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-amber-400 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-500/60 dark:text-amber-300 dark:hover:bg-amber-500/10"
+            title="Pflicht: Lead zuordnen"
+          >
+            <AtSign className="h-3 w-3" />
+            Lead wählen
+          </button>
         )}
-        {text && (
-          <span className="inline-flex items-center gap-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
-            <Calendar className="h-2.5 w-2.5" />
-            {dateLabel}
-          </span>
-        )}
+
+        {/* Datum/Uhrzeit-Chip */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setShowDatePicker((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:border-primary/40 hover:bg-primary/5 dark:border-[#2c2c2e] dark:text-gray-300"
+            title="Fälligkeit & Uhrzeit"
+          >
+            <CalendarClock className="h-3 w-3" />
+            {dateChipLabel}
+          </button>
+          {showDatePicker && (
+            <DateTimePopover
+              date={effDate}
+              time={effTime}
+              onChange={(d, t) => {
+                setTouched(true);
+                setDraftDate(d);
+                setDraftTime(t);
+              }}
+              onClose={() => setShowDatePicker(false)}
+            />
+          )}
+        </div>
+
         <button
           onClick={submit}
-          disabled={pending || !text.trim() || !pickedLead}
-          className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-40"
+          disabled={pending || !cleanText || !pickedLead}
+          title={disabledReason}
+          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-40"
         >
           {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Anlegen"}
         </button>

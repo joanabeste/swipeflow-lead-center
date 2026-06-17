@@ -99,20 +99,31 @@ export async function bulkDeleteTodos(todoIds: string[]) {
 
 /** Standalone-Todo (ohne Lead) — wird mit lead_id NULL gespeichert.
  *  Falls die DB-Spalte NOT NULL ist, fängt der Aufrufer den Fehler ab. */
-export async function addStandaloneTodo(title: string, dueDate: string, leadId: string | null) {
+export async function addStandaloneTodo(
+  title: string,
+  dueDate: string,
+  leadId: string | null,
+  dueTime?: string | null,
+) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
   const trimmed = title.trim();
   if (!trimmed) return { error: "Titel darf nicht leer sein." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
+  if (dueTime && !/^\d{2}:\d{2}$/.test(dueTime)) return { error: "Ungültige Uhrzeit." };
 
   const db = createServiceClient();
-  const { error } = await db
-    .from("lead_todos")
-    .insert({ lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id });
+  const payload: Record<string, unknown> = { lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id };
+  // due_time nur schreiben, wenn gesetzt — so funktionieren zeitlose ToDos auch
+  // ohne Migration 124 weiter.
+  if (dueTime) payload.due_time = dueTime;
+  const { error } = await db.from("lead_todos").insert(payload);
   if (error) {
     if (/lead_id.*null/i.test(error.message)) {
       return { error: "Bitte wähle einen Lead — Todos müssen einem Lead zugeordnet werden." };
+    }
+    if (error.code === "42703" || /due_time/i.test(error.message)) {
+      return { error: "Spalte due_time fehlt — Migration 124 muss in Supabase ausgeführt werden." };
     }
     return { error: `DB-Fehler: ${error.message}` };
   }

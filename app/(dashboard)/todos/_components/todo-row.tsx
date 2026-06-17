@@ -9,7 +9,8 @@ import {
   updateLeadTodo,
   deleteLeadTodo,
 } from "../../crm/actions";
-import { addDays, relativeDueLabel, todayKey, toIsoDate } from "../_lib/date-utils";
+import { formatTime, relativeDueLabel, todayKey } from "../_lib/date-utils";
+import { DateTimePopover } from "./date-time-popover";
 import { useToastContext } from "../../toast-provider";
 import type { TodoWithLead } from "../page";
 
@@ -27,6 +28,8 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
 
   const isDone = !!todo.done_at;
   const dueLabel = relativeDueLabel(todo.due_date, todayKey());
+  const dueTime = formatTime(todo.due_time);
+  const pillLabel = dueTime ? `${dueLabel.text} · ${dueTime}` : dueLabel.text;
 
   function handleToggle() {
     startTransition(async () => {
@@ -120,7 +123,7 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
       </div>
 
       {/* Datums-Pill mit Quick-Reschedule-Popover */}
-      {!isDone && <RescheduleButton todo={todo} toneClass={toneClasses[dueLabel.tone]} label={dueLabel.text} />}
+      {!isDone && <RescheduleButton todo={todo} toneClass={toneClasses[dueLabel.tone]} label={pillLabel} />}
 
       {/* Lead-Pill mit Click-to-Call Hover-Detail */}
       {todo.lead && (
@@ -163,69 +166,47 @@ function RescheduleButton({ todo, toneClass, label }: { todo: TodoWithLead; tone
   const { addToast } = useToastContext();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [draftDate, setDraftDate] = useState(todo.due_date);
+  const [draftTime, setDraftTime] = useState<string | null>(formatTime(todo.due_time));
 
-  function reschedule(newDate: string) {
+  // Beim Schließen persistieren — nur wenn sich Datum oder Uhrzeit geändert haben.
+  function persistAndClose() {
+    setOpen(false);
+    const changed = draftDate !== todo.due_date || (draftTime ?? null) !== (formatTime(todo.due_time) ?? null);
+    if (!changed) return;
     startTransition(async () => {
-      const res = await updateLeadTodo(todo.id, todo.lead_id, todo.title, newDate);
+      const res = await updateLeadTodo(todo.id, todo.lead_id, todo.title, draftDate, draftTime);
       if (res.error) addToast(res.error, "error");
       else {
         addToast("Verschoben", "success");
-        setOpen(false);
         router.refresh();
       }
     });
   }
 
-  const today = todayKey();
-  const presets: { label: string; date: string }[] = [
-    { label: "Heute", date: today },
-    { label: "Morgen", date: addDays(today, 1) },
-    { label: "+3 Tage", date: addDays(today, 3) },
-    { label: "+7 Tage", date: addDays(today, 7) },
-    { label: "+14 Tage", date: addDays(today, 14) },
-  ];
-
   return (
     <div className="relative shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`rounded px-1.5 py-0.5 text-[11px] font-medium transition ${toneClass}`}
-        title="Verschieben"
+        disabled={pending}
+        className={`rounded px-1.5 py-0.5 text-[11px] font-medium transition disabled:opacity-50 ${toneClass}`}
+        title="Verschieben — Datum & Uhrzeit"
       >
-        {label}
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : label}
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-            {presets.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => reschedule(p.date)}
-                disabled={pending}
-                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-xs hover:bg-primary/5 disabled:opacity-50"
-              >
-                <span>{p.label}</span>
-                <span className="text-gray-400">{formatShort(p.date)}</span>
-              </button>
-            ))}
-            <div className="my-1 border-t border-gray-100 dark:border-[#2c2c2e]" />
-            <input
-              type="date"
-              defaultValue={todo.due_date}
-              onChange={(e) => e.target.value && reschedule(e.target.value)}
-              className="w-full rounded px-2 py-1 text-xs dark:[color-scheme:dark]"
-            />
-          </div>
-        </>
+        <DateTimePopover
+          date={draftDate}
+          time={draftTime}
+          onChange={(d, t) => {
+            setDraftDate(d);
+            setDraftTime(t);
+          }}
+          onClose={persistAndClose}
+        />
       )}
     </div>
   );
-}
-
-function formatShort(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${d}.${m}.${y.slice(2)}`;
 }
 
 function TodoRowEditor({
@@ -240,12 +221,13 @@ function TodoRowEditor({
   const { addToast } = useToastContext();
   const [title, setTitle] = useState(todo.title);
   const [date, setDate] = useState(todo.due_date);
+  const [time, setTime] = useState<string | null>(formatTime(todo.due_time));
   const [pending, startTransition] = useTransition();
 
   function submit() {
     if (!title.trim()) return;
     startTransition(async () => {
-      const res = await updateLeadTodo(todo.id, todo.lead_id, title, date);
+      const res = await updateLeadTodo(todo.id, todo.lead_id, title, date, time);
       if (res.error) addToast(res.error, "error");
       else {
         addToast("Gespeichert", "success");
@@ -272,7 +254,7 @@ function TodoRowEditor({
         }}
         className="mt-2 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
       />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-500 dark:text-gray-400">Fällig am</label>
         <input
           type="date"
@@ -280,6 +262,22 @@ function TodoRowEditor({
           onChange={(e) => setDate(e.target.value)}
           className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark]"
         />
+        <input
+          type="time"
+          value={time ?? ""}
+          onChange={(e) => setTime(e.target.value || null)}
+          aria-label="Uhrzeit (optional)"
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark]"
+        />
+        {time && (
+          <button
+            onClick={() => setTime(null)}
+            className="text-[11px] text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            title="Uhrzeit entfernen"
+          >
+            ohne Uhrzeit
+          </button>
+        )}
         <div className="ml-auto flex gap-2">
           <button onClick={onClose} className="rounded-md px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5">
             Abbrechen
@@ -296,6 +294,3 @@ function TodoRowEditor({
     </div>
   );
 }
-
-// Re-export für TodosManager (selected/onSelectChange Pattern)
-export { addDays as _addDays, toIsoDate as _toIsoDate };

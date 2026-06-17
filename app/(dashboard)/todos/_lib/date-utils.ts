@@ -36,6 +36,26 @@ export function bucketOf(due: string, doneAt: string | null, today: string): Due
   return "later";
 }
 
+/** Kürzt eine Postgres-time („HH:MM:SS") auf „HH:MM"; null bleibt null. */
+export function formatTime(t: string | null | undefined): string | null {
+  if (!t) return null;
+  return t.slice(0, 5);
+}
+
+/** Sortiert nach Tag, dann Uhrzeit. Ganztägige ToDos (kein due_time) ans Ende des Tages. */
+export function byDueDateTime(
+  a: { due_date: string; due_time: string | null },
+  b: { due_date: string; due_time: string | null },
+): number {
+  if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
+  const ta = a.due_time;
+  const tb = b.due_time;
+  if (ta && tb) return ta < tb ? -1 : ta > tb ? 1 : 0;
+  if (ta) return -1; // a hat eine Uhrzeit, b ist ganztägig → a zuerst
+  if (tb) return 1;
+  return 0;
+}
+
 export function relativeDueLabel(due: string, today: string): { text: string; tone: "overdue" | "today" | "soon" | "later" } {
   const delta = diffDays(due, today);
   if (delta < 0) {
@@ -51,18 +71,45 @@ export function relativeDueLabel(due: string, today: string): { text: string; to
 }
 
 /**
- * Smart-Parser für Quick-Add-Input. Erkennt Datums-Hinweise am Ende des Texts
- * und gibt Titel + Datum getrennt zurück. Beispiele:
- *   „Anrufen morgen"          → { title: "Anrufen", date: <morgen> }
- *   „Demo Freitag"            → { title: "Demo", date: <nächster Freitag> }
- *   „Follow-up in 3 Tagen"    → { title: "Follow-up", date: heute+3 }
- *   „Angebot 22.05."          → { title: "Angebot", date: 2026-05-22 }
- *   „Anruf"                   → { title: "Anruf", date: heute }
+ * Erkennt eine optionale Uhrzeit irgendwo im Text und gibt sie + den um das
+ * Token bereinigten Resttext zurück. Erkannt werden:
+ *   „14:30"            → 14:30   (Doppelpunkt-Form, ohne „Uhr")
+ *   „14 Uhr"           → 14:00
+ *   „14:30 Uhr"        → 14:30
+ *   „14.30 Uhr"        → 14:30   (Punkt nur in Verbindung mit „Uhr", sonst Datum)
+ *   „9 Uhr"            → 09:00
  */
-export function parseQuickAddInput(input: string): { title: string; date: string } {
-  const text = input.trim();
+function extractTime(text: string): { time: string | null; rest: string } {
+  // Zuerst die „Uhr"-Form (eindeutig), dann die reine Doppelpunkt-Form.
+  let m = text.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b/i);
+  if (!m) m = text.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (!m || m.index === undefined) return { time: null, rest: text };
+
+  const h = parseInt(m[1], 10);
+  const min = m[2] ? parseInt(m[2], 10) : 0;
+  if (h > 23 || min > 59) return { time: null, rest: text };
+
+  const time = `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+  const rest = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).replace(/\s{2,}/g, " ").trim();
+  return { time, rest };
+}
+
+/**
+ * Smart-Parser für Quick-Add-Input. Erkennt Datums- und Uhrzeit-Hinweise im Text
+ * und gibt Titel + Datum + (optionale) Uhrzeit getrennt zurück. Beispiele:
+ *   „Anrufen morgen"          → { title: "Anrufen", date: <morgen>, time: null }
+ *   „Anrufen morgen 14:30"    → { title: "Anrufen", date: <morgen>, time: "14:30" }
+ *   „Demo Freitag 9 Uhr"      → { title: "Demo", date: <nächster Freitag>, time: "09:00" }
+ *   „Follow-up in 3 Tagen"    → { title: "Follow-up", date: heute+3, time: null }
+ *   „Angebot 22.05."          → { title: "Angebot", date: 2026-05-22, time: null }
+ *   „Anruf"                   → { title: "Anruf", date: heute, time: null }
+ */
+export function parseQuickAddInput(input: string): { title: string; date: string; time: string | null } {
   const today = todayKey();
-  if (!text) return { title: "", date: today };
+  // Uhrzeit zuerst herauslösen, damit sie die Datums-Patterns nicht stört.
+  const { time, rest } = extractTime(input.trim());
+  const text = rest;
+  if (!text) return { title: "", date: today, time };
 
   // Pattern 1: „... in N Tagen / in N Wochen"
   const inDays = text.match(/^(.+?)\s+in\s+(\d{1,3})\s+(tag|tagen|woche|wochen)\s*$/i);
@@ -70,7 +117,7 @@ export function parseQuickAddInput(input: string): { title: string; date: string
     const n = parseInt(inDays[2], 10);
     const unit = inDays[3].toLowerCase();
     const days = unit.startsWith("woche") ? n * 7 : n;
-    return { title: inDays[1].trim(), date: addDays(today, days) };
+    return { title: inDays[1].trim(), date: addDays(today, days), time };
   }
 
   // Pattern 2: „... heute / morgen / übermorgen"
@@ -78,7 +125,7 @@ export function parseQuickAddInput(input: string): { title: string; date: string
   if (relSimple) {
     const word = relSimple[2].toLowerCase();
     const days = word === "heute" ? 0 : word === "morgen" ? 1 : 2;
-    return { title: relSimple[1].trim(), date: addDays(today, days) };
+    return { title: relSimple[1].trim(), date: addDays(today, days), time };
   }
 
   // Pattern 3: „... <Wochentag>" (nächstes Vorkommen, oder heute wenn heute)
@@ -89,7 +136,7 @@ export function parseQuickAddInput(input: string): { title: string; date: string
     const todayDow = todayDate.getDay();
     let delta = (target - todayDow + 7) % 7;
     if (delta === 0) delta = 7; // „Freitag" = nächster Freitag, nicht heute
-    return { title: weekdayMatch[1].trim(), date: addDays(today, delta) };
+    return { title: weekdayMatch[1].trim(), date: addDays(today, delta), time };
   }
 
   // Pattern 4: „... TT.MM." oder „... TT.MM.JJJJ"
@@ -111,10 +158,10 @@ export function parseQuickAddInput(input: string): { title: string; date: string
       }
     }
     if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
-      return { title: explicit[1].trim(), date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}` };
+      return { title: explicit[1].trim(), date: `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`, time };
     }
   }
 
   // Default: heute
-  return { title: text, date: today };
+  return { title: text, date: today, time };
 }

@@ -449,24 +449,31 @@ export async function deleteNote(noteId: string, leadId: string) {
 
 // ─── Aufgaben / Wiedervorlagen ───────────────────────────────
 
-export async function addLeadTodo(leadId: string, title: string, dueDate: string) {
+export async function addLeadTodo(leadId: string, title: string, dueDate: string, dueTime?: string | null) {
   const ctx = await checkSection("can_vertrieb");
   if (!ctx) return { error: "Keine Berechtigung." };
   const user = ctx.user;
   const trimmed = title.trim();
   if (!trimmed) return { error: "Titel darf nicht leer sein." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
+  if (dueTime && !/^\d{2}:\d{2}$/.test(dueTime)) return { error: "Ungültige Uhrzeit." };
 
   const db = createServiceClient();
+  const payload: Record<string, unknown> = { lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id };
+  // due_time nur schreiben, wenn gesetzt (siehe Migration 124).
+  if (dueTime) payload.due_time = dueTime;
   const { data, error } = await db
     .from("lead_todos")
-    .insert({ lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id })
+    .insert(payload)
     .select()
     .single();
   if (error) {
     console.error("[addLeadTodo] insert failed:", error);
     if (error.code === "42P01" || /relation.*does not exist/i.test(error.message)) {
       return { error: "Tabelle lead_todos fehlt — Migration 053 muss in Supabase ausgeführt werden." };
+    }
+    if (error.code === "42703" || /due_time/i.test(error.message)) {
+      return { error: "Spalte due_time fehlt — Migration 124 muss in Supabase ausgeführt werden." };
     }
     return { error: `DB-Fehler: ${error.message}` };
   }
@@ -476,7 +483,7 @@ export async function addLeadTodo(leadId: string, title: string, dueDate: string
     action: "lead.todo_added",
     entityType: "lead",
     entityId: leadId,
-    details: { todo_id: data.id, due_date: dueDate, title: trimmed },
+    details: { todo_id: data.id, due_date: dueDate, due_time: dueTime ?? null, title: trimmed },
   });
 
   revalidatePath(`/crm/${leadId}`);
@@ -485,19 +492,32 @@ export async function addLeadTodo(leadId: string, title: string, dueDate: string
   return { success: true, todo: data };
 }
 
-export async function updateLeadTodo(todoId: string, leadId: string, title: string, dueDate: string) {
+export async function updateLeadTodo(
+  todoId: string,
+  leadId: string,
+  title: string,
+  dueDate: string,
+  dueTime?: string | null,
+) {
   const ctx = await checkSection("can_vertrieb");
   if (!ctx) return { error: "Keine Berechtigung." };
   const user = ctx.user;
   const trimmed = title.trim();
   if (!trimmed) return { error: "Titel darf nicht leer sein." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return { error: "Ungültiges Datum." };
+  if (dueTime && !/^\d{2}:\d{2}$/.test(dueTime)) return { error: "Ungültige Uhrzeit." };
 
   const db = createServiceClient();
-  const { error } = await db
-    .from("lead_todos")
-    .update({ title: trimmed, due_date: dueDate, updated_at: new Date().toISOString() })
-    .eq("id", todoId);
+  const base = { title: trimmed, due_date: dueDate, updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { ...base };
+  if (dueTime !== undefined) payload.due_time = dueTime; // string oder null (= Uhrzeit leeren)
+  let { error } = await db.from("lead_todos").update(payload).eq("id", todoId);
+  if (error && (error.code === "42703" || /due_time/i.test(error.message))) {
+    // Migration 124 noch nicht eingespielt.
+    if (dueTime) return { error: "Spalte due_time fehlt — Migration 124 muss in Supabase ausgeführt werden." };
+    // Zeitloses Update: due_time weglassen, damit Titel/Datum trotzdem speichern.
+    ({ error } = await db.from("lead_todos").update(base).eq("id", todoId));
+  }
   if (error) return { error: `DB-Fehler: ${error.message}` };
 
   await logAudit({
@@ -505,7 +525,7 @@ export async function updateLeadTodo(todoId: string, leadId: string, title: stri
     action: "lead.todo_updated",
     entityType: "lead",
     entityId: leadId,
-    details: { todo_id: todoId, due_date: dueDate, title: trimmed },
+    details: { todo_id: todoId, due_date: dueDate, due_time: dueTime ?? null, title: trimmed },
   });
 
   revalidatePath(`/crm/${leadId}`);

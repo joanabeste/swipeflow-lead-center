@@ -409,6 +409,7 @@ export interface LeadTodo {
   lead_id: string;
   title: string;
   due_date: string;        // YYYY-MM-DD
+  due_time: string | null; // "HH:MM[:SS]" oder null = ganztägig / keine feste Uhrzeit
   done_at: string | null;
   created_by: string | null;
   created_at: string;

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Filter, ChevronDown, ChevronRight, ListTodo, Loader2 } from "lucide-react";
 import { TodoQuickAdd } from "./_components/quick-add";
 import { TodoRow } from "./_components/todo-row";
-import { bucketOf, todayKey } from "./_lib/date-utils";
+import { bucketOf, byDueDateTime, todayKey } from "./_lib/date-utils";
 import type { DueBucket } from "./_lib/date-utils";
 import type { TodoWithLead } from "./page";
 import {
@@ -41,6 +41,8 @@ const BUCKET_DONE: { key: DueBucket; label: string; tone: string } = {
 };
 
 type StatusFilter = "open" | "done" | "all";
+/** Schnellfilter über die KPI-Karten. "week" = Morgen + Diese Woche. */
+type BucketFilter = "overdue" | "today" | "week" | null;
 
 export function TodosManager({ initialTodos, leadCatalog }: Props) {
   const router = useRouter();
@@ -49,6 +51,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("open");
   const [leadFilter, setLeadFilter] = useState<string>(""); // Lead-ID
+  const [bucketFilter, setBucketFilter] = useState<BucketFilter>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openBuckets, setOpenBuckets] = useState<Set<DueBucket>>(
     () => new Set(BUCKETS_OPEN.filter((b) => b.defaultOpen).map((b) => b.key)),
@@ -73,6 +76,11 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       if (status === "done" && !t.done_at) return false;
       // Lead-Filter
       if (leadFilter && t.lead_id !== leadFilter) return false;
+      // KPI-Schnellfilter (nur offene Buckets)
+      if (bucketFilter) {
+        const b = bucketOf(t.due_date, t.done_at, today);
+        if (bucketFilter === "week" ? b !== "tomorrow" && b !== "this_week" : b !== bucketFilter) return false;
+      }
       // Suche
       if (q) {
         const hay = `${t.title} ${t.lead?.company_name ?? ""} ${t.lead?.city ?? ""}`.toLowerCase();
@@ -80,15 +88,18 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       }
       return true;
     });
-  }, [initialTodos, search, status, leadFilter]);
+  }, [initialTodos, search, status, leadFilter, bucketFilter, today]);
 
-  // Buckets gruppieren
+  // Buckets gruppieren — offene Buckets nach Tag, dann Uhrzeit sortieren.
   const grouped = useMemo(() => {
     const map = new Map<DueBucket, TodoWithLead[]>();
     for (const t of filtered) {
       const b = bucketOf(t.due_date, t.done_at, today);
       if (!map.has(b)) map.set(b, []);
       map.get(b)!.push(t);
+    }
+    for (const [key, arr] of map) {
+      if (key !== "done_today" && key !== "done_earlier") arr.sort(byDueDateTime);
     }
     return map;
   }, [filtered, today]);
@@ -116,6 +127,30 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
     }
     return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
   }, [initialTodos]);
+
+  // KPI-Karte als Schnellfilter: toggelt den Bucket-Filter (immer auf „offen")
+  // und klappt die betroffenen Bucket-Sektionen auf, damit Treffer sichtbar sind.
+  function selectBucket(b: Exclude<BucketFilter, null>) {
+    setStatus("open");
+    setBucketFilter((prev) => (prev === b ? null : b));
+    setOpenBuckets((cur) => {
+      const s = new Set(cur);
+      if (b === "overdue") s.add("overdue");
+      else if (b === "today") s.add("today");
+      else if (b === "week") {
+        s.add("tomorrow");
+        s.add("this_week");
+      }
+      return s;
+    });
+  }
+
+  function resetFilters() {
+    setSearch("");
+    setStatus("open");
+    setLeadFilter("");
+    setBucketFilter(null);
+  }
 
   function toggleBucket(key: DueBucket) {
     setOpenBuckets((prev) => {
@@ -168,17 +203,36 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       {/* Quick-Add */}
       <TodoQuickAdd leadCatalog={leadCatalog} />
 
-      {/* KPI-Strip */}
+      {/* KPI-Strip — Karten sind klickbare Schnellfilter */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <KpiCard
           label="Überfällig"
           value={stats.overdue}
           tone="red"
-          active={status === "open" && leadFilter === "" && search === "" && openBuckets.has("overdue")}
+          active={bucketFilter === "overdue"}
+          onClick={() => selectBucket("overdue")}
         />
-        <KpiCard label="Heute" value={stats.today} tone="amber" />
-        <KpiCard label="Diese Woche" value={stats.thisWeek} tone="blue" />
-        <KpiCard label="Offen gesamt" value={stats.totalOpen} tone="gray" />
+        <KpiCard
+          label="Heute"
+          value={stats.today}
+          tone="amber"
+          active={bucketFilter === "today"}
+          onClick={() => selectBucket("today")}
+        />
+        <KpiCard
+          label="Diese Woche"
+          value={stats.thisWeek}
+          tone="blue"
+          active={bucketFilter === "week"}
+          onClick={() => selectBucket("week")}
+        />
+        <KpiCard
+          label="Offen gesamt"
+          value={stats.totalOpen}
+          tone="gray"
+          active={bucketFilter === null && status === "open" && !leadFilter && !search}
+          onClick={resetFilters}
+        />
       </div>
 
       {/* Filter-Bar */}
@@ -215,13 +269,9 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
               </option>
             ))}
           </select>
-          {(search || status !== "open" || leadFilter) && (
+          {(search || status !== "open" || leadFilter || bucketFilter) && (
             <button
-              onClick={() => {
-                setSearch("");
-                setStatus("open");
-                setLeadFilter("");
-              }}
+              onClick={resetFilters}
               className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
             >
               Zurücksetzen
@@ -282,7 +332,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       {/* Buckets */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <EmptyState search={search} status={status} totalOpen={stats.totalOpen} />
+          <EmptyState search={search} status={status} totalOpen={stats.totalOpen} filtered={!!bucketFilter || !!leadFilter} />
         ) : (
           <>
             {BUCKETS_OPEN.map((b) => {
@@ -387,11 +437,14 @@ function KpiCard({
   label,
   value,
   tone,
+  active = false,
+  onClick,
 }: {
   label: string;
   value: number;
   tone: "red" | "amber" | "blue" | "gray";
   active?: boolean;
+  onClick?: () => void;
 }) {
   const toneClasses: Record<typeof tone, string> = {
     red: value > 0 ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/15 dark:text-red-300" : "",
@@ -399,16 +452,29 @@ function KpiCard({
     blue: value > 0 ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/15 dark:text-blue-300" : "",
     gray: "",
   };
+  const ringTone: Record<typeof tone, string> = {
+    red: "ring-red-400 dark:ring-red-500",
+    amber: "ring-amber-400 dark:ring-amber-500",
+    blue: "ring-blue-400 dark:ring-blue-500",
+    gray: "ring-primary",
+  };
   return (
-    <div className={`rounded-lg border p-3 transition ${toneClasses[tone]} border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-lg border p-3 text-left transition hover:border-primary/40 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${toneClasses[tone]} border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e] ${
+        active ? `ring-2 ${ringTone[tone]}` : ""
+      }`}
+    >
       <p className="text-2xl font-bold tabular-nums">{value}</p>
       <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{label}</p>
-    </div>
+    </button>
   );
 }
 
-function EmptyState({ search, status, totalOpen }: { search: string; status: StatusFilter; totalOpen: number }) {
-  if (search || status !== "open") {
+function EmptyState({ search, status, totalOpen, filtered }: { search: string; status: StatusFilter; totalOpen: number; filtered: boolean }) {
+  if (search || status !== "open" || filtered) {
     return (
       <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center dark:border-[#2c2c2e]">
         <p className="text-sm text-gray-500 dark:text-gray-400">Keine Treffer mit diesen Filtern.</p>

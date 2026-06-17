@@ -126,15 +126,27 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // Zeigt überfällige + heutige + nächste 7 Tage. Lead-Daten parallel via Lookup.
   const todayDateOnly = toBerlinDayKey(today);
   const sevenDaysAheadKey = new Date(Date.now() + 7 * 24 * 3600_000).toISOString().slice(0, 10);
-  const { data: openTodoRows } = await db
+  type OpenTodo = { id: string; lead_id: string; title: string; due_date: string; due_time: string | null };
+  const firstTodo = await db
     .from("lead_todos")
-    .select("id, lead_id, title, due_date")
+    .select("id, lead_id, title, due_date, due_time")
     .is("done_at", null)
     .lte("due_date", sevenDaysAheadKey)
     .order("due_date", { ascending: true })
     .limit(50);
-  type OpenTodo = { id: string; lead_id: string; title: string; due_date: string };
-  const openTodos = (openTodoRows ?? []) as OpenTodo[];
+  let openTodoRows = firstTodo.data as OpenTodo[] | null;
+  if (firstTodo.error && (firstTodo.error.code === "42703" || /due_time/i.test(firstTodo.error.message))) {
+    // Migration 124 noch nicht eingespielt — ohne Uhrzeit weiterladen.
+    const fallback = await db
+      .from("lead_todos")
+      .select("id, lead_id, title, due_date")
+      .is("done_at", null)
+      .lte("due_date", sevenDaysAheadKey)
+      .order("due_date", { ascending: true })
+      .limit(50);
+    openTodoRows = fallback.data as OpenTodo[] | null;
+  }
+  const openTodos = openTodoRows ?? [];
   const todoLeadIds = Array.from(new Set(openTodos.map((t) => t.lead_id)));
   const { data: todoLeads } = todoLeadIds.length > 0
     ? await db.from("leads").select("id, company_name, city").in("id", todoLeadIds).is("deleted_at", null)
@@ -155,6 +167,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
         leadId: t.lead_id,
         title: t.title,
         dueDate: t.due_date,
+        dueTime: t.due_time ? t.due_time.slice(0, 5) : null,
         tone,
         company_name: lead.company_name,
         city: lead.city,

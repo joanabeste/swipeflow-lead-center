@@ -344,7 +344,7 @@ export function OpenTodosWidget({ data }: { data: DashboardData }) {
                     </p>
                   </div>
                   <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${section.badge}`}>
-                    {formatTodoDue(t.dueDate, todayKey)}
+                    {t.dueTime ? `${formatTodoDue(t.dueDate, todayKey)} · ${t.dueTime}` : formatTodoDue(t.dueDate, todayKey)}
                   </span>
                 </Link>
               ))}

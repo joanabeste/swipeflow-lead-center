@@ -17,6 +17,11 @@ function todayKey(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Postgres-time „HH:MM:SS" → „HH:MM"; null bleibt null. */
+function fmtTime(t: string | null | undefined): string | null {
+  return t ? t.slice(0, 5) : null;
+}
+
 function dueLabel(due: string): { text: string; tone: "overdue" | "today" | "soon" | "later" } {
   const today = todayKey();
   if (due < today) {
@@ -53,7 +58,15 @@ export function LeadTodosCard({ leadId, todos }: Props) {
     const o: LeadTodo[] = [];
     const d: LeadTodo[] = [];
     for (const t of todos) (t.done_at ? d : o).push(t);
-    o.sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0));
+    o.sort((a, b) => {
+      if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
+      const ta = a.due_time;
+      const tb = b.due_time;
+      if (ta && tb) return ta < tb ? -1 : ta > tb ? 1 : 0;
+      if (ta) return -1; // mit Uhrzeit vor ganztägig
+      if (tb) return 1;
+      return 0;
+    });
     d.sort((a, b) => ((b.done_at ?? "") < (a.done_at ?? "") ? -1 : 1));
     return { open: o, done: d };
   }, [todos]);
@@ -179,6 +192,7 @@ function TodoRow({
   onDelete: () => void;
 }) {
   const due = dueLabel(todo.due_date);
+  const t = fmtTime(todo.due_time);
   return (
     <div className="group flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50/60 dark:hover:bg-white/[0.02]">
       <button
@@ -200,7 +214,7 @@ function TodoRow({
       </div>
       {!completed && (
         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${toneClasses(due.tone)}`}>
-          {due.text}
+          {t ? `${due.text} · ${t}` : due.text}
         </span>
       )}
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100">
@@ -234,6 +248,7 @@ function TodoComposer({
   const { addToast } = useToastContext();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [dueDate, setDueDate] = useState(initial?.due_date ?? todayKey());
+  const [dueTime, setDueTime] = useState<string | null>(fmtTime(initial?.due_time));
   const [pending, startTransition] = useTransition();
   const isEdit = !!initial;
 
@@ -241,8 +256,8 @@ function TodoComposer({
     if (!title.trim()) return;
     startTransition(async () => {
       const res = isEdit
-        ? await updateLeadTodo(initial!.id, leadId, title, dueDate)
-        : await addLeadTodo(leadId, title, dueDate);
+        ? await updateLeadTodo(initial!.id, leadId, title, dueDate, dueTime)
+        : await addLeadTodo(leadId, title, dueDate, dueTime);
       if (res.error) addToast(res.error, "error");
       else {
         addToast(isEdit ? "ToDo aktualisiert" : "ToDo gespeichert", "success");
@@ -269,7 +284,7 @@ function TodoComposer({
         onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
         className="mt-2 w-full rounded-md border border-gray-200 bg-white px-2 py-1.5 text-sm dark:border-[#2c2c2e] dark:bg-[#161618]"
       />
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-500 dark:text-gray-400">Fällig am</label>
         <input
           type="date"
@@ -277,6 +292,23 @@ function TodoComposer({
           onChange={(e) => setDueDate(e.target.value)}
           className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark]"
         />
+        <input
+          type="time"
+          value={dueTime ?? ""}
+          onChange={(e) => setDueTime(e.target.value || null)}
+          aria-label="Uhrzeit (optional)"
+          className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-900 dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark]"
+        />
+        {dueTime && (
+          <button
+            type="button"
+            onClick={() => setDueTime(null)}
+            className="text-[11px] text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+            title="Uhrzeit entfernen"
+          >
+            ohne Uhrzeit
+          </button>
+        )}
         <div className="ml-auto flex gap-2">
           <button
             onClick={onClose}
