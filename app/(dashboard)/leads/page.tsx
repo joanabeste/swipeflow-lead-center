@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
+import { Zap } from "lucide-react";
 import { LeadTableSection } from "./lead-table-section";
 import { LeadTableSkeleton } from "./lead-table-skeleton";
 
@@ -9,15 +10,9 @@ interface Props {
 
 export default async function LeadsPage({ searchParams }: Props) {
   const params = await searchParams;
+  // include_crm bleibt als stiller URL-Override (?include_crm=1) erhalten —
+  // der sichtbare Umschalt-Button wurde entfernt.
   const includeCrm = params.include_crm === "1";
-
-  // Toggle-Link baut URL mit gedrehtem include_crm-Param.
-  const toggleParams = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v && k !== "include_crm" && k !== "page") toggleParams.set(k, v);
-  }
-  if (!includeCrm) toggleParams.set("include_crm", "1");
-  const toggleHref = `/leads${toggleParams.toString() ? `?${toggleParams.toString()}` : ""}`;
 
   // Suspense-Key: bei Filter-/Seitenwechsel zeigt die Grenze wieder das
   // Skeleton, statt die alte Tabelle bis zum Eintreffen der neuen Daten
@@ -37,12 +32,16 @@ export default async function LeadsPage({ searchParams }: Props) {
         <h1 className="text-2xl font-bold tracking-tight">
           {includeCrm ? "Alle Leads" : "Neue Leads"}
         </h1>
-        <Link
-          href={toggleHref}
-          className="text-xs font-medium text-primary hover:underline"
-        >
-          {includeCrm ? "Nur neue Leads zeigen" : "Auch CRM-Leads zeigen"}
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/leads/qualifizieren"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-gray-900 transition hover:bg-primary-dark"
+            title="Webdesign-Leads im Vollbild qualifizieren"
+          >
+            <Zap className="h-4 w-4" />
+            Qualifizieren
+          </Link>
+        </div>
       </div>
 
       <Suspense key={sectionKey} fallback={<LeadTableSkeleton />}>

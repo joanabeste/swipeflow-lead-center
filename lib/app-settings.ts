@@ -106,3 +106,60 @@ export async function saveCallQueueSettings(
     { onConflict: "key" },
   );
 }
+
+// ─── Qualifizierungs-Cockpit: Tasten-1-Verhalten ───────────────────────
+
+export interface QualifyHotkeySettings {
+  /** true  → Taste „1" qualifiziert den Lead sofort (status='qualified' +
+   *          targetStatusId) und schiebt ihn ins CRM.
+   *  false → „1" markiert nur die grüne Ampel; das Qualifizieren passiert
+   *          gesammelt per „Alle grünen qualifizieren". */
+  immediateQualify: boolean;
+  /** custom_lead_statuses.id, in den ein grün-qualifizierter Lead wandert. */
+  targetStatusId: string;
+}
+
+const FALLBACK_QUALIFY_HOTKEY: QualifyHotkeySettings = {
+  immediateQualify: false,
+  targetStatusId: "webdesign-manuelle-ueberpruefung",
+};
+
+export async function getQualifyHotkeySettings(): Promise<QualifyHotkeySettings> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "qualify_hotkey")
+      .single();
+    const v = data?.value as Partial<QualifyHotkeySettings> | undefined;
+    return {
+      immediateQualify:
+        typeof v?.immediateQualify === "boolean"
+          ? v.immediateQualify
+          : FALLBACK_QUALIFY_HOTKEY.immediateQualify,
+      targetStatusId:
+        typeof v?.targetStatusId === "string" && v.targetStatusId.trim()
+          ? v.targetStatusId
+          : FALLBACK_QUALIFY_HOTKEY.targetStatusId,
+    };
+  } catch {
+    return FALLBACK_QUALIFY_HOTKEY;
+  }
+}
+
+export async function saveQualifyHotkeySettings(
+  settings: QualifyHotkeySettings,
+  userId: string | null,
+): Promise<void> {
+  const db = createServiceClient();
+  await db.from("app_settings").upsert(
+    {
+      key: "qualify_hotkey",
+      value: settings as unknown as Record<string, unknown>,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "key" },
+  );
+}

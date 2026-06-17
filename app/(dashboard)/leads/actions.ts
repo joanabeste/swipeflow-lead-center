@@ -8,6 +8,11 @@ import { scoreForRating } from "@/lib/types";
 import { ARCHIVE_STATUS_BY_MODE } from "@/lib/service-mode-constants";
 import { captureLeadStates, logCancelOverrides } from "@/lib/learning/override-tracker";
 import { checkSection } from "@/lib/auth";
+import {
+  getQualifyHotkeySettings,
+  saveQualifyHotkeySettings,
+  type QualifyHotkeySettings,
+} from "@/lib/app-settings";
 import { insertMergeNote, insertNoDuplicateNote, insertUnmergeNote } from "@/lib/leads/merge-note";
 
 // Mass-Assignment-Guard: updateLead wird vom Stammdaten-Formular im CRM mit
@@ -817,4 +822,82 @@ export async function bulkRestoreCrmStatus(
   revalidatePath("/crm");
   revalidatePath("/einstellungen/aussortierte-leads");
   return { success: true };
+}
+
+// ─── Qualifizierungs-Cockpit ────────────────────────────────────────────
+
+/**
+ * Globale Einstellung für das Qualifizierungs-Cockpit speichern: ob Taste „1"
+ * sofort qualifiziert (→ CRM) und in welchen CRM-Status grün-qualifizierte
+ * Leads wandern. Vertrieb-Berechtigung genügt (das Cockpit ist ein Vertriebs-Tool).
+ */
+export async function saveQualifySettings(
+  settings: QualifyHotkeySettings,
+): Promise<{ success: true } | { error: string }> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+
+  const targetStatusId = settings.targetStatusId?.trim();
+  if (!targetStatusId) return { error: "Bitte einen Ziel-Status wählen." };
+
+  // Ziel-Status muss existieren — sonst würde bulkUpdateStatus später auf NULL
+  // zurückfallen und der Lead landete ohne CRM-Status im "Qualifiziert".
+  const db = createServiceClient();
+  const { data: exists } = await db
+    .from("custom_lead_statuses")
+    .select("id")
+    .eq("id", targetStatusId)
+    .maybeSingle();
+  if (!exists) return { error: "Unbekannter Ziel-Status." };
+
+  await saveQualifyHotkeySettings(
+    { immediateQualify: Boolean(settings.immediateQualify), targetStatusId },
+    ctx.user.id,
+  );
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "settings.qualify_hotkey_saved",
+    entityType: "app_settings",
+    details: { immediate_qualify: Boolean(settings.immediateQualify), target_status_id: targetStatusId },
+  });
+
+  revalidatePath("/leads/qualifizieren");
+  return { success: true };
+}
+
+/**
+ * Qualifiziert alle aktuell grün markierten, noch nicht im CRM liegenden
+ * Webdesign-Leads in einem Rutsch — der Sammel-Weg, wenn „sofort qualifizieren"
+ * (Taste 1) AUS ist. Nutzt den konfigurierten Ziel-Status und das vorhandene
+ * bulkUpdateStatus (CRM-Übernahme + Ampel-Notiz + Audit).
+ */
+export async function qualifyAllGreen(): Promise<
+  { success: true; count: number } | { error: string }
+> {
+  const ctx = await checkSection("can_vertrieb");
+  if (!ctx) return { error: "Keine Berechtigung." };
+
+  const { targetStatusId } = await getQualifyHotkeySettings();
+  const db = createServiceClient();
+
+  // Gleiche "Neue Leads"-Kriterien wie die Queue, eingeschränkt auf grün.
+  // (rating='green' impliziert bereits eine Ampel-Bewertung → der Webdesign-
+  // Heuristik-Teil ist hier redundant, daher kein vertical-Filter nötig.)
+  const { data: rows, error } = await db
+    .from("leads")
+    .select("id")
+    .is("deleted_at", null)
+    .eq("traffic_light_rating", "green")
+    .is("crm_status_id", null)
+    .not("status", "in", '("qualified","exported")')
+    .eq("lifecycle_stage", "lead");
+  if (error) return { error: error.message };
+
+  const ids = (rows ?? []).map((r) => r.id as string);
+  if (ids.length === 0) return { success: true, count: 0 };
+
+  const res = await bulkUpdateStatus(ids, "qualified", targetStatusId);
+  if ("error" in res && res.error) return { error: res.error };
+  return { success: true, count: ids.length };
 }
