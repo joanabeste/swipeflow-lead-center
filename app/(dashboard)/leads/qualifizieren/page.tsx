@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { CustomLeadStatus, TrafficLightRating } from "@/lib/types";
 import { getQualifyHotkeySettings } from "@/lib/app-settings";
 import { QualifyCockpit } from "./qualify-cockpit";
@@ -56,6 +56,38 @@ async function loadQueue(
 }
 
 /**
+ * Reserviert dem aktuellen Nutzer einen DISJUNKTEN Batch (id + Ampel) per RPC
+ * (FOR UPDATE SKIP LOCKED) → zwei parallele Nutzer bekommen nie dieselben Leads.
+ * Liefert `null`, wenn die RPC fehlt (Migration 127 noch nicht eingespielt) →
+ * der Aufrufer faellt dann auf die globale Queue zurueck (Cockpit bleibt nutzbar).
+ */
+async function loadReservedBatch(): Promise<QueueRow[] | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const db = createServiceClient();
+  const { data, error } = await db.rpc("claim_qualify_leads", {
+    p_user: user.id,
+    p_limit: 50,
+    p_ttl_seconds: 600,
+  });
+  if (error) {
+    console.warn(
+      "[qualifizieren] claim RPC nicht verfuegbar, Fallback auf globale Queue:",
+      error.message,
+    );
+    return null;
+  }
+  return ((data as { id: string; rating: string | null }[]) ?? []).map((r) => ({
+    id: r.id,
+    rating: (r.rating as TrafficLightRating | null) ?? null,
+  }));
+}
+
+/**
  * Vollbild-Qualifizierungs-Cockpit für neue Webdesign-Leads. Baut serverseitig
  * nur die Reihenfolge (id + Ampel); Detaildaten je Lead lädt der Client lazy
  * über `/api/leads/[id]/preview` (gleiches Bundle wie die Schnellansicht).
@@ -63,8 +95,8 @@ async function loadQueue(
 export default async function QualifizierenPage() {
   const supabase = await createClient();
 
-  const [queue, { data: statuses }, settings] = await Promise.all([
-    loadQueue(supabase),
+  const [reserved, { data: statuses }, settings] = await Promise.all([
+    loadReservedBatch(),
     supabase
       .from("custom_lead_statuses")
       .select("*")
@@ -73,6 +105,10 @@ export default async function QualifizierenPage() {
       .order("display_order", { ascending: true }),
     getQualifyHotkeySettings(),
   ]);
+
+  // Fallback auf die globale Queue, falls die Reservierungs-Migration (127) noch
+  // nicht eingespielt ist — so funktioniert das Cockpit auch vorher.
+  const queue = reserved ?? (await loadQueue(supabase));
 
   // Nur Webdesign-relevante bzw. vertikal-agnostische Status als Qualifizier-Ziel.
   const targetStatuses = ((statuses as CustomLeadStatus[]) ?? []).filter(

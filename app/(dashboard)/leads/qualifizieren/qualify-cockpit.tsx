@@ -26,6 +26,7 @@ import {
   setTrafficLightManual,
 } from "@/app/(dashboard)/leads/actions";
 import { qualifyWithContactEnrichment } from "@/app/(dashboard)/leads/enrichment-actions";
+import { claimQualifyBatch, extendQualifyClaims } from "@/app/(dashboard)/leads/qualify-claims-actions";
 import { WebsiteFrame } from "./_components/website-frame";
 import { QuickNote } from "./_components/quick-note";
 import { QualifySettings } from "./_components/qualify-settings";
@@ -63,7 +64,7 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
   // Ende). Würden wir die live nutzen, verschöbe sich die Liste unter dem Index
   // und es würde ein Lead übersprungen. Deshalb navigieren wir über diesen
   // stabilen Snapshot; Bewertungs-Anzeige läuft über die ratings/qualified-Overlays.
-  const [queue] = useState(initialQueue);
+  const [queue, setQueue] = useState(initialQueue);
 
   const [settings, setSettings] = useState(initialSettings);
   const [filter, setFilter] = useState<FilterValue>("all");
@@ -71,6 +72,7 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
   const [data, setData] = useState<LeadDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   // Optimistische Overlays, damit Bewertung/Qualifizierung sofort sichtbar ist,
   // ohne auf den Server zu warten.
   const [ratings, setRatings] = useState<Record<string, TrafficLightRating>>({});
@@ -164,6 +166,51 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
   const handleStammdatenChange = useCallback((patch: Partial<Lead>) => {
     setData((d) => (d ? { ...d, lead: { ...d.lead, ...patch } } : d));
   }, []);
+
+  // Heartbeat: verlaengert die Reservierungen, solange das Cockpit offen ist
+  // (TTL 10 Min) — eine laufende Sitzung verliert ihren Batch nie.
+  useEffect(() => {
+    const iv = setInterval(() => void extendQualifyClaims(), 4 * 60_000);
+    return () => clearInterval(iv);
+  }, []);
+
+  // Reservierungen freigeben, sobald das Cockpit verlassen wird: pagehide (Tab/
+  // Browser zu, Navigation weg) + Unmount (In-App-Navigation). sendBeacon ist im
+  // Unload zuverlaessig; TTL ist der Backstop. Bewusst NICHT bei visibilitychange
+  // (sonst wuerde ein kurzer Tab-Wechsel den Batch freigeben).
+  useEffect(() => {
+    const release = () => {
+      try {
+        navigator.sendBeacon("/api/qualify/release");
+      } catch {
+        /* best effort — TTL faengt es ab */
+      }
+    };
+    window.addEventListener("pagehide", release);
+    return () => {
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, []);
+
+  // „Weitere laden": neuen/aufgefuellten Batch reservieren und ans Ende anhaengen
+  // (RPC fuellt auf 50 auf und liefert nur noch offene Leads). Kein Index-Reset →
+  // der Nutzer blaettert nahtlos weiter.
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    const fresh = await claimQualifyBatch();
+    setLoadingMore(false);
+    setQueue((prev) => {
+      const seen = new Set(prev.map((q) => q.id));
+      const added = fresh.filter((q) => !seen.has(q.id));
+      if (added.length === 0) {
+        addToast("Keine weiteren Leads verfügbar.", "info");
+        return prev;
+      }
+      addToast(`${added.length} weitere Leads geladen.`, "success");
+      return [...prev, ...added];
+    });
+  }, [addToast]);
 
   const rate = useCallback(
     (rating: TrafficLightRating) => {
@@ -333,8 +380,11 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
       ) : done ? (
         <EmptyState
           title="Alles durchgesehen 🎉"
-          subtitle={`Du hast alle ${total} Leads dieser Queue bearbeitet.`}
+          subtitle={`Du hast alle ${total} reservierten Leads bearbeitet.`}
           onClose={close}
+          actionLabel="Weitere 50 laden"
+          onAction={loadMore}
+          actionPending={loadingMore}
         />
       ) : (
         <div className="flex min-h-0 flex-1">
@@ -538,23 +588,45 @@ function EmptyState({
   title,
   subtitle,
   onClose,
+  actionLabel,
+  onAction,
+  actionPending,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionPending?: boolean;
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
       <CheckCircle2 className="h-10 w-10 text-green-500" />
       <h2 className="text-xl font-bold">{title}</h2>
       <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
-      <button
-        type="button"
-        onClick={onClose}
-        className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark"
-      >
-        Zurück zu den Leads
-      </button>
+      <div className="mt-2 flex items-center gap-2">
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={actionPending}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {actionPending ? "Lädt…" : actionLabel}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onClose}
+          className={
+            actionLabel && onAction
+              ? "rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
+              : "rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark"
+          }
+        >
+          Zurück zu den Leads
+        </button>
+      </div>
     </div>
   );
 }
