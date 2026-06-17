@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { usePreviewRefresh } from "@/lib/preview-refresh-context";
+import { useConfetti } from "@/components/confetti";
+import { APPOINTMENT_STATUS_ID } from "@/lib/service-mode-constants";
 import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
@@ -45,6 +47,7 @@ export function CrmActivityFeed({
   leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders, importInfo,
 }: Props) {
   const notify = usePreviewRefresh();
+  const fireConfetti = useConfetti();
   const [filter, setFilter] = useState<ActivityKind>("all");
   // Standardmäßig ist der Anruf-Bereich aufgeklappt, weil das die häufigste
   // Aktion im CRM-Detail ist.
@@ -54,7 +57,10 @@ export function CrmActivityFeed({
 
   function handleStatusChange(statusId: string) {
     startTransition(async () => {
-      await updateCrmStatus(leadId, statusId || null);
+      const res = await updateCrmStatus(leadId, statusId || null);
+      if (!(res && "error" in res && res.error) && statusId === APPOINTMENT_STATUS_ID) {
+        fireConfetti();
+      }
       notify();
     });
   }

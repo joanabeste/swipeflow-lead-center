@@ -7,6 +7,8 @@ import { ChevronDown, Check, Loader2 } from "lucide-react";
 import type { CustomLeadStatus } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
 import { useToastContext } from "../../toast-provider";
+import { useConfetti } from "@/components/confetti";
+import { APPOINTMENT_STATUS_ID } from "@/lib/service-mode-constants";
 
 /**
  * Inline-Status-Dropdown für die CRM-Tabelle.
@@ -28,6 +30,7 @@ export function InlineStatusDropdown({
   const [pending, startTransition] = useTransition();
   const router = useRouter();
   const { addToast } = useToastContext();
+  const fireConfetti = useConfetti();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
@@ -85,6 +88,7 @@ export function InlineStatusDropdown({
         addToast(res.error, "error");
       } else {
         addToast("Status aktualisiert.", "success");
+        if (nextId === APPOINTMENT_STATUS_ID) fireConfetti();
         router.refresh();
       }
       setOpen(false);

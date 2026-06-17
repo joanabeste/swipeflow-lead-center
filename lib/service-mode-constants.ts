@@ -21,3 +21,7 @@ export const ARCHIVE_STATUS_BY_MODE = {
   recruiting: "recruiting-passt-nicht",
   webdev: "webdesign-passt-nicht",
 } as const satisfies Record<ServiceMode, string>;
+
+// CRM-Status „Termin gelegt" (custom_lead_statuses.id). Wird ein Lead darauf
+// gesetzt, feiert das UI mit Vollbild-Konfetti.
+export const APPOINTMENT_STATUS_ID = "termin-gelegt";
