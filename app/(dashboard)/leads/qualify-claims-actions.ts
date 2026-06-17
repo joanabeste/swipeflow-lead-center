@@ -14,6 +14,15 @@ export interface QualifyClaim {
   rating: TrafficLightRating | null;
 }
 
+/** Anzeige-fertige Karte fuer die mobile Lead-Tinder-Ansicht (nur Leads MIT Website). */
+export interface TinderCard {
+  id: string;
+  company_name: string;
+  website: string;
+  rating: TrafficLightRating | null;
+  reason: string | null;
+}
+
 /**
  * Reserviert dem aktuellen Nutzer einen disjunkten Batch — bis PER_RATING je
  * Ampel-Kategorie (gruen/orange/rot/unbewertet) — und gibt ihn zurueck. Atomar via
@@ -39,6 +48,71 @@ export async function claimQualifyBatch(): Promise<QualifyClaim[]> {
     id: r.id,
     rating: (r.rating as TrafficLightRating | null) ?? null,
   }));
+}
+
+/**
+ * Wie `claimQualifyBatch`, aber fuer die mobile Lead-Tinder-Ansicht: reserviert
+ * denselben disjunkten Batch (teilt sich die Reservierung mit dem Desktop-Cockpit)
+ * und liefert davon NUR die Leads MIT Website zurueck — anzeige-fertig (Name, URL,
+ * Ampel, Begruendung). „Keine Website" wird damit billig server-seitig gefiltert;
+ * den „blockiert/nicht einbettbar"-Fall prueft der Client zusaetzlich per
+ * `/api/leads/[id]/embeddable`. Wird sowohl beim Initial-Load (RSC) als auch beim
+ * Auto-Nachschub (Client) verwendet.
+ */
+export async function claimQualifyWebBatch(): Promise<TinderCard[]> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const db = createServiceClient();
+  const { data: claimed, error: claimErr } = await db.rpc("claim_qualify_leads", {
+    p_user: user.id,
+    p_per_rating: PER_RATING,
+    p_ttl_seconds: TTL_SECONDS,
+  });
+  if (claimErr) {
+    console.error("[claimQualifyWebBatch] claim:", claimErr.message);
+    return [];
+  }
+
+  const ids = ((claimed as { id: string }[]) ?? []).map((r) => r.id);
+  if (ids.length === 0) return [];
+
+  // Folge-Select auf genau die reservierten IDs, gefiltert auf vorhandene Website.
+  // ids ist <= 4*PER_RATING (~200) → weit unter dem PostgREST-Inline-Limit (~430).
+  // Reihenfolge wie die RPC: heisseste Ampel zuerst, stabiler id-Tiebreaker.
+  const { data: rows, error: selErr } = await db
+    .from("leads")
+    .select("id, company_name, website, traffic_light_rating, traffic_light_reason")
+    .in("id", ids)
+    .not("website", "is", null)
+    .neq("website", "")
+    .order("traffic_light_score", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true });
+  if (selErr) {
+    console.error("[claimQualifyWebBatch] select:", selErr.message);
+    return [];
+  }
+
+  const cards: TinderCard[] = [];
+  for (const r of (rows as Array<{
+    id: string;
+    company_name: string | null;
+    website: string | null;
+    traffic_light_rating: string | null;
+    traffic_light_reason: string | null;
+  }>) ?? []) {
+    // Whitespace-only-Websites zusaetzlich verwerfen (gleiche Logik wie normalizeWebsiteUrl).
+    if (!r.website?.trim()) continue;
+    cards.push({
+      id: r.id,
+      company_name: r.company_name ?? "Unbekannt",
+      website: r.website,
+      rating: (r.traffic_light_rating as TrafficLightRating | null) ?? null,
+      reason: r.traffic_light_reason,
+    });
+  }
+  return cards;
 }
 
 /**
