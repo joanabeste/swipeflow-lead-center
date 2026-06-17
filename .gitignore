@@ -42,6 +42,14 @@ yarn-error.log*
 # gescrapte Import-Payloads (lokal, enthalten Echtdaten — nie committen)
 /outputs_import_payload.json
 
+# lokale Import-/Batch-Scratch-Dateien (enthalten B2B-Echtdaten — nie committen)
+/.thisrun-*.json
+/_batch*.json
+/_green_*.json
+/_dedup_*.py
+/leads-enriched.jsonl
+*.jsonl
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

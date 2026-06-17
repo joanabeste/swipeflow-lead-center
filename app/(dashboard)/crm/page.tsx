@@ -5,6 +5,7 @@ import { loadTablePrefs } from "@/lib/table-prefs";
 import { MODE_TO_VERTICAL } from "@/lib/service-mode-constants";
 import { normalizePhone } from "@/lib/csv/normalizer";
 import { canonicalPhoneDigits, leadsHasPhoneNorm } from "@/lib/leads/phone-search";
+import { leadsHasLastCallAt } from "@/lib/leads/last-call";
 import { CRM_LIST_COLS } from "@/lib/leads/api-fields";
 import { listTeamMembers } from "../deals/actions";
 
@@ -79,14 +80,24 @@ export default async function CrmPage({
 
   const team = await listTeamMembers();
 
-  // Alle Leads mit mindestens einem Call
-  const { data: calledRows } = await db
-    .from("lead_calls")
-    .select("lead_id")
-    .limit(10000);
-  const calledLeadIds = Array.from(new Set((calledRows ?? []).map((r) => r.lead_id)));
+  // Bevorzugt persistente Spalte leads.last_call_at (Migration 126). Solange sie
+  // fehlt, Fallback auf den alten Inline-ID-Pfad. Der alte Pfad packt alle
+  // lead_ids-mit-Anruf in die URL und kippt ab ~430 Leads an Nodes fetch-Header-
+  // Limit (UND_ERR_HEADERS_OVERFLOW) → Board zeigt 0. Der neue Pfad filtert per
+  // Spalte (konstante URL) und spart den 10.000-Zeilen-lead_calls-Scan.
+  const hasLastCallAt = await leadsHasLastCallAt(db);
 
-  // Recent-Calls für last_call-Filter
+  // Alle Leads mit mindestens einem Call — nur im Fallback-Pfad noetig.
+  let calledLeadIds: string[] = [];
+  if (!hasLastCallAt) {
+    const { data: calledRows } = await db
+      .from("lead_calls")
+      .select("lead_id")
+      .limit(10000);
+    calledLeadIds = Array.from(new Set((calledRows ?? []).map((r) => r.lead_id)));
+  }
+
+  // Recent-Calls für last_call-Filter (nur Fallback-Pfad)
   async function fetchRecentCallLeadIds(sinceIso: string): Promise<string[]> {
     const { data } = await db
       .from("lead_calls")
@@ -124,7 +135,9 @@ export default async function CrmPage({
     .is("deleted_at", null);
 
   // CRM-Scope: qualified ODER hat mind. einen Call
-  if (calledLeadIds.length > 0) {
+  if (hasLastCallAt) {
+    query = query.or("status.eq.qualified,last_call_at.not.is.null");
+  } else if (calledLeadIds.length > 0) {
     query = query.or(`status.eq.qualified,id.in.(${calledLeadIds.join(",")})`);
   } else {
     query = query.eq("status", "qualified");
@@ -147,10 +160,16 @@ export default async function CrmPage({
   }
 
   // Aktivitäts-Filter
-  if (sp.activity === "called" && calledLeadIds.length > 0) {
-    query = query.in("id", calledLeadIds);
+  if (sp.activity === "called") {
+    if (hasLastCallAt) {
+      query = query.not("last_call_at", "is", null);
+    } else if (calledLeadIds.length > 0) {
+      query = query.in("id", calledLeadIds);
+    }
   } else if (sp.activity === "uncalled") {
-    if (calledLeadIds.length > 0) {
+    if (hasLastCallAt) {
+      query = query.is("last_call_at", null);
+    } else if (calledLeadIds.length > 0) {
       query = query.not("id", "in", `(${calledLeadIds.join(",")})`);
     }
   } else if (sp.activity === "noted" && notedLeadIds.length > 0) {
@@ -165,27 +184,47 @@ export default async function CrmPage({
   // gerendert, Date.now() hier pragmatisch OK.
   // eslint-disable-next-line react-hooks/purity
   const nowMs = Date.now();
+  const NO_MATCH = "00000000-0000-0000-0000-000000000000";
   if (sp.last_call === "today") {
     const since = new Date(nowMs);
     since.setHours(0, 0, 0, 0);
-    const recent = await fetchRecentCallLeadIds(since.toISOString());
-    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    if (hasLastCallAt) {
+      query = query.gte("last_call_at", since.toISOString());
+    } else {
+      const recent = await fetchRecentCallLeadIds(since.toISOString());
+      query = recent.length > 0 ? query.in("id", recent) : query.eq("id", NO_MATCH);
+    }
   } else if (sp.last_call === "7d") {
     const since = new Date(nowMs - 7 * 86400_000);
-    const recent = await fetchRecentCallLeadIds(since.toISOString());
-    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    if (hasLastCallAt) {
+      query = query.gte("last_call_at", since.toISOString());
+    } else {
+      const recent = await fetchRecentCallLeadIds(since.toISOString());
+      query = recent.length > 0 ? query.in("id", recent) : query.eq("id", NO_MATCH);
+    }
   } else if (sp.last_call === "30d") {
     const since = new Date(nowMs - 30 * 86400_000);
-    const recent = await fetchRecentCallLeadIds(since.toISOString());
-    query = recent.length > 0 ? query.in("id", recent) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    if (hasLastCallAt) {
+      query = query.gte("last_call_at", since.toISOString());
+    } else {
+      const recent = await fetchRecentCallLeadIds(since.toISOString());
+      query = recent.length > 0 ? query.in("id", recent) : query.eq("id", NO_MATCH);
+    }
   } else if (sp.last_call === "older_30d") {
-    // in calledLeadIds ABER nicht in recent(30d)
-    const recent = await fetchRecentCallLeadIds(new Date(nowMs - 30 * 86400_000).toISOString());
-    const recentSet = new Set(recent);
-    const older = calledLeadIds.filter((id) => !recentSet.has(id));
-    query = older.length > 0 ? query.in("id", older) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    // letzter Anruf aelter als 30 Tage (NULL = nie angerufen → durch < ausgeschlossen)
+    const cutoff = new Date(nowMs - 30 * 86400_000).toISOString();
+    if (hasLastCallAt) {
+      query = query.lt("last_call_at", cutoff);
+    } else {
+      const recent = await fetchRecentCallLeadIds(cutoff);
+      const recentSet = new Set(recent);
+      const older = calledLeadIds.filter((id) => !recentSet.has(id));
+      query = older.length > 0 ? query.in("id", older) : query.eq("id", NO_MATCH);
+    }
   } else if (sp.last_call === "never") {
-    if (calledLeadIds.length > 0) {
+    if (hasLastCallAt) {
+      query = query.is("last_call_at", null);
+    } else if (calledLeadIds.length > 0) {
       query = query.not("id", "in", `(${calledLeadIds.join(",")})`);
     }
   }
