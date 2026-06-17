@@ -54,6 +54,10 @@ const KEY_TO_RATING: Record<string, TrafficLightRating> = {
   "3": "red",
 };
 
+// Ab so wenig verbleibenden Leads im Batch wird im Hintergrund nachreserviert
+// (unsichtbar) → der Nutzer erlebt eine endlose Liste.
+const REPLENISH_THRESHOLD = 5;
+
 export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
@@ -72,7 +76,11 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
   const [data, setData] = useState<LeadDetailBundle | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
+  // Auto-Nachschub: keine weiteren Leads mehr reservierbar?
+  const [exhausted, setExhausted] = useState(false);
+  const replenishingRef = useRef(false);
+  // Alle je gesehenen Lead-IDs (Dedupe beim Anhaengen neuer Reservierungen).
+  const claimedIdsRef = useRef<Set<string>>(new Set(initialQueue.map((q) => q.id)));
   // Optimistische Overlays, damit Bewertung/Qualifizierung sofort sichtbar ist,
   // ohne auf den Server zu warten.
   const [ratings, setRatings] = useState<Record<string, TrafficLightRating>>({});
@@ -193,29 +201,32 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
     };
   }, []);
 
-  // „Weitere laden": neuen/aufgefuellten Batch reservieren und ans Ende anhaengen
-  // (RPC fuellt auf 50 auf und liefert nur noch offene Leads). Kein Index-Reset →
-  // der Nutzer blaettert nahtlos weiter.
-  const loadMore = useCallback(async () => {
-    setLoadingMore(true);
-    const fresh = await claimQualifyBatch();
-    setLoadingMore(false);
-    setQueue((prev) => {
-      const seen = new Set(prev.map((q) => q.id));
-      const added = fresh.filter((q) => !seen.has(q.id));
+  // Unsichtbarer Auto-Nachschub: naehert sich der Nutzer dem Ende seines Batches,
+  // im Hintergrund den naechsten reservieren und anhaengen → endloses Gefuehl.
+  // Erst wenn nichts Neues mehr kommt, wird „exhausted" gesetzt.
+  useEffect(() => {
+    if (total === 0 || exhausted || replenishingRef.current) return;
+    if (total - index > REPLENISH_THRESHOLD) return;
+    replenishingRef.current = true;
+    void (async () => {
+      const fresh = await claimQualifyBatch();
+      const added = fresh.filter((q) => !claimedIdsRef.current.has(q.id));
       if (added.length === 0) {
-        addToast("Keine weiteren Leads verfügbar.", "info");
-        return prev;
+        setExhausted(true);
+      } else {
+        added.forEach((q) => claimedIdsRef.current.add(q.id));
+        setQueue((prev) => [...prev, ...added]);
       }
-      addToast(`${added.length} weitere Leads geladen.`, "success");
-      return [...prev, ...added];
-    });
-  }, [addToast]);
+      replenishingRef.current = false;
+    })();
+  }, [index, total, exhausted]);
 
   const rate = useCallback(
     (rating: TrafficLightRating) => {
       const id = currentId;
       if (!id) return;
+      // Aktiv bewertet → ggf. wieder Nachschub erlauben (freigewordene Kapazitaet).
+      setExhausted(false);
       const qualify = rating === "green" && settings.immediateQualify;
 
       // optimistisch
@@ -378,14 +389,15 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
           onClose={close}
         />
       ) : done ? (
-        <EmptyState
-          title="Alles durchgesehen 🎉"
-          subtitle={`Du hast alle ${total} reservierten Leads bearbeitet.`}
-          onClose={close}
-          actionLabel="Weitere laden"
-          onAction={loadMore}
-          actionPending={loadingMore}
-        />
+        exhausted ? (
+          <EmptyState
+            title="Alles durchgesehen 🎉"
+            subtitle="Aktuell gibt es keine weiteren Leads zum Qualifizieren."
+            onClose={close}
+          />
+        ) : (
+          <LoadingMore />
+        )
       ) : (
         <div className="flex min-h-0 flex-1">
           {/* Website links */}
@@ -588,45 +600,34 @@ function EmptyState({
   title,
   subtitle,
   onClose,
-  actionLabel,
-  onAction,
-  actionPending,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
-  actionLabel?: string;
-  onAction?: () => void;
-  actionPending?: boolean;
 }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
       <CheckCircle2 className="h-10 w-10 text-green-500" />
       <h2 className="text-xl font-bold">{title}</h2>
       <p className="max-w-sm text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
-      <div className="mt-2 flex items-center gap-2">
-        {actionLabel && onAction && (
-          <button
-            type="button"
-            onClick={onAction}
-            disabled={actionPending}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {actionPending ? "Lädt…" : actionLabel}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onClose}
-          className={
-            actionLabel && onAction
-              ? "rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"
-              : "rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark"
-          }
-        >
-          Zurück zu den Leads
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-primary-dark"
+      >
+        Zurück zu den Leads
+      </button>
+    </div>
+  );
+}
+
+// Kurzer Ladezustand, waehrend im Hintergrund der naechste Batch nachreserviert
+// wird (sollte dank Schwellwert-Prefetch selten sichtbar sein).
+function LoadingMore() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center text-sm text-gray-500 dark:text-gray-400">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-primary dark:border-gray-600 dark:border-t-primary" />
+      Lädt weitere Leads…
     </div>
   );
 }

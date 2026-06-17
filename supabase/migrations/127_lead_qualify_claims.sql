@@ -46,8 +46,22 @@ declare
   v_rating text;
   v_have int;
 begin
-  -- 1) Abgelaufene Reservierungen global freigeben (selbstheilend).
+  -- 1a) Abgelaufene Reservierungen global freigeben (selbstheilend).
   delete from public.lead_qualify_claims where expires_at <= now();
+
+  -- 1b) Eigene Reservierungen freigeben, deren Lead nicht mehr in der Queue ist
+  --     (qualifiziert/exportiert/CRM-Status gesetzt/geloescht). So zaehlen pro
+  --     Kategorie nur noch offene Leads → der Auto-Nachschub fuellt korrekt nach.
+  delete from public.lead_qualify_claims c
+   where c.claimed_by = p_user
+     and not exists (
+       select 1 from public.leads l
+       where l.id = c.lead_id
+         and l.deleted_at is null
+         and l.crm_status_id is null
+         and l.status not in ('qualified', 'exported')
+         and l.lifecycle_stage = 'lead'
+     );
 
   -- 2) Eigene aktive Reservierungen verlaengern (Reopen wirkt wie Heartbeat).
   update public.lead_qualify_claims
