@@ -175,12 +175,16 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
       setRatings((m) => ({ ...m, [id]: rating }));
       if (qualify) setQualified((s) => new Set(s).add(id));
 
-      // Hat der aktuell geladene Lead (Bundle) noch keinen Ansprechpartner? Dann
-      // reichert das Verschieben unten zuerst an — Hinweis sofort, da das ein paar
-      // Sekunden dauert und im Hintergrund läuft.
-      const knownNoContact =
-        qualify && !!data && data.lead.id === id && (data.contacts?.length ?? 0) === 0;
-      if (knownNoContact) addToast("Kein Ansprechpartner – Lead wird angereichert…", "info");
+      // Fehlt dem aktuell geladenen Lead (Bundle) Ansprechpartner ODER Telefon?
+      // Dann reichert das Verschieben unten zuerst an — Hinweis sofort, da das ein
+      // paar Sekunden dauert und im Hintergrund läuft.
+      const knownNeedsEnrichment =
+        qualify &&
+        !!data &&
+        data.lead.id === id &&
+        ((data.contacts?.length ?? 0) === 0 || !data.lead.phone?.trim());
+      if (knownNeedsEnrichment)
+        addToast("Kein Ansprechpartner/Telefon – Lead wird angereichert…", "info");
 
       // im Hintergrund persistieren (blockiert das Weiterspringen nicht)
       void (async () => {

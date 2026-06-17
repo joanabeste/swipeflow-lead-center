@@ -63,12 +63,14 @@ export async function enrichAndMoveToCrm(
 
 /**
  * Qualifiziert einen EINZELNEN Lead aus dem Qualifizierungs-Cockpit und reichert
- * ihn ZUVOR an, falls noch kein Ansprechpartner hinterlegt ist — damit nach der
- * CRM-Übernahme ein Kontakt vorhanden ist. Hat der Lead bereits einen Kontakt,
- * wird direkt verschoben (keine unnötige Anreicherung).
+ * ihn ZUVOR an, falls noch **kein Ansprechpartner ODER keine Telefonnummer**
+ * hinterlegt ist — damit nach der CRM-Übernahme ein Kontakt und eine Nummer
+ * vorhanden sind. Sind beide schon da, wird direkt verschoben (keine unnötige
+ * Anreicherung). `enrichLead` füllt beides: Kontakte (contacts_management) und
+ * `leads.phone` (company_phone, sofern in der Whitelist).
  *
  * Anreicherungs-Fehler brechen NICHT ab: der Nutzer hat „qualifizieren" gewollt,
- * der Lead soll auch ohne gefundenen Kontakt ins CRM. Bewusst nur für den Einzel-
+ * der Lead soll auch ohne gefundene Daten ins CRM. Bewusst nur für den Einzel-
  * Weg gedacht (eine Anreicherung pro Aufruf, weit unter dem Funktions-Timeout) —
  * der Bulk-Weg „Alle grünen qualifizieren" bleibt ohne Auto-Anreicherung.
  */
@@ -79,19 +81,23 @@ export async function qualifyWithContactEnrichment(
 ): Promise<{ success: true; enriched: boolean } | { error: string }> {
   const db = createServiceClient();
 
-  // Schon ein Ansprechpartner vorhanden? → keine Anreicherung nötig.
-  const { count, error: countErr } = await db
-    .from("lead_contacts")
-    .select("id", { count: "exact", head: true })
-    .eq("lead_id", leadId);
+  // Lead-Telefon + Ansprechpartner-Anzahl prüfen — anreichern, wenn eines fehlt.
+  const [{ data: lead, error: leadErr }, { count, error: countErr }] = await Promise.all([
+    db.from("leads").select("phone").eq("id", leadId).maybeSingle(),
+    db.from("lead_contacts").select("id", { count: "exact", head: true }).eq("lead_id", leadId),
+  ]);
+  if (leadErr) return { error: leadErr.message };
   if (countErr) return { error: countErr.message };
 
+  const missingContact = !count;
+  const missingPhone = !((lead?.phone as string | null)?.trim());
+
   let enriched = false;
-  if (!count) {
+  if (missingContact || missingPhone) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    // webdev-Default zieht Ansprechpartner (contacts_management). Bei Fehler
-    // trotzdem weiter zum Verschieben (siehe Doc oben).
+    // webdev-Default zieht Ansprechpartner (contacts_management) + Firmen-Telefon.
+    // Bei Fehler trotzdem weiter zum Verschieben (siehe Doc oben).
     const config = await getEnrichmentDefault(serviceMode);
     const result = await enrichLead(leadId, user?.id ?? null, config, serviceMode);
     enriched = result.success;
