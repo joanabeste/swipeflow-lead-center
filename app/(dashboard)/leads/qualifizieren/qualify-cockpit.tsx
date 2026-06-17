@@ -22,10 +22,10 @@ import { normalizeWebsiteUrl } from "@/lib/website-url";
 import { prefetchNeighbors } from "@/lib/preview/prefetch";
 import { useToastContext } from "@/app/(dashboard)/toast-provider";
 import {
-  bulkUpdateStatus,
   qualifyAllGreen,
   setTrafficLightManual,
 } from "@/app/(dashboard)/leads/actions";
+import { qualifyWithContactEnrichment } from "@/app/(dashboard)/leads/enrichment-actions";
 import { WebsiteFrame } from "./_components/website-frame";
 import { QuickNote } from "./_components/quick-note";
 import { QualifySettings } from "./_components/qualify-settings";
@@ -175,6 +175,13 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
       setRatings((m) => ({ ...m, [id]: rating }));
       if (qualify) setQualified((s) => new Set(s).add(id));
 
+      // Hat der aktuell geladene Lead (Bundle) noch keinen Ansprechpartner? Dann
+      // reichert das Verschieben unten zuerst an — Hinweis sofort, da das ein paar
+      // Sekunden dauert und im Hintergrund läuft.
+      const knownNoContact =
+        qualify && !!data && data.lead.id === id && (data.contacts?.length ?? 0) === 0;
+      if (knownNoContact) addToast("Kein Ansprechpartner – Lead wird angereichert…", "info");
+
       // im Hintergrund persistieren (blockiert das Weiterspringen nicht)
       void (async () => {
         const r1 = await setTrafficLightManual(id, rating);
@@ -182,15 +189,18 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
           addToast(`Ampel: ${r1.error}`, "error");
         }
         if (qualify) {
-          const r2 = await bulkUpdateStatus([id], "qualified", settings.targetStatusId);
+          // Reichert vorher an, falls kein Ansprechpartner vorhanden ist (Server
+          // prüft DB-seitig), und verschiebt dann ins CRM.
+          const r2 = await qualifyWithContactEnrichment(id, settings.targetStatusId, "webdev");
           if ("error" in r2) addToast(`Qualifizieren: ${r2.error}`, "error");
+          else if (r2.enriched) addToast("Angereichert, qualifiziert & ins CRM", "success");
           else addToast("Qualifiziert & ins CRM übernommen", "success");
         }
       })();
 
       goNext();
     },
-    [currentId, settings, addToast, goNext],
+    [currentId, settings, addToast, goNext, data],
   );
 
   // Zentrales Tastatur-Handling. Deaktiviert, solange der Fokus in einem

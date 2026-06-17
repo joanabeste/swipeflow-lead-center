@@ -6,6 +6,7 @@ import { enrichLead } from "@/lib/enrichment/enrich-lead";
 import type { EnrichmentConfig, ServiceMode } from "@/lib/types";
 import { bulkUpdateStatus } from "./actions";
 import { DEFAULT_QUALIFY_STATUS_BY_MODE } from "@/lib/service-mode-constants";
+import { getEnrichmentDefault } from "@/lib/enrichment/defaults";
 
 export async function enrichLeadAction(
   leadId: string,
@@ -58,6 +59,50 @@ export async function enrichAndMoveToCrm(
   revalidatePath(`/leads/${leadId}`);
   revalidatePath(`/crm/${leadId}`);
   return { success: true };
+}
+
+/**
+ * Qualifiziert einen EINZELNEN Lead aus dem Qualifizierungs-Cockpit und reichert
+ * ihn ZUVOR an, falls noch kein Ansprechpartner hinterlegt ist — damit nach der
+ * CRM-Übernahme ein Kontakt vorhanden ist. Hat der Lead bereits einen Kontakt,
+ * wird direkt verschoben (keine unnötige Anreicherung).
+ *
+ * Anreicherungs-Fehler brechen NICHT ab: der Nutzer hat „qualifizieren" gewollt,
+ * der Lead soll auch ohne gefundenen Kontakt ins CRM. Bewusst nur für den Einzel-
+ * Weg gedacht (eine Anreicherung pro Aufruf, weit unter dem Funktions-Timeout) —
+ * der Bulk-Weg „Alle grünen qualifizieren" bleibt ohne Auto-Anreicherung.
+ */
+export async function qualifyWithContactEnrichment(
+  leadId: string,
+  targetStatusId?: string,
+  serviceMode: ServiceMode = "webdev",
+): Promise<{ success: true; enriched: boolean } | { error: string }> {
+  const db = createServiceClient();
+
+  // Schon ein Ansprechpartner vorhanden? → keine Anreicherung nötig.
+  const { count, error: countErr } = await db
+    .from("lead_contacts")
+    .select("id", { count: "exact", head: true })
+    .eq("lead_id", leadId);
+  if (countErr) return { error: countErr.message };
+
+  let enriched = false;
+  if (!count) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    // webdev-Default zieht Ansprechpartner (contacts_management). Bei Fehler
+    // trotzdem weiter zum Verschieben (siehe Doc oben).
+    const config = await getEnrichmentDefault(serviceMode);
+    const result = await enrichLead(leadId, user?.id ?? null, config, serviceMode);
+    enriched = result.success;
+  }
+
+  const move = await bulkUpdateStatus([leadId], "qualified", targetStatusId);
+  if ("error" in move && move.error) return { error: move.error };
+
+  revalidatePath(`/leads/${leadId}`);
+  revalidatePath(`/crm/${leadId}`);
+  return { success: true, enriched };
 }
 
 export async function abortEnrichment(enrichmentId: string, leadId: string) {

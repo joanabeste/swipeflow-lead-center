@@ -148,14 +148,24 @@ export function ContactsCard({ leadId, contacts, onChange }: Props) {
                 />
               </li>
             ) : (
-              <li key={c.id} className="group flex items-start justify-between gap-2 text-sm">
+              <li key={c.id} className="flex items-start justify-between gap-2 text-sm">
                 <div className="min-w-0">
-                  <p className="font-medium text-gray-800 dark:text-gray-200">
+                  {/* Name (+ Rolle) ist klickbar → öffnet das Bearbeiten-Formular.
+                      Fehlt der Name, lädt der Hinweis zum Nachtragen ein. */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdding(false);
+                      setEditingId(c.id);
+                    }}
+                    title="Bearbeiten"
+                    className="text-left font-medium text-gray-800 hover:text-primary dark:text-gray-200 dark:hover:text-primary"
+                  >
                     {[c.salutation === "herr" ? "Herr" : c.salutation === "frau" ? "Frau" : null, c.name]
                       .filter(Boolean)
-                      .join(" ")}
+                      .join(" ") || <span className="italic text-gray-400">Name hinzufügen</span>}
                     {c.role && <span className="font-normal text-gray-500"> · {c.role}</span>}
-                  </p>
+                  </button>
                   {c.phone && (
                     <a
                       href={`tel:${c.phone}`}
@@ -180,8 +190,8 @@ export function ContactsCard({ leadId, contacts, onChange }: Props) {
                     setEditingId(c.id);
                   }}
                   title="Bearbeiten"
-                  aria-label={`${c.name} bearbeiten`}
-                  className="shrink-0 rounded-md p-1 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+                  aria-label={`${c.name || "Ansprechpartner"} bearbeiten`}
+                  className="shrink-0 rounded-md p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
