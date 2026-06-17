@@ -247,47 +247,59 @@ function ContactForm({
 
   const inputCls =
     "w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm text-gray-800 placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-200";
+  const labelCls = "mb-0.5 block text-xs font-medium text-gray-500 dark:text-gray-400";
 
   return (
-    <form onSubmit={submit} className="space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5 dark:border-[#2c2c2e] dark:bg-[#161618]">
-      <div className="flex gap-2">
-        <select
-          value={f.salutation}
-          onChange={(e) => set("salutation", e.target.value as FormValues["salutation"])}
-          className={`${inputCls} w-24 shrink-0`}
-          aria-label="Anrede"
-        >
-          <option value="">Anrede</option>
-          <option value="herr">Herr</option>
-          <option value="frau">Frau</option>
-        </select>
+    <form onSubmit={submit} className="space-y-2.5 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-[#2c2c2e] dark:bg-[#161618]">
+      <div>
+        <label className={labelCls}>Name *</label>
         <input
           value={f.name}
           onChange={(e) => set("name", e.target.value)}
-          placeholder="Name *"
+          placeholder="Name eingeben"
           autoFocus
           className={inputCls}
         />
       </div>
-      <input
-        value={f.role}
-        onChange={(e) => set("role", e.target.value)}
-        placeholder="Rolle / Position"
-        className={inputCls}
-      />
-      <input
-        value={f.email}
-        onChange={(e) => set("email", e.target.value)}
-        placeholder="E-Mail"
-        type="email"
-        className={inputCls}
-      />
-      <input
-        value={f.phone}
-        onChange={(e) => set("phone", e.target.value)}
-        placeholder="Telefon"
-        className={inputCls}
-      />
+      <div>
+        <label className={labelCls}>Anrede</label>
+        <select
+          value={f.salutation}
+          onChange={(e) => set("salutation", e.target.value as FormValues["salutation"])}
+          className={inputCls}
+          aria-label="Anrede"
+        >
+          <option value="">Automatisch erkennen</option>
+          <option value="herr">Herr</option>
+          <option value="frau">Frau</option>
+        </select>
+      </div>
+      <div>
+        <label className={labelCls}>Rolle / Position</label>
+        <input
+          value={f.role}
+          onChange={(e) => set("role", e.target.value)}
+          placeholder="z. B. Inhaber, Geschäftsführer"
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>E-Mail</label>
+        <input
+          value={f.email}
+          onChange={(e) => set("email", e.target.value)}
+          type="email"
+          className={inputCls}
+        />
+      </div>
+      <div>
+        <label className={labelCls}>Telefon</label>
+        <input
+          value={f.phone}
+          onChange={(e) => set("phone", e.target.value)}
+          className={inputCls}
+        />
+      </div>
       <div className="flex items-center gap-2 pt-0.5">
         <button
           type="submit"
