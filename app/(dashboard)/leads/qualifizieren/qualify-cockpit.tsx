@@ -382,7 +382,7 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
           title="Alles durchgesehen 🎉"
           subtitle={`Du hast alle ${total} reservierten Leads bearbeitet.`}
           onClose={close}
-          actionLabel="Weitere 50 laden"
+          actionLabel="Weitere laden"
           onAction={loadMore}
           actionPending={loadingMore}
         />

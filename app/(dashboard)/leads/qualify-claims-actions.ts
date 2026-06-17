@@ -3,9 +3,10 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { TrafficLightRating } from "@/lib/types";
 
-// Batch-Groesse + TTL der Reservierung. Heartbeat (extendQualifyClaims) muss
-// haeufiger als TTL laufen, damit eine offene Sitzung nie verfaellt.
-const BATCH_SIZE = 50;
+// Reservierung pro Ampel-Kategorie (gruen/orange/rot/unbewertet) + TTL. Heartbeat
+// (extendQualifyClaims) muss haeufiger als TTL laufen, damit eine offene Sitzung
+// nie verfaellt.
+const PER_RATING = 50;
 const TTL_SECONDS = 600; // 10 Minuten
 
 export interface QualifyClaim {
@@ -14,10 +15,10 @@ export interface QualifyClaim {
 }
 
 /**
- * Reserviert dem aktuellen Nutzer einen disjunkten Batch (bis BATCH_SIZE) und
- * gibt ihn zurueck. Atomar via RPC (FOR UPDATE SKIP LOCKED) → zwei Nutzer greifen
- * nie denselben Lead. Erneuter Aufruf verlaengert die eigenen Claims und fuellt
- * auf — eignet sich auch fuer „Weitere laden".
+ * Reserviert dem aktuellen Nutzer einen disjunkten Batch — bis PER_RATING je
+ * Ampel-Kategorie (gruen/orange/rot/unbewertet) — und gibt ihn zurueck. Atomar via
+ * RPC (FOR UPDATE SKIP LOCKED) → zwei Nutzer greifen nie denselben Lead. Erneuter
+ * Aufruf verlaengert die eigenen Claims und fuellt auf — auch fuer „Weitere laden".
  */
 export async function claimQualifyBatch(): Promise<QualifyClaim[]> {
   const supabase = await createClient();
@@ -27,7 +28,7 @@ export async function claimQualifyBatch(): Promise<QualifyClaim[]> {
   const db = createServiceClient();
   const { data, error } = await db.rpc("claim_qualify_leads", {
     p_user: user.id,
-    p_limit: BATCH_SIZE,
+    p_per_rating: PER_RATING,
     p_ttl_seconds: TTL_SECONDS,
   });
   if (error) {

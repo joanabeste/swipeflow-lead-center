@@ -71,7 +71,7 @@ async function loadReservedBatch(): Promise<QueueRow[] | null> {
   const db = createServiceClient();
   const { data, error } = await db.rpc("claim_qualify_leads", {
     p_user: user.id,
-    p_limit: 50,
+    p_per_rating: 50, // 50 je Ampel-Kategorie (gruen/orange/rot/unbewertet)
     p_ttl_seconds: 600,
   });
   if (error) {
