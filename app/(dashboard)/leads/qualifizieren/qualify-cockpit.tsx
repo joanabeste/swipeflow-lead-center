@@ -3,15 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Building2,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Mail,
-  MapPin,
-  Phone,
   Search,
-  User,
   X,
 } from "lucide-react";
 import {
@@ -34,6 +29,8 @@ import {
 import { WebsiteFrame } from "./_components/website-frame";
 import { QuickNote } from "./_components/quick-note";
 import { QualifySettings } from "./_components/qualify-settings";
+import { ContactsCard } from "./_components/contacts-card";
+import { StammdatenCard } from "./_components/stammdaten-card";
 
 export interface QueueItem {
   id: string;
@@ -56,9 +53,17 @@ const KEY_TO_RATING: Record<string, TrafficLightRating> = {
   "3": "red",
 };
 
-export function QualifyCockpit({ queue, statuses, initialSettings }: Props) {
+export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
+
+  // Eingefrorener Queue-Snapshot vom ersten Render. WICHTIG: Next refresht die
+  // Route nach jeder Server-Action (Bewerten/Qualifizieren) automatisch → die
+  // neue queue-Prop ist neu sortiert/gefiltert (qualifizierte raus, rote ans
+  // Ende). Würden wir die live nutzen, verschöbe sich die Liste unter dem Index
+  // und es würde ein Lead übersprungen. Deshalb navigieren wir über diesen
+  // stabilen Snapshot; Bewertungs-Anzeige läuft über die ratings/qualified-Overlays.
+  const [queue] = useState(initialQueue);
 
   const [settings, setSettings] = useState(initialSettings);
   const [filter, setFilter] = useState<FilterValue>("all");
@@ -147,6 +152,18 @@ export function QualifyCockpit({ queue, statuses, initialSettings }: Props) {
   const goPrev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), []);
   const goNext = useCallback(() => setIndex((i) => Math.min(total, i + 1)), [total]);
   const close = useCallback(() => router.push("/leads"), [router]);
+
+  // Optimistisch geaenderte Ansprechpartner ins gerade geladene Bundle spiegeln
+  // (das Cockpit laedt es per /api/leads/[id]/preview und refresht sonst nicht).
+  const handleContactsChange = useCallback((next: LeadContact[]) => {
+    setData((d) => (d ? { ...d, contacts: next } : d));
+  }, []);
+
+  // Gespeicherte Stammdaten optimistisch ins Bundle spiegeln (Titel, Website,
+  // Stammdaten-Karte aktualisieren sich sofort, ohne erneutes Laden).
+  const handleStammdatenChange = useCallback((patch: Partial<Lead>) => {
+    setData((d) => (d ? { ...d, lead: { ...d.lead, ...patch } } : d));
+  }, []);
 
   const rate = useCallback(
     (rating: TrafficLightRating) => {
@@ -376,11 +393,21 @@ export function QualifyCockpit({ queue, statuses, initialSettings }: Props) {
                 {/* Notizen — key={lead.id}: frischer Mount je Lead */}
                 <QuickNote key={lead.id} leadId={lead.id} notes={data?.notes ?? []} />
 
-                {/* Stammdaten */}
-                <StammdatenCard lead={lead} />
+                {/* Stammdaten — lesbar + bearbeitbar */}
+                <StammdatenCard
+                  key={lead.id}
+                  leadId={lead.id}
+                  lead={lead}
+                  onChange={handleStammdatenChange}
+                />
 
-                {/* Ansprechpartner */}
-                <ContactsCard contacts={data?.contacts ?? []} />
+                {/* Ansprechpartner — anlegen / bearbeiten / loeschen */}
+                <ContactsCard
+                  key={lead.id}
+                  leadId={lead.id}
+                  contacts={data?.contacts ?? []}
+                  onChange={handleContactsChange}
+                />
               </div>
             )}
           </aside>
@@ -475,82 +502,6 @@ function AmpelCard({ rating, lead }: { rating: TrafficLightRating | null; lead: 
         </p>
       ) : (
         <p className="mt-2 text-sm text-gray-400">Keine Begründung hinterlegt.</p>
-      )}
-    </div>
-  );
-}
-
-// ─── Stammdaten ─────────────────────────────────────────────────────────
-
-function StammdatenCard({ lead }: { lead: Lead }) {
-  const rows: [string, string | null][] = [
-    ["Branche", lead.industry],
-    ["Größe", lead.company_size],
-    ["Rechtsform", lead.legal_form],
-    ["Telefon", lead.phone],
-    ["E-Mail", lead.email],
-  ];
-  const address = [lead.street, [lead.zip, lead.city].filter(Boolean).join(" ")]
-    .filter(Boolean)
-    .join(", ");
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-        <Building2 className="h-4 w-4 text-primary" /> Stammdaten
-      </h3>
-      <dl className="mt-2 space-y-1.5 text-sm">
-        {address && (
-          <div className="flex gap-2">
-            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
-            <span className="text-gray-700 dark:text-gray-300">{address}</span>
-          </div>
-        )}
-        {rows
-          .filter(([, v]) => Boolean(v))
-          .map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-3">
-              <dt className="text-gray-500 dark:text-gray-400">{k}</dt>
-              <dd className="truncate text-right text-gray-700 dark:text-gray-300">{v}</dd>
-            </div>
-          ))}
-      </dl>
-    </div>
-  );
-}
-
-// ─── Ansprechpartner ────────────────────────────────────────────────────
-
-function ContactsCard({ contacts }: { contacts: LeadContact[] }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-        <User className="h-4 w-4 text-primary" /> Ansprechpartner
-      </h3>
-      {contacts.length === 0 ? (
-        <p className="mt-2 text-sm text-gray-400">Keine Ansprechpartner hinterlegt.</p>
-      ) : (
-        <ul className="mt-2 space-y-2.5">
-          {contacts.map((c) => (
-            <li key={c.id} className="text-sm">
-              <p className="font-medium text-gray-800 dark:text-gray-200">
-                {[c.salutation === "herr" ? "Herr" : c.salutation === "frau" ? "Frau" : null, c.name]
-                  .filter(Boolean)
-                  .join(" ")}
-                {c.role && <span className="font-normal text-gray-500"> · {c.role}</span>}
-              </p>
-              {c.phone && (
-                <a href={`tel:${c.phone}`} className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-primary dark:text-gray-400">
-                  <Phone className="h-3 w-3" /> {c.phone}
-                </a>
-              )}
-              {c.email && (
-                <a href={`mailto:${c.email}`} className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-primary dark:text-gray-400">
-                  <Mail className="h-3 w-3" /> {c.email}
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

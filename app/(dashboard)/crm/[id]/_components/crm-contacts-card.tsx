@@ -130,7 +130,7 @@ function ContactRow({
     if (!confirm(`"${contact.name}" wirklich löschen?`)) return;
     startTransition(async () => {
       const res = await deleteContact(contact.id, leadId);
-      if (res.error) addToast(res.error, "error");
+      if ("error" in res) addToast(res.error, "error");
       else {
         addToast("Kontakt gelöscht", "success");
         notify();

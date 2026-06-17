@@ -924,7 +924,7 @@ export async function updateContact(contactId: string, leadId: string, input: {
   email?: string | null;
   phone?: string | null;
   salutation?: "herr" | "frau" | null;
-}) {
+}): Promise<{ success: true } | { error: string }> {
   const ctx = await checkSection("can_vertrieb");
   if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
@@ -969,7 +969,7 @@ export async function updateContactSalutation(
   return { success: true };
 }
 
-export async function deleteContact(contactId: string, leadId: string) {
+export async function deleteContact(contactId: string, leadId: string): Promise<{ success: true } | { error: string }> {
   const ctx = await checkSection("can_vertrieb");
   if (!ctx) return { error: "Keine Berechtigung." };
   const db = createServiceClient();
