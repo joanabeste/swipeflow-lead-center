@@ -18,7 +18,7 @@ import {
 } from "@/lib/employment/pdf";
 import { buildEmploymentRenderInput, loadEmploymentContract } from "@/lib/employment/data";
 import { EMPLOYMENT_TEMPLATE_VERSION } from "@/lib/employment/template";
-import { isContractEditable, isContractDeletable } from "@/lib/contracts/types";
+import { isContractEditable } from "@/lib/contracts/types";
 import { employeeName } from "@/lib/employment/types";
 import type {
   EmploymentContractRow,
@@ -282,9 +282,9 @@ export async function deleteEmploymentContract(id: string): Promise<Result> {
   if (!ctx) return { error: "Nicht berechtigt." };
   const row = await loadEmploymentContract(id);
   if (!row) return { error: "Arbeitsvertrag nicht gefunden." };
-  if (!isContractDeletable(row)) {
-    return { error: "Nur Entwürfe, stornierte oder Verträge mit aktivem Link können gelöscht werden." };
-  }
+  // Anders als bei Kundenverträgen: interne Arbeitsverträge dürfen in jedem
+  // Status gelöscht werden (auch unterschrieben) — der Arbeitgeber besitzt das
+  // Dokument selbst. Zugehörige Storage-Dateien + Fragebogen werden mit entfernt.
   const db = createServiceClient();
   // Storage-Dateien (Signatur/PDFs) best effort entfernen.
   const paths = [

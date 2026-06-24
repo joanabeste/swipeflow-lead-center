@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { formatEuro } from "@/lib/contracts/format";
-import { isExpired, isLinkActive, isContractDeletable } from "@/lib/contracts/types";
+import { isExpired, isLinkActive } from "@/lib/contracts/types";
 import { buildEmploymentLink } from "@/lib/email/central";
 import {
   loadEmploymentContract,
@@ -69,7 +69,6 @@ export default async function ArbeitsvertragDetailPage({ params }: { params: Pro
       <EmploymentActions
         id={contract.id}
         status={contract.status}
-        deletable={isContractDeletable(contract)}
         hasEmail={!!contract.employee_email}
         initialLink={link}
         questionnaireSubmitted={questionnaire?.status === "submitted"}

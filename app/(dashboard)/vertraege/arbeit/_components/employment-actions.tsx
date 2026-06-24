@@ -17,14 +17,12 @@ import {
 export function EmploymentActions({
   id,
   status,
-  deletable,
   hasEmail,
   initialLink,
   questionnaireSubmitted,
 }: {
   id: string;
   status: ContractStatus;
-  deletable: boolean;
   hasEmail: boolean;
   initialLink: string | null;
   questionnaireSubmitted: boolean;
@@ -77,7 +75,11 @@ export function EmploymentActions({
   }
 
   async function remove() {
-    if (!confirm("Diesen Arbeitsvertrag endgültig löschen?")) return;
+    const warn =
+      status === "signed"
+        ? "Diesen unterschriebenen Arbeitsvertrag endgültig löschen? Vertrags-PDF, Unterschrift und Personalfragebogen werden mit entfernt. Das kann nicht rückgängig gemacht werden."
+        : "Diesen Arbeitsvertrag endgültig löschen?";
+    if (!confirm(warn)) return;
     const res = await run("delete", () => deleteEmploymentContract(id));
     if (res) router.push("/vertraege/arbeit");
   }
@@ -120,16 +122,14 @@ export function EmploymentActions({
           </Button>
         )}
 
-        {status !== "cancelled" && status !== "signed" && (
+        {status !== "cancelled" && (
           <Button variant="ghost" onClick={cancel} busy={busy === "cancel"} disabled={busy !== null} size="md">
             <Ban className="h-4 w-4" /> Stornieren
           </Button>
         )}
-        {deletable && (
-          <Button variant="danger" onClick={remove} busy={busy === "delete"} disabled={busy !== null} size="md">
-            <Trash2 className="h-4 w-4" /> Löschen
-          </Button>
-        )}
+        <Button variant="danger" onClick={remove} busy={busy === "delete"} disabled={busy !== null} size="md">
+          <Trash2 className="h-4 w-4" /> Löschen
+        </Button>
       </div>
 
       {link && showLinkTools && (
