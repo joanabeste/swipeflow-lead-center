@@ -56,20 +56,25 @@ export default async function DashboardLayout({
     webex: webexCreds !== null,
   };
 
-  // Badge-Counter für die Sidebar — überfällig + heute fällig.
+  // Badge-Counter für die Sidebar — überfällig + heute fällig, aber NUR die
+  // eigenen ToDos (created_by = ich). Der Badge soll nur erscheinen, wenn man
+  // selbst betroffen ist — nicht bei fremden ToDos.
   // Service-Client umgeht RLS, weil der Counter aggregiert ist.
   const today = new Date().toISOString().slice(0, 10);
   let todosDueOrOverdue = 0;
-  try {
-    const db = createServiceClient();
-    const { count } = await db
-      .from("lead_todos")
-      .select("id", { count: "exact", head: true })
-      .is("done_at", null)
-      .lte("due_date", today);
-    todosDueOrOverdue = count ?? 0;
-  } catch {
-    // Tabelle fehlt o.Ä. — Badge bleibt 0
+  if (user) {
+    try {
+      const db = createServiceClient();
+      const { count } = await db
+        .from("lead_todos")
+        .select("id", { count: "exact", head: true })
+        .is("done_at", null)
+        .lte("due_date", today)
+        .eq("created_by", user.id);
+      todosDueOrOverdue = count ?? 0;
+    } catch {
+      // Tabelle fehlt o.Ä. — Badge bleibt 0
+    }
   }
 
   // Zeit-spezifische Daten — defensiv (Migrationen koennen noch fehlen).
