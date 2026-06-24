@@ -29,6 +29,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers: request.headers } });
   }
 
+  // ─── Öffentliche Arbeitsvertrags-Route: Mitarbeiter unterschreibt + füllt Personalfragebogen ohne Login ───
+  if (request.nextUrl.pathname.startsWith("/arbeitsvertrag/")) {
+    return NextResponse.next({ request: { headers: request.headers } });
+  }
+
   // ─── Öffentliche Freigabe-Route: Kunde gibt Social-Media-Posts ohne Login frei ───
   if (request.nextUrl.pathname.startsWith("/freigabe/")) {
     return NextResponse.next({ request: { headers: request.headers } });
