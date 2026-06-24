@@ -19,7 +19,16 @@ const CHROMIUM_PACK_URL =
  * Local-Dev: PLAYWRIGHT_LOCAL_CHROME auf den Chrome-Pfad setzen.
  */
 export async function renderContractPdf(input: ContractRenderInput): Promise<Buffer> {
-  const html = renderContractHtml({ ...input, mode: "pdf" });
+  return renderHtmlToPdf(renderContractHtml({ ...input, mode: "pdf" }));
+}
+
+/**
+ * Rendert beliebiges HTML zu einem A4-PDF via Headless-Chromium und schneidet
+ * eingebettete Unterschriften (`.sign-img img`) auf ihre Ink-Bounding-Box zu.
+ * Geteilt von Kunden- (renderContractPdf) und Arbeitsverträgen / Personalfragebogen.
+ * Local-Dev: PLAYWRIGHT_LOCAL_CHROME auf den Chrome-Pfad setzen.
+ */
+export async function renderHtmlToPdf(html: string): Promise<Buffer> {
   const localChrome = process.env.PLAYWRIGHT_LOCAL_CHROME;
 
   const executablePath = localChrome

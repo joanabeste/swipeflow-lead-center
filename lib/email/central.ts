@@ -123,6 +123,96 @@ export function buildContractAdminUrl(contractId: string): string {
   return `${base}/vertraege/${contractId}`;
 }
 
+// ─── Arbeitsverträge (interne Mitarbeiter) ──────────────────────────────────
+
+/** Baut den öffentlichen Arbeitsvertrags-Link (gleiche Public-Domain wie Kundenverträge). */
+export function buildEmploymentLink(token: string): string {
+  const base = (process.env.CONTRACT_PUBLIC_BASE_URL ?? process.env.APP_BASE_URL ?? "")
+    .replace(/\/+$/, "");
+  return `${base}/arbeitsvertrag/${token}`;
+}
+
+/** Baut die absolute Admin-URL zur Arbeitsvertrags-Detailseite. */
+export function buildEmploymentAdminUrl(contractId: string): string {
+  const base = (process.env.APP_BASE_URL ?? "").replace(/\/+$/, "");
+  return `${base}/vertraege/arbeit/${contractId}`;
+}
+
+/** Versendet den Arbeitsvertrags-Link an den künftigen Mitarbeiter. */
+export async function sendEmploymentLinkEmail(opts: {
+  to: string;
+  employeeName: string;
+  link: string;
+  expiresAt: Date;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const config = getCentralSmtpConfig();
+  const ablauf = opts.expiresAt.toLocaleDateString("de-DE");
+  const body = [
+    `Hallo ${opts.employeeName || ""}`.trim() + ",",
+    ``,
+    `anbei erhältst du deinen Arbeitsvertrag mit der Swipeflow GmbH.`,
+    `Bitte öffne den folgenden Link, prüfe den Vertrag in Ruhe und unterschreibe direkt online.`,
+    `Im Anschluss kannst du den Personalfragebogen für die Lohnabrechnung ausfüllen:`,
+    ``,
+    opts.link,
+    ``,
+    `Der Link ist bis zum ${ablauf} gültig.`,
+    ``,
+    `Bei Fragen melde dich jederzeit.`,
+    ``,
+    `Viele Grüße`,
+    `Swipeflow GmbH`,
+  ].join("\n");
+
+  return sendEmail(config, {
+    to: opts.to,
+    subject: "Dein Arbeitsvertrag mit der Swipeflow GmbH",
+    body,
+  });
+}
+
+/** Interne Benachrichtigung, dass ein Arbeitsvertrag unterschrieben wurde. */
+export async function sendEmploymentSignedNotifyEmail(opts: {
+  employeeName: string;
+  adminUrl: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const config = getCentralSmtpConfig();
+  const to = process.env.CONTRACTS_NOTIFY_EMAIL || config.fromEmail;
+  const body = [
+    `Ein Arbeitsvertrag wurde soeben unterschrieben.`,
+    ``,
+    `Mitarbeiter: ${opts.employeeName || "—"}`,
+    `Im Backend ansehen: ${opts.adminUrl}`,
+  ].join("\n");
+
+  return sendEmail(config, {
+    to,
+    subject: `Arbeitsvertrag unterschrieben: ${opts.employeeName || "Mitarbeiter"}`,
+    body,
+  });
+}
+
+/** Interne Benachrichtigung, dass der Personalfragebogen ausgefüllt wurde. */
+export async function sendQuestionnaireSubmittedNotifyEmail(opts: {
+  employeeName: string;
+  adminUrl: string;
+}): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
+  const config = getCentralSmtpConfig();
+  const to = process.env.CONTRACTS_NOTIFY_EMAIL || config.fromEmail;
+  const body = [
+    `Der Personalfragebogen wurde ausgefüllt.`,
+    ``,
+    `Mitarbeiter: ${opts.employeeName || "—"}`,
+    `PDF im Backend herunterladen: ${opts.adminUrl}`,
+  ].join("\n");
+
+  return sendEmail(config, {
+    to,
+    subject: `Personalfragebogen ausgefüllt: ${opts.employeeName || "Mitarbeiter"}`,
+    body,
+  });
+}
+
 // ─── Social-Media-Freigabe ──────────────────────────────────────────────────
 
 /** Versendet den dauerhaften Freigabelink für Social-Media-Inhalte an den Kunden. */

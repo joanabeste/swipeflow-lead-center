@@ -32,6 +32,7 @@ import {
   Pencil,
   FileSignature,
   FilePlus,
+  UserPlus,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SectionPermissions, UserRole } from "@/lib/types";
@@ -155,9 +156,15 @@ const vertraegeSection: Section = {
   defaultPath: "/vertraege",
   requires: "can_vertraege",
   groups: [
-    { items: [
+    { label: "Kundenverträge", items: [
       { href: "/vertraege", label: "Uebersicht", icon: FileSignature },
       { href: "/vertraege/neu", label: "Neuer Vertrag", icon: FilePlus },
+    ]},
+    { label: "Personal", items: [
+      { href: "/vertraege/arbeit", label: "Arbeitsverträge", icon: Briefcase },
+      { href: "/vertraege/arbeit/neu", label: "Neuer Arbeitsvertrag", icon: UserPlus },
+    ]},
+    { items: [
       { href: "/vertraege/einstellungen", label: "Einstellungen", icon: Settings },
     ]},
   ],
