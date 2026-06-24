@@ -2,11 +2,12 @@
 
 import { useState, useRef, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, AtSign, CalendarClock } from "lucide-react";
+import { Plus, Loader2, AtSign, CalendarClock, User } from "lucide-react";
 import { addStandaloneTodo } from "../actions";
 import { parseQuickAddInput, relativeDueLabel, todayKey } from "../_lib/date-utils";
 import { DateTimePopover } from "./date-time-popover";
 import { useToastContext } from "../../toast-provider";
+import type { TodoPerson } from "../page";
 
 interface LeadCatalogEntry {
   id: string;
@@ -16,9 +17,11 @@ interface LeadCatalogEntry {
 
 interface Props {
   leadCatalog: LeadCatalogEntry[];
+  people: TodoPerson[];
+  currentUserId: string;
 }
 
-export function TodoQuickAdd({ leadCatalog }: Props) {
+export function TodoQuickAdd({ leadCatalog, people, currentUserId }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,6 +29,8 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
   const [pickedLead, setPickedLead] = useState<LeadCatalogEntry | null>(null);
   const [showLeadPicker, setShowLeadPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  // Besitzer der neuen ToDo — Default „Ich". Optional einem Kollegen zuweisen.
+  const [ownerId, setOwnerId] = useState<string>(currentUserId);
   const [pending, startTransition] = useTransition();
 
   // Datum/Uhrzeit: solange nicht manuell angefasst, folgt es dem geparsten Text.
@@ -85,6 +90,7 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
     setTouched(false);
     setDraftTime(null);
     setShowDatePicker(false);
+    setOwnerId(currentUserId);
   }
 
   function submit() {
@@ -101,7 +107,7 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
     if (!title.trim()) return;
 
     startTransition(async () => {
-      const res = await addStandaloneTodo(title, effDate, pickedLead.id, effTime);
+      const res = await addStandaloneTodo(title, effDate, pickedLead.id, effTime, ownerId);
       if (res.error) {
         addToast(res.error, "error");
         return;
@@ -166,6 +172,31 @@ export function TodoQuickAdd({ leadCatalog }: Props) {
             <AtSign className="h-3 w-3" />
             Lead wählen
           </button>
+        )}
+
+        {/* Assignee-Chip — ToDo optional einem Kollegen zuweisen (Default „Ich") */}
+        {people.length > 1 && (
+          <label
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:border-primary/40 hover:bg-primary/5 dark:border-[#2c2c2e] dark:text-gray-300"
+            title="Für wen ist diese ToDo?"
+          >
+            <User className="h-3 w-3" />
+            <select
+              value={ownerId}
+              onChange={(e) => setOwnerId(e.target.value)}
+              className="bg-transparent text-xs outline-none dark:[color-scheme:dark]"
+              aria-label="ToDo zuweisen"
+            >
+              <option value={currentUserId}>Ich</option>
+              {people
+                .filter((p) => p.id !== currentUserId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </select>
+          </label>
         )}
 
         {/* Datum/Uhrzeit-Chip */}

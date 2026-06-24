@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Filter, ChevronDown, ChevronRight, ListTodo, Loader2 } from "lucide-react";
+import { Search, Filter, ChevronDown, ChevronRight, ListTodo, Loader2, Users } from "lucide-react";
 import { TodoQuickAdd } from "./_components/quick-add";
 import { TodoRow } from "./_components/todo-row";
 import { bucketOf, byDueDateTime, todayKey } from "./_lib/date-utils";
 import type { DueBucket } from "./_lib/date-utils";
-import type { TodoWithLead } from "./page";
+import type { TodoWithLead, TodoPerson } from "./page";
 import {
   bulkRescheduleTodos,
   bulkCompleteTodos,
@@ -24,7 +24,12 @@ interface LeadCatalogEntry {
 interface Props {
   initialTodos: TodoWithLead[];
   leadCatalog: LeadCatalogEntry[];
+  people: TodoPerson[];
+  currentUserId: string;
 }
+
+/** Personen-Umschalter: eigene User-ID = „Meine", "all" = alle, sonst Kollegen-ID. */
+const PERSON_FILTER_KEY = "todos.personFilter";
 
 const BUCKETS_OPEN: { key: DueBucket; label: string; defaultOpen: boolean; tone: string }[] = [
   { key: "overdue", label: "Überfällig", defaultOpen: true, tone: "text-red-600 dark:text-red-400" },
@@ -44,7 +49,7 @@ type StatusFilter = "open" | "done" | "all";
 /** Schnellfilter über die KPI-Karten. "week" = Morgen + Diese Woche. */
 type BucketFilter = "overdue" | "today" | "week" | null;
 
-export function TodosManager({ initialTodos, leadCatalog }: Props) {
+export function TodosManager({ initialTodos, leadCatalog, people, currentUserId }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const today = todayKey();
@@ -52,6 +57,8 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
   const [status, setStatus] = useState<StatusFilter>("open");
   const [leadFilter, setLeadFilter] = useState<string>(""); // Lead-ID
   const [bucketFilter, setBucketFilter] = useState<BucketFilter>(null);
+  // Personen-Umschalter: Default „Meine" (= eigene ID). Auswahl pro Browser merken.
+  const [personFilter, setPersonFilter] = useState<string>(currentUserId);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openBuckets, setOpenBuckets] = useState<Set<DueBucket>>(
     () => new Set(BUCKETS_OPEN.filter((b) => b.defaultOpen).map((b) => b.key)),
@@ -67,10 +74,31 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Gemerkte Personen-Ansicht aus localStorage laden (nur gültige Werte übernehmen).
+  useEffect(() => {
+    const saved = localStorage.getItem(PERSON_FILTER_KEY);
+    if (!saved) return;
+    if (saved === "all" || saved === currentUserId || people.some((p) => p.id === saved)) {
+      setPersonFilter(saved);
+    }
+  }, [people, currentUserId]);
+
+  function selectPerson(value: string) {
+    setPersonFilter(value);
+    localStorage.setItem(PERSON_FILTER_KEY, value);
+  }
+
+  // Personen-Scope zuerst — danach greifen Status/Lead/Bucket/Suche. ToDos ohne
+  // created_by (Alt-Bestand) erscheinen dadurch nur in der „Alle"-Ansicht.
+  const personScoped = useMemo(() => {
+    if (personFilter === "all") return initialTodos;
+    return initialTodos.filter((t) => t.created_by === personFilter);
+  }, [initialTodos, personFilter]);
+
   // Filter-Pipeline
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return initialTodos.filter((t) => {
+    return personScoped.filter((t) => {
       // Status-Filter
       if (status === "open" && t.done_at) return false;
       if (status === "done" && !t.done_at) return false;
@@ -88,7 +116,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       }
       return true;
     });
-  }, [initialTodos, search, status, leadFilter, bucketFilter, today]);
+  }, [personScoped, search, status, leadFilter, bucketFilter, today]);
 
   // Buckets gruppieren — offene Buckets nach Tag, dann Uhrzeit sortieren.
   const grouped = useMemo(() => {
@@ -108,7 +136,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
   // Echtzahlen sind. Filter sind lediglich Sicht-Anpassung.
   const stats = useMemo(() => {
     let overdue = 0, todayCount = 0, thisWeek = 0, totalOpen = 0;
-    for (const t of initialTodos) {
+    for (const t of personScoped) {
       if (t.done_at) continue;
       totalOpen++;
       const b = bucketOf(t.due_date, null, today);
@@ -117,16 +145,16 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
       else if (b === "tomorrow" || b === "this_week") thisWeek++;
     }
     return { overdue, today: todayCount, thisWeek, totalOpen };
-  }, [initialTodos, today]);
+  }, [personScoped, today]);
 
   // Lead-Filter-Auswahl: Liste der Leads, die in den geladenen Todos vorkommen
   const leadOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const t of initialTodos) {
+    for (const t of personScoped) {
       if (t.lead && !seen.has(t.lead.id)) seen.set(t.lead.id, t.lead.company_name);
     }
     return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [initialTodos]);
+  }, [personScoped]);
 
   // KPI-Karte als Schnellfilter: toggelt den Bucket-Filter (immer auf „offen")
   // und klappt die betroffenen Bucket-Sektionen auf, damit Treffer sichtbar sind.
@@ -188,20 +216,42 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight">
           <ListTodo className="h-5 w-5 text-primary" />
           ToDos
         </h1>
-        {stats.totalOpen > 0 && (
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {stats.totalOpen} offen
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Personen-Umschalter: Meine · je Kollege · Alle */}
+          <label className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+            <Users className="h-3.5 w-3.5 text-gray-400" />
+            <select
+              value={personFilter}
+              onChange={(e) => selectPerson(e.target.value)}
+              className="bg-transparent text-xs font-medium text-gray-700 outline-none dark:text-gray-200"
+              aria-label="ToDos welcher Person anzeigen"
+            >
+              <option value={currentUserId}>Meine ToDos</option>
+              {people
+                .filter((p) => p.id !== currentUserId)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              <option value="all">Alle ToDos</option>
+            </select>
+          </label>
+          {stats.totalOpen > 0 && (
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {stats.totalOpen} offen
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Quick-Add */}
-      <TodoQuickAdd leadCatalog={leadCatalog} />
+      <TodoQuickAdd leadCatalog={leadCatalog} people={people} currentUserId={currentUserId} />
 
       {/* KPI-Strip — Karten sind klickbare Schnellfilter */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -354,6 +404,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
                           todo={t}
                           selected={selected.has(t.id)}
                           onSelectChange={(s) => toggleSelect(t.id, s)}
+                          ownerName={personFilter === "all" ? t.created_by_name : null}
                         />
                       </li>
                     ))}
@@ -381,6 +432,7 @@ export function TodosManager({ initialTodos, leadCatalog }: Props) {
                           todo={t}
                           selected={selected.has(t.id)}
                           onSelectChange={(s) => toggleSelect(t.id, s)}
+                          ownerName={personFilter === "all" ? t.created_by_name : null}
                         />
                       </li>
                     ))}

@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import type { LeadTodo } from "@/lib/types";
+import { requireSection } from "@/lib/auth";
+import { permissionsFromProfile, type LeadTodo, type Profile } from "@/lib/types";
 import { TodosManager } from "./todos-manager";
 
 export interface TodoLeadInfo {
@@ -11,9 +12,18 @@ export interface TodoLeadInfo {
 
 export interface TodoWithLead extends LeadTodo {
   lead: TodoLeadInfo | null;
+  /** Name des Besitzers (created_by) — für die Ersteller-Pille in der „Alle"-Ansicht. */
+  created_by_name: string | null;
+}
+
+/** Person für den Umschalter / Assignee-Auswahl. */
+export interface TodoPerson {
+  id: string;
+  name: string;
 }
 
 export default async function TodosPage() {
+  const { user } = await requireSection("can_vertrieb");
   const db = createServiceClient();
 
   // Alle offenen Todos + alle erledigten der letzten 7 Tage. Erledigte älter
@@ -64,10 +74,32 @@ export default async function TodosPage() {
     city: (l.city as string | null) ?? null,
   }));
 
+  // Vertriebs-Team laden — für den Personen-Umschalter, die Assignee-Auswahl im
+  // Quick-Add und die Ersteller-Pille. Nur aktive Profile mit can_vertrieb.
+  const { data: profileRows } = await db
+    .from("profiles")
+    .select("id, name, role, status, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_vertraege")
+    .eq("status", "active");
+  const nameById = new Map<string, string>();
+  const people: TodoPerson[] = [];
+  for (const p of (profileRows ?? []) as Profile[]) {
+    nameById.set(p.id, p.name);
+    if (permissionsFromProfile(p).can_vertrieb) people.push({ id: p.id, name: p.name });
+  }
+  people.sort((a, b) => a.name.localeCompare(b.name));
+
   const todosWithLead: TodoWithLead[] = todoRows.map((t) => ({
     ...t,
     lead: leadsById.get(t.lead_id) ?? null,
+    created_by_name: t.created_by ? nameById.get(t.created_by) ?? null : null,
   }));
 
-  return <TodosManager initialTodos={todosWithLead} leadCatalog={leadCatalog} />;
+  return (
+    <TodosManager
+      initialTodos={todosWithLead}
+      leadCatalog={leadCatalog}
+      people={people}
+      currentUserId={user.id}
+    />
+  );
 }

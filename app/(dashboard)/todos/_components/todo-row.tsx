@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2, Check, Loader2, Pencil, Trash2, X, MapPin, Phone } from "lucide-react";
+import { Building2, Check, Loader2, Pencil, Trash2, X, MapPin, Phone, User } from "lucide-react";
 import {
   toggleLeadTodo,
   updateLeadTodo,
@@ -18,9 +18,11 @@ interface Props {
   todo: TodoWithLead;
   selected: boolean;
   onSelectChange: (selected: boolean) => void;
+  /** Besitzer-Name — nur in der „Alle"-Ansicht gesetzt, sonst null. */
+  ownerName?: string | null;
 }
 
-export function TodoRow({ todo, selected, onSelectChange }: Props) {
+export function TodoRow({ todo, selected, onSelectChange, ownerName }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const [pending, startTransition] = useTransition();
@@ -137,6 +139,17 @@ export function TodoRow({ todo, selected, onSelectChange }: Props) {
             {todo.lead.phone && <Phone className="h-2.5 w-2.5 text-primary" />}
           </Link>
         </div>
+      )}
+
+      {/* Besitzer-Pille — nur in der „Alle"-Ansicht */}
+      {ownerName && (
+        <span
+          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-white/5 dark:text-gray-300"
+          title={`Erstellt von ${ownerName}`}
+        >
+          <User className="h-2.5 w-2.5" />
+          <span className="max-w-[120px] truncate">{ownerName}</span>
+        </span>
       )}
 
       {/* Hover-Aktionen */}

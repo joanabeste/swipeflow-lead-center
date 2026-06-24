@@ -104,6 +104,7 @@ export async function addStandaloneTodo(
   dueDate: string,
   leadId: string | null,
   dueTime?: string | null,
+  ownerId?: string | null,
 ) {
   const user = await currentUser();
   if (!user) return { error: "Nicht angemeldet." };
@@ -113,7 +114,10 @@ export async function addStandaloneTodo(
   if (dueTime && !/^\d{2}:\d{2}$/.test(dueTime)) return { error: "Ungültige Uhrzeit." };
 
   const db = createServiceClient();
-  const payload: Record<string, unknown> = { lead_id: leadId, title: trimmed, due_date: dueDate, created_by: user.id };
+  // created_by ist hier der „Besitzer" der ToDo: standardmäßig man selbst, optional
+  // ein Kollege (Zuweisung). Wer tatsächlich angelegt hat, steht im audit_log.
+  const owner = ownerId ?? user.id;
+  const payload: Record<string, unknown> = { lead_id: leadId, title: trimmed, due_date: dueDate, created_by: owner };
   // due_time nur schreiben, wenn gesetzt — so funktionieren zeitlose ToDos auch
   // ohne Migration 124 weiter.
   if (dueTime) payload.due_time = dueTime;
