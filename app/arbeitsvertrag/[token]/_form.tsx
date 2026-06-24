@@ -130,9 +130,40 @@ export function PublicEmploymentView({
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function questionnaireError(): string | null {
+    const missing: string[] = [];
+    if (!q.geburtsdatum?.trim()) missing.push("Geburtsdatum");
+    if (!q.geburtsort?.trim()) missing.push("Geburtsort");
+    if (!q.geburtsland?.trim()) missing.push("Geburtsland");
+    if (!q.staatsangehoerigkeit?.trim()) missing.push("Staatsangehörigkeit");
+    if (!q.familienstand?.trim()) missing.push("Familienstand");
+    if (!q.geschlecht?.trim()) missing.push("Geschlecht");
+    if (q.sv_nummer_vorhanden !== false && !svNummer.trim()) missing.push("Sozialversicherungsnummer");
+    if (!iban.trim()) missing.push("IBAN");
+    if (!bic.trim()) missing.push("BIC");
+    if (!q.haupt_oder_neben?.trim()) missing.push("Haupt-/Nebenbeschäftigung");
+    if (q.weitere_beschaeftigungen && !q.weitere_taetigkeit?.trim()) missing.push("Welche weitere(n) Beschäftigung(en)");
+    if (!q.schulabschluss?.trim()) missing.push("Schulabschluss");
+    if (!q.berufsausbildung?.trim()) missing.push("Berufsausbildung");
+    if (!steuerId.trim()) missing.push("Steuer-ID");
+    if (!q.steuerklasse?.trim()) missing.push("Steuerklasse");
+    if (!q.kinderfreibetraege?.trim()) missing.push("Kinderfreibeträge");
+    if (!q.konfession?.trim()) missing.push("Konfession");
+    if (!q.kv_art?.trim()) missing.push("Krankenversicherung");
+    if (!q.kv_name?.trim()) missing.push("Name der Krankenkasse / Versicherung");
+    if (missing.length) return `Bitte alle Pflichtfelder ausfüllen: ${missing.join(", ")}.`;
+    if (!isValidIban(iban)) return "Bitte eine gültige IBAN angeben.";
+    return null;
+  }
+
   async function sendQuestionnaire() {
     setError(null);
-    if (iban.trim() && !isValidIban(iban)) return setError("Bitte eine gültige IBAN angeben.");
+    const err = questionnaireError();
+    if (err) {
+      setError(err);
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      return;
+    }
     setBusy(true);
     const res = await submitQuestionnaire(token, {
       data: q,
@@ -285,31 +316,51 @@ export function PublicEmploymentView({
           <fieldset className="space-y-4">
             <Legend>Persönliche Angaben</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Geburtsdatum"><input type="date" className={inp} value={q.geburtsdatum ?? ""} onChange={(e) => setQf({ geburtsdatum: e.target.value })} /></Field>
+              <Field label="Geburtsdatum" req><input type="date" className={inp} value={q.geburtsdatum ?? ""} onChange={(e) => setQf({ geburtsdatum: e.target.value })} /></Field>
               <Field label="Geburtsname (falls abweichend)"><input className={inp} value={q.geburtsname ?? ""} onChange={(e) => setQf({ geburtsname: e.target.value })} /></Field>
-              <Field label="Geburtsort"><input className={inp} value={q.geburtsort ?? ""} onChange={(e) => setQf({ geburtsort: e.target.value })} /></Field>
-              <Field label="Geburtsland"><input className={inp} value={q.geburtsland ?? ""} onChange={(e) => setQf({ geburtsland: e.target.value })} /></Field>
-              <Field label="Staatsangehörigkeit"><input className={inp} value={q.staatsangehoerigkeit ?? ""} onChange={(e) => setQf({ staatsangehoerigkeit: e.target.value })} /></Field>
-              <Field label="Familienstand"><input className={inp} value={q.familienstand ?? ""} onChange={(e) => setQf({ familienstand: e.target.value })} /></Field>
-              <Field label="Geschlecht">
+              <Field label="Geburtsort" req><input className={inp} value={q.geburtsort ?? ""} onChange={(e) => setQf({ geburtsort: e.target.value })} /></Field>
+              <Field label="Geburtsland" req><input className={inp} value={q.geburtsland ?? ""} onChange={(e) => setQf({ geburtsland: e.target.value })} /></Field>
+              <Field label="Staatsangehörigkeit" req><input className={inp} value={q.staatsangehoerigkeit ?? ""} onChange={(e) => setQf({ staatsangehoerigkeit: e.target.value })} /></Field>
+              <Field label="Familienstand" req>
+                <select className={inp} value={q.familienstand ?? ""} onChange={(e) => setQf({ familienstand: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="ledig">ledig</option>
+                  <option value="verheiratet">verheiratet</option>
+                  <option value="eingetragene Lebenspartnerschaft">eingetragene Lebenspartnerschaft</option>
+                  <option value="getrennt lebend">getrennt lebend</option>
+                  <option value="geschieden">geschieden</option>
+                  <option value="verwitwet">verwitwet</option>
+                </select>
+              </Field>
+              <Field label="Geschlecht" req>
                 <select className={inp} value={q.geschlecht ?? ""} onChange={(e) => setQf({ geschlecht: e.target.value as QuestionnaireData["geschlecht"] })}>
                   <option value="">— bitte wählen —</option>
                   <option value="maennlich">männlich</option>
                   <option value="weiblich">weiblich</option>
                   <option value="divers">divers</option>
-                  <option value="unbestimmt">unbestimmt</option>
                 </select>
               </Field>
-              <Field label="Sozialversicherungsnummer (falls vorhanden)"><input className={inp} value={svNummer} onChange={(e) => setSvNummer(e.target.value)} /></Field>
+              {q.sv_nummer_vorhanden !== false && (
+                <Field label="Sozialversicherungsnummer" req><input className={inp} value={svNummer} onChange={(e) => setSvNummer(e.target.value)} /></Field>
+              )}
             </div>
+            <CheckRow
+              checked={q.sv_nummer_vorhanden === false}
+              onChange={(v) => {
+                setQf({ sv_nummer_vorhanden: v ? false : undefined });
+                if (v) setSvNummer("");
+              }}
+            >
+              Ich habe noch keine Sozialversicherungsnummer
+            </CheckRow>
             <CheckRow checked={!!q.schwerbehindert} onChange={(v) => setQf({ schwerbehindert: v })}>Schwerbehindert</CheckRow>
           </fieldset>
 
           <fieldset className="space-y-4 border-t border-gray-100 pt-5">
             <Legend>Bankverbindung</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="IBAN"><input className={inp} value={iban} onChange={(e) => setIban(e.target.value)} placeholder="DE.. .. .. .." autoComplete="off" /></Field>
-              <Field label="BIC"><input className={inp} value={bic} onChange={(e) => setBic(e.target.value)} /></Field>
+              <Field label="IBAN" req><input className={inp} value={iban} onChange={(e) => setIban(e.target.value)} placeholder="DE.. .. .. .." autoComplete="off" /></Field>
+              <Field label="BIC" req><input className={inp} value={bic} onChange={(e) => setBic(e.target.value)} /></Field>
             </div>
             <Field label="Abweichender Kontoinhaber (falls abweichend)"><input className={inp} value={q.abweichender_kontoinhaber ?? ""} onChange={(e) => setQf({ abweichender_kontoinhaber: e.target.value })} /></Field>
           </fieldset>
@@ -317,7 +368,7 @@ export function PublicEmploymentView({
           <fieldset className="space-y-4 border-t border-gray-100 pt-5">
             <Legend>Beschäftigung</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Haupt- oder Nebenbeschäftigung">
+              <Field label="Haupt- oder Nebenbeschäftigung" req>
                 <select className={inp} value={q.haupt_oder_neben ?? ""} onChange={(e) => setQf({ haupt_oder_neben: e.target.value as QuestionnaireData["haupt_oder_neben"] })}>
                   <option value="">— bitte wählen —</option>
                   <option value="haupt">Hauptbeschäftigung</option>
@@ -325,41 +376,100 @@ export function PublicEmploymentView({
                 </select>
               </Field>
             </div>
-            <CheckRow checked={!!q.weitere_beschaeftigungen} onChange={(v) => setQf({ weitere_beschaeftigungen: v })}>Ich habe weitere Beschäftigungen</CheckRow>
+            <CheckRow checked={!!q.weitere_beschaeftigungen} onChange={(v) => setQf({ weitere_beschaeftigungen: v, ...(v ? {} : { weitere_taetigkeit: "", weitere_geringfuegig: false }) })}>Ich habe weitere Beschäftigungen</CheckRow>
             {q.weitere_beschaeftigungen && (
-              <CheckRow checked={!!q.weitere_geringfuegig} onChange={(v) => setQf({ weitere_geringfuegig: v })}>Davon geringfügig (Minijob)</CheckRow>
+              <>
+                <Field label="Welche weitere(n) Beschäftigung(en)?" req><input className={inp} value={q.weitere_taetigkeit ?? ""} onChange={(e) => setQf({ weitere_taetigkeit: e.target.value })} placeholder="z. B. Aushilfe Gastronomie bei Firma XY" /></Field>
+                <CheckRow checked={!!q.weitere_geringfuegig} onChange={(v) => setQf({ weitere_geringfuegig: v })}>Davon geringfügig (Minijob)</CheckRow>
+              </>
             )}
           </fieldset>
 
           <fieldset className="space-y-4 border-t border-gray-100 pt-5">
             <Legend>Schul- und Berufsausbildung</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Höchster Schulabschluss"><input className={inp} value={q.schulabschluss ?? ""} onChange={(e) => setQf({ schulabschluss: e.target.value })} /></Field>
-              <Field label="Höchste Berufsausbildung"><input className={inp} value={q.berufsausbildung ?? ""} onChange={(e) => setQf({ berufsausbildung: e.target.value })} /></Field>
+              <Field label="Höchster Schulabschluss" req>
+                <select className={inp} value={q.schulabschluss ?? ""} onChange={(e) => setQf({ schulabschluss: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="ohne Schulabschluss">ohne Schulabschluss</option>
+                  <option value="Haupt-/Volksschulabschluss">Haupt-/Volksschulabschluss</option>
+                  <option value="Mittlere Reife / gleichwertiger Abschluss">Mittlere Reife / gleichwertiger Abschluss</option>
+                  <option value="Abitur / Fachabitur">Abitur / Fachabitur</option>
+                </select>
+              </Field>
+              <Field label="Höchste Berufsausbildung" req>
+                <select className={inp} value={q.berufsausbildung ?? ""} onChange={(e) => setQf({ berufsausbildung: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="ohne beruflichen Ausbildungsabschluss">ohne beruflichen Ausbildungsabschluss</option>
+                  <option value="Anerkannte Berufsausbildung">Anerkannte Berufsausbildung</option>
+                  <option value="Meister / Techniker / gleichwertiger Fachschulabschluss">Meister / Techniker / gleichwertiger Fachschulabschluss</option>
+                  <option value="Bachelor">Bachelor</option>
+                  <option value="Diplom / Magister / Master / Staatsexamen">Diplom / Magister / Master / Staatsexamen</option>
+                  <option value="Promotion">Promotion</option>
+                </select>
+              </Field>
             </div>
           </fieldset>
 
           <fieldset className="space-y-4 border-t border-gray-100 pt-5">
             <Legend>Steuerliche Angaben</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Steuer-ID"><input className={inp} value={steuerId} onChange={(e) => setSteuerId(e.target.value)} /></Field>
-              <Field label="Steuerklasse / Faktor"><input className={inp} value={q.steuerklasse ?? ""} onChange={(e) => setQf({ steuerklasse: e.target.value })} /></Field>
-              <Field label="Kinderfreibeträge"><input className={inp} value={q.kinderfreibetraege ?? ""} onChange={(e) => setQf({ kinderfreibetraege: e.target.value })} /></Field>
-              <Field label="Konfession"><input className={inp} value={q.konfession ?? ""} onChange={(e) => setQf({ konfession: e.target.value })} /></Field>
+              <Field label="Steuer-ID" req><input className={inp} value={steuerId} onChange={(e) => setSteuerId(e.target.value)} /></Field>
+              <Field label="Steuerklasse" req>
+                <select className={inp} value={q.steuerklasse ?? ""} onChange={(e) => setQf({ steuerklasse: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="I">I</option>
+                  <option value="II">II</option>
+                  <option value="III">III</option>
+                  <option value="IV">IV</option>
+                  <option value="IV mit Faktor">IV mit Faktor</option>
+                  <option value="V">V</option>
+                  <option value="VI">VI</option>
+                </select>
+              </Field>
+              <Field label="Kinderfreibeträge" req>
+                <select className={inp} value={q.kinderfreibetraege ?? ""} onChange={(e) => setQf({ kinderfreibetraege: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="0">0</option>
+                  <option value="0,5">0,5</option>
+                  <option value="1">1</option>
+                  <option value="1,5">1,5</option>
+                  <option value="2">2</option>
+                  <option value="2,5">2,5</option>
+                  <option value="3">3</option>
+                  <option value="3,5">3,5</option>
+                  <option value="4">4</option>
+                  <option value="4,5">4,5</option>
+                  <option value="5">5</option>
+                  <option value="5,5">5,5</option>
+                  <option value="6">6</option>
+                </select>
+              </Field>
+              <Field label="Konfession" req>
+                <select className={inp} value={q.konfession ?? ""} onChange={(e) => setQf({ konfession: e.target.value })}>
+                  <option value="">— bitte wählen —</option>
+                  <option value="keine / konfessionslos">keine / konfessionslos</option>
+                  <option value="römisch-katholisch">römisch-katholisch</option>
+                  <option value="evangelisch">evangelisch</option>
+                  <option value="altkatholisch">altkatholisch</option>
+                  <option value="freireligiös">freireligiös</option>
+                  <option value="jüdisch">jüdisch</option>
+                </select>
+              </Field>
             </div>
           </fieldset>
 
           <fieldset className="space-y-4 border-t border-gray-100 pt-5">
             <Legend>Sozialversicherung</Legend>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Krankenversicherung">
+              <Field label="Krankenversicherung" req>
                 <select className={inp} value={q.kv_art ?? ""} onChange={(e) => setQf({ kv_art: e.target.value as QuestionnaireData["kv_art"] })}>
                   <option value="">— bitte wählen —</option>
                   <option value="gesetzlich">Gesetzlich</option>
                   <option value="privat">Privat</option>
                 </select>
               </Field>
-              <Field label="Name der Krankenkasse / Versicherung"><input className={inp} value={q.kv_name ?? ""} onChange={(e) => setQf({ kv_name: e.target.value })} /></Field>
+              <Field label="Name der Krankenkasse / Versicherung" req><input className={inp} value={q.kv_name ?? ""} onChange={(e) => setQf({ kv_name: e.target.value })} /></Field>
             </div>
           </fieldset>
 
@@ -398,10 +508,13 @@ function Card({ children }: { children: React.ReactNode }) {
 function Legend({ children }: { children: React.ReactNode }) {
   return <legend className="text-sm font-semibold text-gray-900">{children}</legend>;
 }
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, req, children }: { label: string; req?: boolean; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-medium text-gray-500">{label}</span>
+      <span className="mb-1.5 block text-xs font-medium text-gray-500">
+        {label}
+        {req && <span className="text-red-500"> *</span>}
+      </span>
       {children}
     </label>
   );

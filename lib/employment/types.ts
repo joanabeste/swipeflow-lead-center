@@ -90,6 +90,7 @@ export interface QuestionnaireData {
   // 3. Beschäftigung
   haupt_oder_neben?: "haupt" | "neben" | "";
   weitere_beschaeftigungen?: boolean;
+  weitere_taetigkeit?: string; // Freitext: welche weitere(n) Beschäftigung(en)
   weitere_geringfuegig?: boolean;
 
   // 4. Schul- und Berufsausbildung
