@@ -47,8 +47,9 @@ export function PublicEmploymentView({
   const [html, setHtml] = useState(contractHtml);
 
   // Mitarbeiterdaten
-  const [firstName, setFirstName] = useState(prefill.firstName);
-  const [lastName, setLastName] = useState(prefill.lastName);
+  // Name wird aus dem Lead vorbefüllt und ist nicht editierbar (nur Anzeige).
+  const [firstName] = useState(prefill.firstName);
+  const [lastName] = useState(prefill.lastName);
   const [street, setStreet] = useState(prefill.street);
   const [zip, setZip] = useState(prefill.zip);
   const [city, setCity] = useState(prefill.city);
@@ -73,6 +74,12 @@ export function PublicEmploymentView({
   const [error, setError] = useState<string | null>(null);
 
   const setQf = (patch: Partial<QuestionnaireData>) => setQ((s) => ({ ...s, ...patch }));
+
+  type Kind = NonNullable<QuestionnaireData["kinder"]>[number];
+  const addKind = () => setQf({ kinder: [...(q.kinder ?? []), {}] });
+  const updateKind = (i: number, patch: Partial<Kind>) =>
+    setQf({ kinder: (q.kinder ?? []).map((k, idx) => (idx === i ? { ...k, ...patch } : k)) });
+  const removeKind = (i: number) => setQf({ kinder: (q.kinder ?? []).filter((_, idx) => idx !== i) });
 
   const employeeFields = () => ({
     first_name: firstName,
@@ -151,6 +158,9 @@ export function PublicEmploymentView({
     if (!q.konfession?.trim()) missing.push("Konfession");
     if (!q.kv_art?.trim()) missing.push("Krankenversicherung");
     if (!q.kv_name?.trim()) missing.push("Name der Krankenkasse / Versicherung");
+    (q.kinder ?? []).forEach((k, i) => {
+      if (!k.vorname?.trim() || !k.geburtsdatum?.trim()) missing.push(`Kind ${i + 1}: Vorname + Geburtsdatum (oder Zeile entfernen)`);
+    });
     if (missing.length) return `Bitte alle Pflichtfelder ausfüllen: ${missing.join(", ")}.`;
     if (!isValidIban(iban)) return "Bitte eine gültige IBAN angeben.";
     return null;
@@ -224,10 +234,11 @@ export function PublicEmploymentView({
         <Card>
           <fieldset className="space-y-4">
             <Legend>Persönliche Daten</Legend>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Vorname *"><input className={inp} value={firstName} onChange={(e) => setFirstName(e.target.value)} /></Field>
-              <Field label="Nachname *"><input className={inp} value={lastName} onChange={(e) => setLastName(e.target.value)} /></Field>
-            </div>
+            <Field label="Name">
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                {`${firstName} ${lastName}`.trim() || "—"}
+              </div>
+            </Field>
             <Field label="Straße & Hausnummer *"><input className={inp} value={street} onChange={(e) => setStreet(e.target.value)} /></Field>
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-1"><Field label="PLZ *"><input className={inp} value={zip} onChange={(e) => setZip(e.target.value)} /></Field></div>
@@ -471,6 +482,38 @@ export function PublicEmploymentView({
               </Field>
               <Field label="Name der Krankenkasse / Versicherung" req><input className={inp} value={q.kv_name ?? ""} onChange={(e) => setQf({ kv_name: e.target.value })} /></Field>
             </div>
+          </fieldset>
+
+          <fieldset className="space-y-4 border-t border-gray-100 pt-5">
+            <Legend>Kinder</Legend>
+            <p className="text-xs text-gray-500">
+              Relevant für den Pflegeversicherungs-Beitrag (Kinder unter 25 Jahren). Wenn du keine Kinder hast, einfach leer lassen.
+            </p>
+            {(q.kinder ?? []).length > 0 && (
+              <div className="space-y-3">
+                {(q.kinder ?? []).map((k, i) => (
+                  <div key={i} className="grid grid-cols-1 gap-3 rounded-xl border border-gray-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+                    <Field label="Name"><input className={inp} value={k.name ?? ""} onChange={(e) => updateKind(i, { name: e.target.value })} /></Field>
+                    <Field label="Vorname"><input className={inp} value={k.vorname ?? ""} onChange={(e) => updateKind(i, { vorname: e.target.value })} /></Field>
+                    <Field label="Geburtsdatum"><input type="date" className={inp} value={k.geburtsdatum ?? ""} onChange={(e) => updateKind(i, { geburtsdatum: e.target.value })} /></Field>
+                    <button
+                      type="button"
+                      onClick={() => removeKind(i)}
+                      className="rounded-xl bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-200"
+                    >
+                      Entfernen
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={addKind}
+              className="rounded-xl border border-dashed border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition hover:border-gray-400 hover:bg-gray-50"
+            >
+              + Kind hinzufügen
+            </button>
           </fieldset>
 
           {error && <ErrorBox>{error}</ErrorBox>}
