@@ -276,13 +276,24 @@ export function SidebarNav({
 
   const current = visibleSections.find((s) => s.id === activeSection) ?? visibleSections[0];
 
+  // Länge des passenden Pfad-Prefixes (oder -1). Pfadgrenze beachten,
+  // damit /vertraege/arbeit nicht /vertraege/arbeitXY matcht.
+  function hrefMatchLen(href: string) {
+    if (href === "#") return -1;
+    if (href === "/") return pathname === "/" ? 1 : -1;
+    return pathname === href || pathname.startsWith(href + "/") ? href.length : -1;
+  }
+
+  // Nur das Item mit dem längsten Treffer ist aktiv — so markiert
+  // /vertraege/arbeit/neu nur "Neuer Arbeitsvertrag", nicht auch "Arbeitsverträge".
+  const bestMatchLen = Math.max(
+    -1,
+    ...current.groups.flatMap((g) => g.items.map((i) => hrefMatchLen(i.href))),
+  );
+
   function isActive(href: string) {
-    if (href === "#") return false;
-    if (href === "/") return pathname === "/";
-    if (href === "/zeit") return pathname === "/zeit";
-    if (href === "/admin") return pathname === "/admin";
-    if (href === "/vertraege") return pathname === "/vertraege";
-    return pathname.startsWith(href);
+    const len = hrefMatchLen(href);
+    return len >= 0 && len === bestMatchLen;
   }
 
   function renderItem(item: NavItem) {
