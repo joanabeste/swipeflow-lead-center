@@ -2,7 +2,21 @@
 
 import { useMemo, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Filter, ChevronDown, ChevronRight, ListTodo, Loader2, Users } from "lucide-react";
+import {
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronRight,
+  ListTodo,
+  Loader2,
+  Users,
+  AlertTriangle,
+  CalendarClock,
+  CalendarRange,
+  ListChecks,
+  X,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { TodoQuickAdd } from "./_components/quick-add";
 import { TodoRow } from "./_components/todo-row";
 import { bucketOf, byDueDateTime, todayKey } from "./_lib/date-utils";
@@ -79,6 +93,7 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
     const saved = localStorage.getItem(PERSON_FILTER_KEY);
     if (!saved) return;
     if (saved === "all" || saved === currentUserId || people.some((p) => p.id === saved)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPersonFilter(saved);
     }
   }, [people, currentUserId]);
@@ -221,14 +236,19 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           <ListTodo className="h-5 w-5 text-primary" />
           ToDos
         </h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {stats.totalOpen > 0 && (
+            <span className="hidden rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-500 dark:bg-white/5 dark:text-gray-400 sm:inline">
+              {stats.totalOpen} offen
+            </span>
+          )}
           {/* Personen-Umschalter: Meine · je Kollege · Alle */}
-          <label className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+          <label className="flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 text-xs hover:border-primary/40 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
             <Users className="h-3.5 w-3.5 text-gray-400" />
             <select
               value={personFilter}
               onChange={(e) => selectPerson(e.target.value)}
-              className="bg-transparent text-xs font-medium text-gray-700 outline-none dark:text-gray-200"
+              className="bg-transparent text-xs font-medium text-gray-700 outline-none dark:text-gray-200 dark:[color-scheme:dark]"
               aria-label="ToDos welcher Person anzeigen"
             >
               <option value={currentUserId}>Meine ToDos</option>
@@ -242,11 +262,6 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
               <option value="all">Alle ToDos</option>
             </select>
           </label>
-          {stats.totalOpen > 0 && (
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {stats.totalOpen} offen
-            </span>
-          )}
         </div>
       </div>
 
@@ -259,6 +274,7 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           label="Überfällig"
           value={stats.overdue}
           tone="red"
+          icon={AlertTriangle}
           active={bucketFilter === "overdue"}
           onClick={() => selectBucket("overdue")}
         />
@@ -266,6 +282,7 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           label="Heute"
           value={stats.today}
           tone="amber"
+          icon={CalendarClock}
           active={bucketFilter === "today"}
           onClick={() => selectBucket("today")}
         />
@@ -273,6 +290,7 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           label="Diese Woche"
           value={stats.thisWeek}
           tone="blue"
+          icon={CalendarRange}
           active={bucketFilter === "week"}
           onClick={() => selectBucket("week")}
         />
@@ -280,28 +298,40 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           label="Offen gesamt"
           value={stats.totalOpen}
           tone="gray"
+          icon={ListChecks}
           active={bucketFilter === null && status === "open" && !leadFilter && !search}
           onClick={resetFilters}
         />
       </div>
 
       {/* Filter-Bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
-        <div className="relative flex-1 min-w-[180px]">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+        <div className="relative min-w-[180px] flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Suchen — Titel, Firma, Stadt"
-            className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:placeholder:text-gray-500"
+            className="h-8 w-full rounded-md border border-gray-200 bg-white pl-8 pr-8 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100 dark:placeholder:text-gray-500"
           />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              title="Suche leeren"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1.5 text-xs">
           <Filter className="h-3.5 w-3.5 text-gray-400" />
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
-            className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100"
+            className={`h-8 rounded-md border bg-white px-2 text-xs dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark] ${
+              status !== "open" ? "border-primary/50 text-primary" : "border-gray-200 dark:border-[#2c2c2e]"
+            }`}
           >
             <option value="open">Offen</option>
             <option value="done">Erledigt</option>
@@ -310,7 +340,9 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           <select
             value={leadFilter}
             onChange={(e) => setLeadFilter(e.target.value)}
-            className="max-w-[180px] rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs dark:border-[#2c2c2e] dark:bg-[#161618] dark:text-gray-100"
+            className={`h-8 max-w-[180px] rounded-md border bg-white px-2 text-xs dark:bg-[#161618] dark:text-gray-100 dark:[color-scheme:dark] ${
+              leadFilter ? "border-primary/50 text-primary" : "border-gray-200 dark:border-[#2c2c2e]"
+            }`}
           >
             <option value="">Alle Leads</option>
             {leadOptions.map(([id, name]) => (
@@ -322,8 +354,9 @@ export function TodosManager({ initialTodos, leadCatalog, people, currentUserId 
           {(search || status !== "open" || leadFilter || bucketFilter) && (
             <button
               onClick={resetFilters}
-              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-gray-200 px-2.5 text-xs text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:border-[#2c2c2e] dark:text-gray-400 dark:hover:text-gray-200"
             >
+              <X className="h-3 w-3" />
               Zurücksetzen
             </button>
           )}
@@ -469,14 +502,14 @@ function BucketSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <button
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium hover:bg-gray-50/80 dark:hover:bg-white/[0.02]"
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-sm font-medium hover:bg-gray-50/80 dark:hover:bg-white/[0.02]"
       >
-        {open ? <ChevronDown className="h-3.5 w-3.5 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 text-gray-400" />}
-        <span className={`uppercase tracking-wide text-[11px] ${tone}`}>{label}</span>
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600 dark:bg-white/5 dark:text-gray-400">
+        {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-400" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400" />}
+        <span className={`text-[11px] font-semibold uppercase tracking-wider ${tone}`}>{label}</span>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-400">
           {count}
         </span>
       </button>
@@ -489,38 +522,51 @@ function KpiCard({
   label,
   value,
   tone,
+  icon: Icon,
   active = false,
   onClick,
 }: {
   label: string;
   value: number;
   tone: "red" | "amber" | "blue" | "gray";
+  icon: LucideIcon;
   active?: boolean;
   onClick?: () => void;
 }) {
+  const hot = value > 0;
+  // Farbige Tönung nur, wenn es etwas zu zeigen gibt — 0-Werte bleiben ruhig.
   const toneClasses: Record<typeof tone, string> = {
-    red: value > 0 ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/40 dark:bg-red-900/15 dark:text-red-300" : "",
-    amber: value > 0 ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/40 dark:bg-amber-900/15 dark:text-amber-300" : "",
-    blue: value > 0 ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/15 dark:text-blue-300" : "",
+    red: hot ? "border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-900/15" : "",
+    amber: hot ? "border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-900/15" : "",
+    blue: hot ? "border-blue-200 bg-blue-50 dark:border-blue-900/40 dark:bg-blue-900/15" : "",
     gray: "",
   };
-  const ringTone: Record<typeof tone, string> = {
-    red: "ring-red-400 dark:ring-red-500",
-    amber: "ring-amber-400 dark:ring-amber-500",
-    blue: "ring-blue-400 dark:ring-blue-500",
-    gray: "ring-primary",
+  const valueTone: Record<typeof tone, string> = {
+    red: hot ? "text-red-700 dark:text-red-300" : "text-gray-300 dark:text-gray-600",
+    amber: hot ? "text-amber-700 dark:text-amber-300" : "text-gray-300 dark:text-gray-600",
+    blue: hot ? "text-blue-700 dark:text-blue-300" : "text-gray-300 dark:text-gray-600",
+    gray: hot ? "text-gray-900 dark:text-gray-100" : "text-gray-300 dark:text-gray-600",
+  };
+  const iconTone: Record<typeof tone, string> = {
+    red: hot ? "text-red-500 dark:text-red-400" : "text-gray-300 dark:text-gray-600",
+    amber: hot ? "text-amber-500 dark:text-amber-400" : "text-gray-300 dark:text-gray-600",
+    blue: hot ? "text-blue-500 dark:text-blue-400" : "text-gray-300 dark:text-gray-600",
+    gray: "text-gray-400 dark:text-gray-500",
   };
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-lg border p-3 text-left transition hover:border-primary/40 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${toneClasses[tone]} border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e] ${
-        active ? `ring-2 ${ringTone[tone]}` : ""
+      className={`group rounded-xl border p-3 text-left transition hover:border-primary/40 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${toneClasses[tone]} border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e] ${
+        active ? "ring-2 ring-primary" : ""
       }`}
     >
-      <p className="text-2xl font-bold tabular-nums">{value}</p>
-      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{label}</p>
+      <div className="flex items-center justify-between">
+        <p className={`text-2xl font-bold tabular-nums ${valueTone[tone]}`}>{value}</p>
+        <Icon className={`h-4 w-4 ${iconTone[tone]}`} />
+      </div>
+      <p className="mt-0.5 text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
     </button>
   );
 }

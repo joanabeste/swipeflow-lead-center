@@ -10,6 +10,28 @@ async function currentUser() {
   return user;
 }
 
+/** Lead-Typeahead für den Quick-Add: durchsucht serverseitig die GESAMTE Lead-DB
+ *  (Name + Stadt), nicht nur die vorgeladenen Top-300. Idiom wie searchLeadsForDeal. */
+export async function searchLeadsForTodo(query: string): Promise<{
+  leads: { id: string; company_name: string; city: string | null }[];
+}> {
+  const user = await currentUser();
+  if (!user) return { leads: [] };
+  const q = query.trim();
+  if (q.length < 2) return { leads: [] };
+  const db = createServiceClient();
+  // ilike-Wildcards & PostgREST-or-Trenner entschärfen (vgl. escapeIlikeWildcards in leads/)
+  const safe = q.slice(0, 100).replace(/[%_,()\\]/g, " ");
+  const { data } = await db
+    .from("leads")
+    .select("id, company_name, city")
+    .is("deleted_at", null)
+    .or(`company_name.ilike.%${safe}%,city.ilike.%${safe}%`)
+    .order("company_name", { ascending: true })
+    .limit(8);
+  return { leads: (data ?? []) as { id: string; company_name: string; city: string | null }[] };
+}
+
 /** Bulk-Reschedule: verschiebt mehrere Todos um N Tage. */
 export async function bulkRescheduleTodos(todoIds: string[], deltaDays: number) {
   const user = await currentUser();

@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/server";
-import type { ServiceMode } from "@/lib/types";
+import { permissionsFromProfile, type Profile, type ServiceMode } from "@/lib/types";
 import { toBerlinDayKey } from "@/lib/date/day-key";
 import { startOfDayInAppTz } from "@/lib/zeit/timezone";
 import { CALL_STATUS_ORDER } from "@/lib/calls/status-display";
@@ -126,24 +126,27 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   // Zeigt überfällige + heutige + nächste 7 Tage. Lead-Daten parallel via Lookup.
   const todayDateOnly = toBerlinDayKey(today);
   const sevenDaysAheadKey = new Date(Date.now() + 7 * 24 * 3600_000).toISOString().slice(0, 10);
-  type OpenTodo = { id: string; lead_id: string; title: string; due_date: string; due_time: string | null };
+  // created_by mitladen, damit das Widget client-seitig pro Person filtern kann
+  // (Default „Meine"). Limit hoeher als die Anzeige, damit das Filtern auf eine
+  // einzelne Person nicht durch fremde ToDos ausgehungert wird.
+  type OpenTodo = { id: string; lead_id: string; title: string; due_date: string; due_time: string | null; created_by: string | null };
   const firstTodo = await db
     .from("lead_todos")
-    .select("id, lead_id, title, due_date, due_time")
+    .select("id, lead_id, title, due_date, due_time, created_by")
     .is("done_at", null)
     .lte("due_date", sevenDaysAheadKey)
     .order("due_date", { ascending: true })
-    .limit(50);
+    .limit(200);
   let openTodoRows = firstTodo.data as OpenTodo[] | null;
   if (firstTodo.error && (firstTodo.error.code === "42703" || /due_time/i.test(firstTodo.error.message))) {
     // Migration 124 noch nicht eingespielt — ohne Uhrzeit weiterladen.
     const fallback = await db
       .from("lead_todos")
-      .select("id, lead_id, title, due_date")
+      .select("id, lead_id, title, due_date, created_by")
       .is("done_at", null)
       .lte("due_date", sevenDaysAheadKey)
       .order("due_date", { ascending: true })
-      .limit(50);
+      .limit(200);
     openTodoRows = fallback.data as OpenTodo[] | null;
   }
   const openTodos = openTodoRows ?? [];
@@ -155,6 +158,18 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   for (const l of (todoLeads ?? []) as Array<{ id: string; company_name: string; city: string | null }>) {
     todoLeadMap.set(l.id, { company_name: l.company_name, city: l.city });
   }
+  // Vertriebs-Team für den Personen-Umschalter im Widget + Ersteller-Namen.
+  const { data: todoProfileRows } = await db
+    .from("profiles")
+    .select("id, name, role, status, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_vertraege")
+    .eq("status", "active");
+  const todoNameById = new Map<string, string>();
+  const todoPeople: { id: string; name: string }[] = [];
+  for (const p of (todoProfileRows ?? []) as Profile[]) {
+    todoNameById.set(p.id, p.name);
+    if (permissionsFromProfile(p).can_vertrieb) todoPeople.push({ id: p.id, name: p.name });
+  }
+  todoPeople.sort((a, b) => a.name.localeCompare(b.name));
   const openTodoItems = openTodos
     .filter((t) => todoLeadMap.has(t.lead_id))   // gelöschte/archivierte Leads ausblenden
     .map((t) => {
@@ -171,6 +186,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
         tone,
         company_name: lead.company_name,
         city: lead.city,
+        createdBy: t.created_by ?? null,
+        ownerName: t.created_by ? todoNameById.get(t.created_by) ?? null : null,
       };
     });
 
@@ -488,6 +505,7 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     teamCallStats,
     dealsByMonth12,
     openTodoItems,
+    todoPeople,
     userId,
     serviceMode,
   };
