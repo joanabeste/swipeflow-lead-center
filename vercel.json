@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/cron/cleanup-qualify-claims",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
