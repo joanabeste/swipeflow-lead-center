@@ -53,6 +53,28 @@ export function ContractActions({
     router.refresh();
   }
 
+  // Lädt eine signed-URL und öffnet sie in einem neuen Tab. Das Tab wird SYNCHRON
+  // beim Klick geöffnet (sonst blockt der Popup-Blocker den verzögerten window.open
+  // nach dem await — z. B. wenn das PDF erst gerendert werden muss).
+  async function openInNewTab(key: string, fn: () => Promise<{ url: string } | { error: string } | { success: true }>) {
+    setError(null);
+    setBusy(key);
+    const win = window.open("", "_blank");
+    const res = await fn();
+    setBusy(null);
+    if ("error" in res) {
+      win?.close();
+      setError(res.error);
+      return;
+    }
+    if ("url" in res && res.url && win) {
+      win.location.href = res.url;
+    } else if ("url" in res && res.url) {
+      // Tab wurde blockiert → wenigstens im aktuellen Tab öffnen.
+      window.open(res.url, "_blank");
+    }
+  }
+
   function openLink() {
     if (!link) return;
     window.open(toAbsolute(link), "_blank");
@@ -172,12 +194,12 @@ export function ContractActions({
           </Link>
         )}
         {canDownload && (
-          <Button onClick={() => run("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
+          <Button onClick={() => openInNewTab("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
             <Download className="h-4 w-4" /> PDF
           </Button>
         )}
         {canPrint && (
-          <Button onClick={() => run("print", () => getUnsignedContractPdfUrl(id))} busy={busy === "print"} variant="secondary">
+          <Button onClick={() => openInNewTab("print", () => getUnsignedContractPdfUrl(id))} busy={busy === "print"} variant="secondary">
             <Printer className="h-4 w-4" /> PDF zum Ausdrucken
           </Button>
         )}
