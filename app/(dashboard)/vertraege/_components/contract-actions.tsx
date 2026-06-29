@@ -53,25 +53,26 @@ export function ContractActions({
     router.refresh();
   }
 
-  // Lädt eine signed-URL und öffnet sie in einem neuen Tab. Das Tab wird SYNCHRON
-  // beim Klick geöffnet (sonst blockt der Popup-Blocker den verzögerten window.open
-  // nach dem await — z. B. wenn das PDF erst gerendert werden muss).
-  async function openInNewTab(key: string, fn: () => Promise<{ url: string } | { error: string } | { success: true }>) {
+  // Holt eine signed-URL und startet den Download direkt (kein Tab). Der Dateiname
+  // kommt per Content-Disposition aus der signed-URL; ein Anchor-Klick löst das
+  // Speichern aus, ohne dass der Popup-Blocker greift.
+  async function downloadFile(key: string, fn: () => Promise<{ url: string } | { error: string } | { success: true }>) {
     setError(null);
     setBusy(key);
-    const win = window.open("", "_blank");
     const res = await fn();
     setBusy(null);
     if ("error" in res) {
-      win?.close();
       setError(res.error);
       return;
     }
-    if ("url" in res && res.url && win) {
-      win.location.href = res.url;
-    } else if ("url" in res && res.url) {
-      // Tab wurde blockiert → wenigstens im aktuellen Tab öffnen.
-      window.open(res.url, "_blank");
+    if ("url" in res && res.url) {
+      const a = document.createElement("a");
+      a.href = res.url;
+      a.download = ""; // Fallback; maßgeblich ist die Content-Disposition der URL
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }
   }
 
@@ -194,12 +195,12 @@ export function ContractActions({
           </Link>
         )}
         {canDownload && (
-          <Button onClick={() => openInNewTab("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
-            <Download className="h-4 w-4" /> PDF
+          <Button onClick={() => downloadFile("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
+            <Download className="h-4 w-4" /> PDF herunterladen
           </Button>
         )}
         {canPrint && (
-          <Button onClick={() => openInNewTab("print", () => getUnsignedContractPdfUrl(id))} busy={busy === "print"} variant="secondary">
+          <Button onClick={() => downloadFile("print", () => getUnsignedContractPdfUrl(id))} busy={busy === "print"} variant="secondary">
             <Printer className="h-4 w-4" /> PDF zum Ausdrucken
           </Button>
         )}

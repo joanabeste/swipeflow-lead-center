@@ -185,13 +185,17 @@ export async function uploadProviderSignaturePng(
   return { path: PROVIDER_SIGNATURE_PATH };
 }
 
-/** Erzeugt eine signed URL für ein Objekt im `contracts`-Bucket. Default 1 h. */
+/** Erzeugt eine signed URL für ein Objekt im `contracts`-Bucket. Default 1 h.
+ *  `downloadAs` setzt Content-Disposition: attachment mit Dateinamen → echter Download. */
 export async function getContractFileSignedUrl(
   path: string,
   expiresInSec = 3600,
+  downloadAs?: string,
 ): Promise<string | null> {
   const db = createServiceClient();
-  const { data, error } = await db.storage.from(BUCKET).createSignedUrl(path, expiresInSec);
+  const { data, error } = await db.storage
+    .from(BUCKET)
+    .createSignedUrl(path, expiresInSec, downloadAs ? { download: downloadAs } : undefined);
   if (error || !data) return null;
   return data.signedUrl;
 }

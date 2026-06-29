@@ -597,6 +597,22 @@ export async function updateProviderSignature(input: { dataUrl: string }): Promi
   return { success: true };
 }
 
+/** Baut einen lesbaren, dateisystemsicheren Download-Namen, z. B.
+ *  „Vertrag-Mustermann-GmbH-unterschrieben.pdf". */
+function contractFileName(
+  contract: ContractRow,
+  lead: ContractLead | null,
+  suffix: string,
+): string {
+  const raw = contract.billing_company || lead?.company_name || "Vertrag";
+  const name = raw
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 60) || "Vertrag";
+  return `Vertrag-${name}${suffix}.pdf`;
+}
+
 /** Liefert eine signed URL zum PDF. Generiert das PDF nach, falls es fehlt. */
 export async function getContractPdfUrl(id: string): Promise<Result<{ url: string }>> {
   const ctx = await checkSection("can_vertraege");
@@ -605,9 +621,9 @@ export async function getContractPdfUrl(id: string): Promise<Result<{ url: strin
   if (!contract) return { error: "Vertrag nicht gefunden." };
   if (contract.status !== "signed") return { error: "Vertrag ist noch nicht unterschrieben." };
 
+  const lead = await loadLead(contract.lead_id);
   let pdfPath = contract.pdf_path;
   if (!pdfPath) {
-    const lead = await loadLead(contract.lead_id);
     const ibanPlain = decryptIban(contract);
     const creditor = await loadCreditor();
     const signature = contract.signature_path
@@ -634,7 +650,7 @@ export async function getContractPdfUrl(id: string): Promise<Result<{ url: strin
     }
   }
 
-  const url = await getContractFileSignedUrl(pdfPath, 3600);
+  const url = await getContractFileSignedUrl(pdfPath, 3600, contractFileName(contract, lead, "-unterschrieben"));
   if (!url) return { error: "Signed URL konnte nicht erzeugt werden." };
   await writeEvent(id, "downloaded", ctx.user.id);
   return { success: true, url };
@@ -666,7 +682,7 @@ export async function getUnsignedContractPdfUrl(id: string): Promise<Result<{ ur
     const buffer = await renderContractPdf(input);
     const up = await uploadUnsignedContractPdf(id, buffer);
     if ("error" in up) return { error: up.error };
-    const url = await getContractFileSignedUrl(up.path, 3600);
+    const url = await getContractFileSignedUrl(up.path, 3600, contractFileName(contract, lead, "-Druckfassung"));
     if (!url) return { error: "Signed URL konnte nicht erzeugt werden." };
     await writeEvent(id, "downloaded", ctx.user.id, { unsigned: true });
     return { success: true, url };
