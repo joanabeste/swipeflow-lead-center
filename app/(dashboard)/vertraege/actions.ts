@@ -9,6 +9,7 @@ import { sendContractLinkEmail, buildContractLink } from "@/lib/email/central";
 import {
   renderContractPdf,
   uploadContractPdf,
+  uploadUnsignedContractPdf,
   uploadProviderSignaturePng,
   loadProviderSignatureForPdf,
   getContractFileSignedUrl,
@@ -637,6 +638,42 @@ export async function getContractPdfUrl(id: string): Promise<Result<{ url: strin
   if (!url) return { error: "Signed URL konnte nicht erzeugt werden." };
   await writeEvent(id, "downloaded", ctx.user.id);
   return { success: true, url };
+}
+
+/** Liefert eine signed URL zu einer unsignierten Druckfassung — zum Ausdrucken
+ *  und handschriftlichen Unterschreiben. Wird bei jedem Aufruf frisch erzeugt
+ *  (nicht in pdf_path gecacht), damit nachträgliche Änderungen einfließen.
+ *  Für bereits unterschriebene Verträge wird das finale PDF zurückgegeben. */
+export async function getUnsignedContractPdfUrl(id: string): Promise<Result<{ url: string }>> {
+  const ctx = await checkSection("can_vertraege");
+  if (!ctx) return { error: "Nicht berechtigt." };
+  const contract = await loadRow(id);
+  if (!contract) return { error: "Vertrag nicht gefunden." };
+  if (contract.status === "signed") return getContractPdfUrl(id);
+
+  const lead = await loadLead(contract.lead_id);
+  const ibanPlain = decryptIban(contract);
+  const creditor = await loadCreditor();
+  // Bewusst ohne Signaturen: leere Unterschriftslinien zum Unterschreiben auf Papier.
+  const input = buildRenderInput(contract, lead, {
+    mode: "pdf",
+    creditor,
+    signature: null,
+    providerSignature: null,
+    ibanPlain,
+  });
+  try {
+    const buffer = await renderContractPdf(input);
+    const up = await uploadUnsignedContractPdf(id, buffer);
+    if ("error" in up) return { error: up.error };
+    const url = await getContractFileSignedUrl(up.path, 3600);
+    if (!url) return { error: "Signed URL konnte nicht erzeugt werden." };
+    await writeEvent(id, "downloaded", ctx.user.id, { unsigned: true });
+    return { success: true, url };
+  } catch (e) {
+    console.error("[getUnsignedContractPdfUrl:render]", e);
+    return { error: "PDF konnte nicht erzeugt werden." };
+  }
 }
 
 /** Lädt das Signatur-PNG aus dem Bucket und baut den Signatur-Block fürs PDF. */

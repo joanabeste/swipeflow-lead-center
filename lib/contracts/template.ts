@@ -269,9 +269,10 @@ function widerrufSection(input: ContractRenderInput): string {
 }
 
 function signatureBlock(input: ContractRenderInput): string {
-  if (input.mode === "pdf" && input.signature) {
-    const customerRole = input.type === "webdesign" ? "Auftraggeber" : "Kunde";
-    const providerRole = input.type === "webdesign" ? "Dienstleister" : "Agentur";
+  if (input.mode !== "pdf") return "";
+  const customerRole = input.type === "webdesign" ? "Auftraggeber" : "Kunde";
+  const providerRole = input.type === "webdesign" ? "Dienstleister" : "Agentur";
+  if (input.signature) {
     return `
       <h2>Unterschrift</h2>
       <div class="sign-grid">
@@ -292,7 +293,22 @@ function signatureBlock(input: ContractRenderInput): string {
       </div>
     `;
   }
-  return "";
+  // Druckfassung ohne Unterschrift: leere Linien zum handschriftlichen Unterzeichnen.
+  return `
+    <h2>Unterschriften</h2>
+    <div class="sign-grid">
+      <div class="sign-box">
+        <div class="sign-img"></div>
+        <div class="sign-line">Ort, Datum, Unterschrift</div>
+        <div class="sign-cap">${esc(input.customerName)} (${customerRole})</div>
+      </div>
+      <div class="sign-box">
+        <div class="sign-img"></div>
+        <div class="sign-line">Ort, Datum, Unterschrift</div>
+        <div class="sign-cap">swipeflow GmbH (${providerRole})</div>
+      </div>
+    </div>
+  `;
 }
 
 function webdesignBody(input: ContractRenderInput): string {

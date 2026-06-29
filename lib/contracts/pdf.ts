@@ -132,6 +132,23 @@ export async function uploadContractPdf(
   return { path };
 }
 
+/** Lädt die unsignierte Druckfassung auf einen eigenen Pfad — überschreibt
+ *  damit nie das finale, signierte `vertrag.pdf`. */
+export async function uploadUnsignedContractPdf(
+  contractId: string,
+  buffer: Buffer,
+): Promise<{ path: string } | { error: string }> {
+  const db = createServiceClient();
+  const path = `${contractId}/vertrag-druck.pdf`;
+  const { error } = await db.storage.from(BUCKET).upload(path, buffer, {
+    contentType: "application/pdf",
+    upsert: true,
+    cacheControl: "0",
+  });
+  if (error) return { error: error.message };
+  return { path };
+}
+
 /** Lädt das Signatur-PNG (data:URL → Buffer) in den `contracts`-Bucket. */
 export async function uploadSignaturePng(
   contractId: string,

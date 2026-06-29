@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Send, Link2, Clock, Ban, Download, Check, Trash2, ExternalLink, Eye, Pencil } from "lucide-react";
-import { sendContract, createContractLink, extendContract, cancelContract, deleteContract, getContractPdfUrl } from "../actions";
+import { Send, Link2, Clock, Ban, Download, Check, Trash2, ExternalLink, Eye, Pencil, Printer } from "lucide-react";
+import { sendContract, createContractLink, extendContract, cancelContract, deleteContract, getContractPdfUrl, getUnsignedContractPdfUrl } from "../actions";
 import { Button, buttonClasses } from "@/components/ui/button";
 import type { ContractStatus } from "@/lib/contracts/types";
 import { useToastContext } from "../../toast-provider";
@@ -127,6 +127,8 @@ export function ContractActions({
   const canExtend = expired && (status === "sent" || status === "viewed");
   const canCancel = status !== "cancelled";
   const canDownload = status === "signed";
+  // Unsignierte Druckfassung zum Ausdrucken & Unterschreiben auf Papier.
+  const canPrint = status !== "signed" && status !== "cancelled";
   const canDelete = status === "draft" || status === "cancelled" || linkActive;
 
   return (
@@ -172,6 +174,11 @@ export function ContractActions({
         {canDownload && (
           <Button onClick={() => run("pdf", () => getContractPdfUrl(id))} busy={busy === "pdf"} variant="secondary">
             <Download className="h-4 w-4" /> PDF
+          </Button>
+        )}
+        {canPrint && (
+          <Button onClick={() => run("print", () => getUnsignedContractPdfUrl(id))} busy={busy === "print"} variant="secondary">
+            <Printer className="h-4 w-4" /> PDF zum Ausdrucken
           </Button>
         )}
 
