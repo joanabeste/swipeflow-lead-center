@@ -108,6 +108,9 @@ export async function saveCallQueueSettings(
 }
 
 // ─── Qualifizierungs-Cockpit: Tasten-1-Verhalten ───────────────────────
+// Diese Einstellung wird PRO NUTZER gespeichert: jeder Eintrag liegt unter dem
+// Key `qualify_hotkey:<userId>` (app_settings.key ist freier Text-PK), sodass
+// das Aus-/Anhaken nur die jeweilige Person betrifft und nicht das ganze Team.
 
 export interface QualifyHotkeySettings {
   /** true  → Taste „1" qualifiziert den Lead sofort (status='qualified' +
@@ -119,18 +122,25 @@ export interface QualifyHotkeySettings {
   targetStatusId: string;
 }
 
+/** Default für Nutzer ohne gespeicherte Einstellung: „Sofort" AN, Ziel „Webdesign Todo". */
 const FALLBACK_QUALIFY_HOTKEY: QualifyHotkeySettings = {
-  immediateQualify: false,
-  targetStatusId: "webdesign-manuelle-ueberpruefung",
+  immediateQualify: true,
+  targetStatusId: "webdesign-todo",
 };
 
-export async function getQualifyHotkeySettings(): Promise<QualifyHotkeySettings> {
+/** Pro-Nutzer-Key im app_settings-Key-Value-Store. */
+const qualifyHotkeyKey = (userId: string) => `qualify_hotkey:${userId}`;
+
+export async function getQualifyHotkeySettings(
+  userId: string | null,
+): Promise<QualifyHotkeySettings> {
+  if (!userId) return FALLBACK_QUALIFY_HOTKEY;
   try {
     const supabase = await createClient();
     const { data } = await supabase
       .from("app_settings")
       .select("value")
-      .eq("key", "qualify_hotkey")
+      .eq("key", qualifyHotkeyKey(userId))
       .single();
     const v = data?.value as Partial<QualifyHotkeySettings> | undefined;
     return {
@@ -152,10 +162,11 @@ export async function saveQualifyHotkeySettings(
   settings: QualifyHotkeySettings,
   userId: string | null,
 ): Promise<void> {
+  if (!userId) return; // ohne Nutzer-Identität keine (sonst globale) Speicherung
   const db = createServiceClient();
   await db.from("app_settings").upsert(
     {
-      key: "qualify_hotkey",
+      key: qualifyHotkeyKey(userId),
       value: settings as unknown as Record<string, unknown>,
       updated_by: userId,
       updated_at: new Date().toISOString(),

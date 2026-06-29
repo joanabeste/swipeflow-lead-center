@@ -246,7 +246,9 @@ export function QualifyCockpit({ queue: initialQueue, statuses, initialSettings 
 
       // im Hintergrund persistieren (blockiert das Weiterspringen nicht)
       void (async () => {
-        const r1 = await setTrafficLightManual(id, rating);
+        const r1 = await setTrafficLightManual(id, rating, {
+          queueGreen: rating === "green" && !qualify,
+        });
         if (r1 && "error" in r1 && r1.error) {
           addToast(`Ampel: ${r1.error}`, "error");
         }

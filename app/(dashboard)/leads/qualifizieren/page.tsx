@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import type { CustomLeadStatus, TrafficLightRating } from "@/lib/types";
 import { getQualifyHotkeySettings } from "@/lib/app-settings";
+import { requireUser } from "@/lib/auth";
 import { QualifyCockpit } from "./qualify-cockpit";
 
 // PostgREST liefert max. 1000 Zeilen pro Request → wir paginieren, damit WIRKLICH
@@ -94,6 +95,7 @@ async function loadReservedBatch(): Promise<QueueRow[] | null> {
  */
 export default async function QualifizierenPage() {
   const supabase = await createClient();
+  const { user } = await requireUser();
 
   const [reserved, { data: statuses }, settings] = await Promise.all([
     loadReservedBatch(),
@@ -103,7 +105,7 @@ export default async function QualifizierenPage() {
       .eq("is_active", true)
       .eq("is_archived", false)
       .order("display_order", { ascending: true }),
-    getQualifyHotkeySettings(),
+    getQualifyHotkeySettings(user.id),
   ]);
 
   // Fallback auf die globale Queue, falls die Reservierungs-Migration (127) noch

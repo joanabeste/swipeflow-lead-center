@@ -14,9 +14,9 @@ interface Props {
 }
 
 /**
- * Globale Cockpit-Einstellung (Zahnrad-Popover): legt fest, ob Taste „1" den
+ * Cockpit-Einstellung pro Nutzer (Zahnrad-Popover): legt fest, ob Taste „1" den
  * Lead sofort qualifiziert (→ CRM) und in welchen CRM-Status grün-qualifizierte
- * Leads wandern. Wird global gespeichert; bei Erfolg `onChange` → das Cockpit
+ * Leads wandern. Wird pro Nutzer gespeichert; bei Erfolg `onChange` → das Cockpit
  * übernimmt das neue Verhalten sofort.
  */
 export function QualifySettings({ statuses, settings, onChange }: Props) {

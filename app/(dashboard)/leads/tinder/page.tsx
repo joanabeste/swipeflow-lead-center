@@ -1,4 +1,5 @@
 import { getQualifyHotkeySettings } from "@/lib/app-settings";
+import { requireUser } from "@/lib/auth";
 import { claimQualifyWebBatch } from "../qualify-claims-actions";
 import { TinderDeck } from "./tinder-deck";
 
@@ -9,9 +10,10 @@ import { TinderDeck } from "./tinder-deck";
  * steuert (wie im Cockpit) den Ziel-CRM-Status beim Gruen-Wisch.
  */
 export default async function LeadTinderPage() {
+  const { user } = await requireUser();
   const [cards, settings] = await Promise.all([
     claimQualifyWebBatch(),
-    getQualifyHotkeySettings(),
+    getQualifyHotkeySettings(user.id),
   ]);
 
   return <TinderDeck initialCards={cards} targetStatusId={settings.targetStatusId} />;
