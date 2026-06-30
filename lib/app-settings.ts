@@ -122,10 +122,12 @@ export interface QualifyHotkeySettings {
   targetStatusId: string;
 }
 
-/** Default für Nutzer ohne gespeicherte Einstellung: „Sofort" AN, Ziel „Webdesign Todo". */
+/** Default für Nutzer ohne gespeicherte Einstellung: „Sofort" AN, Ziel „Webdesign Todo".
+ *  Achtung: Das Label „Webdesign Todo" hat in der DB die ID `webdesign-lead`
+ *  (nicht `webdesign-todo` — diese ID existiert nicht und bricht die crm_status_id-FK). */
 const FALLBACK_QUALIFY_HOTKEY: QualifyHotkeySettings = {
   immediateQualify: true,
-  targetStatusId: "webdesign-todo",
+  targetStatusId: "webdesign-lead",
 };
 
 /** Pro-Nutzer-Key im app_settings-Key-Value-Store. */
