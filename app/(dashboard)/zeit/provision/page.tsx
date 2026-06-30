@@ -60,7 +60,7 @@ export default async function ProvisionPage({
     loadEntriesInRange(targetUserId, range.from, range.to),
     db
       .from("commission_events")
-      .select("id, amount_cents, currency, earned_at, lead_id, rule_id, leads(company_name), commission_rules(name)")
+      .select("id, amount_cents, currency, earned_at, lead_id, rule_id, confirmed_at, leads(company_name), commission_rules(name)")
       .eq("user_id", targetUserId)
       .is("voided_at", null) // stornierte Provisionen zaehlen nicht zur Auszahlung
       .gte("earned_at", range.from.toISOString())
@@ -84,14 +84,16 @@ export default async function ProvisionPage({
     earned_at: string;
     lead_id: string;
     rule_id: string;
+    confirmed_at: string | null;
     leads: { company_name: string } | null;
     commission_rules: { name: string } | null;
   };
-  // Fallback, falls Migration 069 (Spalte voided_at) noch nicht eingespielt ist:
-  // ohne den Storno-Filter erneut laden, statt die Seite zu brechen.
-  let evData = eventsRes.data;
+  // Fallback, falls Migration 069/070 (Spalten voided_at/confirmed_at) noch nicht
+  // eingespielt sind: ohne diese Spalten/Filter erneut laden, statt zu brechen →
+  // dann gilt alles als "voraussichtlich".
+  let evData: unknown[] | null = eventsRes.data;
   let evErr = eventsRes.error;
-  if (evErr && /column .*voided_at.* does not exist/i.test(evErr.message)) {
+  if (evErr && /column .*(voided_at|confirmed_at).* does not exist/i.test(evErr.message)) {
     const retry = await db
       .from("commission_events")
       .select("id, amount_cents, currency, earned_at, lead_id, rule_id, leads(company_name), commission_rules(name)")
@@ -107,8 +109,13 @@ export default async function ProvisionPage({
     console.error("[provision] commission_events query failed:", evErr);
   }
   const events = ((evData ?? []) as unknown as EventRow[]) ?? [];
-  const commissionCents = events.reduce((sum, e) => sum + e.amount_cents, 0);
-  const totalCents = wageCents + commissionCents;
+  // Voraussichtlich = gebucht, aber noch nicht vom Admin bestaetigt.
+  const prospectiveCents = events
+    .filter((e) => !e.confirmed_at)
+    .reduce((sum, e) => sum + e.amount_cents, 0);
+  const confirmedCents = events
+    .filter((e) => e.confirmed_at)
+    .reduce((sum, e) => sum + e.amount_cents, 0);
 
   const currentMonth = monthKey(monthDate);
   const prevMonth = shiftMonth(monthDate, -1);
@@ -133,7 +140,7 @@ export default async function ProvisionPage({
           Provision & Auszahlung
         </h1>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          Stundenlohn × Stunden + verdiente Provisionen für den gewählten Monat.
+          Deine Provisionen im gewählten Monat — voraussichtlich und vom Admin bestätigt.
         </p>
       </header>
 
@@ -185,7 +192,34 @@ export default async function ProvisionPage({
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Provision im Fokus: voraussichtlich vs. bestätigt */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-2xl border border-amber-300/50 bg-amber-50 p-5 dark:border-amber-400/20 dark:bg-amber-400/5">
+          <p className="text-xs uppercase tracking-wider text-amber-700/80 dark:text-amber-400/80">
+            Voraussichtliche Provision
+          </p>
+          <p className="mt-1 text-3xl font-bold text-amber-700 dark:text-amber-300">
+            {fmtMoney(prospectiveCents)}
+          </p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Gebucht, aber noch nicht vom Admin bestätigt.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-green-300/50 bg-green-50 p-5 dark:border-green-400/20 dark:bg-green-400/5">
+          <p className="text-xs uppercase tracking-wider text-green-700/80 dark:text-green-400/80">
+            Bestätigte Provision
+          </p>
+          <p className="mt-1 text-3xl font-bold text-green-700 dark:text-green-300">
+            {fmtMoney(confirmedCents)}
+          </p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Vom Admin bestätigt · {targetProfile?.name || targetProfile?.email} · {monthLabel}
+          </p>
+        </div>
+      </div>
+
+      {/* Lohn/Stunden nur als kleine KPIs */}
+      <div className="grid gap-4 sm:grid-cols-3">
         <KpiCard
           label="Stundenlohn"
           value={hourlyCents > 0 ? fmtMoney(hourlyCents) + "/h" : "—"}
@@ -197,15 +231,6 @@ export default async function ProvisionPage({
           sub={`${entries.length} Einträge`}
         />
         <KpiCard label="Lohn (Std × Lohn)" value={fmtMoney(wageCents)} />
-        <KpiCard label="Provisionen" value={fmtMoney(commissionCents)} sub={`${events.length} Events`} />
-      </div>
-
-      <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
-        <p className="text-xs uppercase tracking-wider text-primary/80">Gesamtauszahlung</p>
-        <p className="mt-1 text-3xl font-bold text-primary">{fmtMoney(totalCents)}</p>
-        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {targetProfile?.name || targetProfile?.email} · {monthLabel}
-        </p>
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
@@ -225,6 +250,7 @@ export default async function ProvisionPage({
                 <th className="px-4 py-2 text-left">Datum</th>
                 <th className="px-4 py-2 text-left">Lead</th>
                 <th className="px-4 py-2 text-left">Regel</th>
+                <th className="px-4 py-2 text-left">Status</th>
                 <th className="px-4 py-2 text-right">Betrag</th>
               </tr>
             </thead>
@@ -249,6 +275,17 @@ export default async function ProvisionPage({
                   </td>
                   <td className="px-4 py-2 text-gray-600 dark:text-gray-300">
                     {e.commission_rules?.name ?? "—"}
+                  </td>
+                  <td className="px-4 py-2">
+                    {e.confirmed_at ? (
+                      <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                        Bestätigt
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        Voraussichtlich
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums font-medium">
                     {fmtMoney(e.amount_cents)}

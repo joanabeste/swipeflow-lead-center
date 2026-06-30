@@ -12,6 +12,8 @@ import {
   UserCog,
   Ban,
   RotateCcw,
+  CheckCircle2,
+  Undo2,
 } from "lucide-react";
 import { useToastContext } from "@/app/(dashboard)/toast-provider";
 import { useDialog } from "@/components/dialog";
@@ -21,6 +23,8 @@ import {
   reassignCommissionEvent,
   updateCommissionEventAmount,
   updateCommissionEventEarnedAt,
+  confirmCommissionEvent,
+  unconfirmCommissionEvent,
   createManualCommissionEvent,
   searchLeadsForCommission,
 } from "./commission-actions";
@@ -32,6 +36,7 @@ export interface LedgerEvent {
   earned_at: string;
   voided_at: string | null;
   void_reason: string | null;
+  confirmed_at: string | null;
   rule_id: string | null;
   lead_id: string;
   user_id: string;
@@ -71,6 +76,14 @@ function personName(p: ProfileLite | { name: string | null; email: string } | nu
   return p.name || p.email;
 }
 
+type EventStatus = "prospective" | "confirmed" | "voided";
+
+function eventStatus(e: LedgerEvent): EventStatus {
+  if (e.voided_at) return "voided";
+  if (e.confirmed_at) return "confirmed";
+  return "prospective";
+}
+
 export function CommissionLedger({
   events,
   profiles,
@@ -91,7 +104,7 @@ export function CommissionLedger({
 
   // Client-Filter (Monat kommt vom Server per ?month=).
   const [userFilter, setUserFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "voided">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | EventStatus>("all");
 
   const profileById = useMemo(
     () => Object.fromEntries(profiles.map((p) => [p.id, p] as const)),
@@ -102,8 +115,7 @@ export function CommissionLedger({
     () =>
       events.filter((e) => {
         if (userFilter !== "all" && e.user_id !== userFilter) return false;
-        if (statusFilter === "active" && e.voided_at) return false;
-        if (statusFilter === "voided" && !e.voided_at) return false;
+        if (statusFilter !== "all" && eventStatus(e) !== statusFilter) return false;
         return true;
       }),
     [events, userFilter, statusFilter],
@@ -111,7 +123,12 @@ export function CommissionLedger({
 
   // Summen (immer auf Basis aller Monats-Events, unabhaengig vom Filter).
   const activeEvents = useMemo(() => events.filter((e) => !e.voided_at), [events]);
-  const totalActiveCents = activeEvents.reduce((s, e) => s + e.amount_cents, 0);
+  const prospectiveCents = activeEvents
+    .filter((e) => !e.confirmed_at)
+    .reduce((s, e) => s + e.amount_cents, 0);
+  const confirmedCents = activeEvents
+    .filter((e) => e.confirmed_at)
+    .reduce((s, e) => s + e.amount_cents, 0);
   const voidedCount = events.length - activeEvents.length;
 
   const perPerson = useMemo(() => {
@@ -208,6 +225,20 @@ export function CommissionLedger({
     run(e.id, () => restoreCommissionEvent(e.id), "Provision reaktiviert.");
   }
 
+  function onConfirm(e: LedgerEvent) {
+    run(e.id, () => confirmCommissionEvent(e.id), "Provision bestätigt.");
+  }
+
+  async function onUnconfirm(e: LedgerEvent) {
+    const ok = await dialog.confirm({
+      title: "Bestätigung aufheben?",
+      body: "Die Provision gilt danach wieder als voraussichtlich.",
+      confirmLabel: "Aufheben",
+    });
+    if (!ok) return;
+    run(e.id, () => unconfirmCommissionEvent(e.id), "Bestätigung aufgehoben.");
+  }
+
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -262,20 +293,25 @@ export function CommissionLedger({
         </select>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "voided")}
+          onChange={(e) => setStatusFilter(e.target.value as "all" | EventStatus)}
           className={selectCls}
         >
           <option value="all">Alle</option>
-          <option value="active">Nur aktiv</option>
-          <option value="voided">Nur storniert</option>
+          <option value="prospective">Voraussichtlich</option>
+          <option value="confirmed">Bestätigt</option>
+          <option value="voided">Storniert</option>
         </select>
       </div>
 
       {/* Summen */}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <SummaryCard label="Summe (aktiv)" value={fmtMoney(totalActiveCents)} />
-        <SummaryCard label="Events" value={`${events.length}`} sub={`${activeEvents.length} aktiv`} />
-        <SummaryCard label="Storniert" value={`${voidedCount}`} />
+        <SummaryCard label="Voraussichtlich" value={fmtMoney(prospectiveCents)} accent="amber" />
+        <SummaryCard label="Bestätigt" value={fmtMoney(confirmedCents)} accent="green" />
+        <SummaryCard
+          label="Events"
+          value={`${events.length}`}
+          sub={voidedCount > 0 ? `${voidedCount} storniert` : undefined}
+        />
       </div>
 
       {perPerson.length > 0 && (
@@ -330,7 +366,8 @@ export function CommissionLedger({
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2c2c2e]/40">
               {filtered.map((e) => {
-                const voided = !!e.voided_at;
+                const status = eventStatus(e);
+                const voided = status === "voided";
                 const busy = busyId === e.id;
                 return (
                   <tr key={e.id} className={voided ? "opacity-55" : undefined}>
@@ -357,19 +394,8 @@ export function CommissionLedger({
                     >
                       {fmtMoney(e.amount_cents)}
                     </td>
-                    <td className="px-3 py-2">
-                      {voided ? (
-                        <span
-                          title={e.void_reason ?? undefined}
-                          className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                        >
-                          Storniert
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
-                          Aktiv
-                        </span>
-                      )}
+                    <td className="px-3 py-2" title={voided ? e.void_reason ?? undefined : undefined}>
+                      <StatusBadge status={status} />
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
@@ -379,6 +405,15 @@ export function CommissionLedger({
                           </IconBtn>
                         ) : (
                           <>
+                            {status === "confirmed" ? (
+                              <IconBtn title="Bestätigung aufheben" onClick={() => onUnconfirm(e)} disabled={busy}>
+                                <Undo2 className="h-4 w-4" />
+                              </IconBtn>
+                            ) : (
+                              <IconBtn title="Bestätigen" onClick={() => onConfirm(e)} disabled={busy}>
+                                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                              </IconBtn>
+                            )}
                             <IconBtn title="Empfänger ändern" onClick={() => onReassign(e)} disabled={busy}>
                               <UserCog className="h-4 w-4" />
                             </IconBtn>
@@ -418,13 +453,49 @@ const selectCls =
 const inputCls =
   "block w-full rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#1c1c1e]";
 
-function SummaryCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function SummaryCard({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "amber" | "green";
+}) {
+  const accentCls =
+    accent === "amber"
+      ? "text-amber-600 dark:text-amber-400"
+      : accent === "green"
+      ? "text-green-600 dark:text-green-400"
+      : "";
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 dark:border-[#2c2c2e]/60 dark:bg-[#161618]">
       <p className="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="mt-1 text-lg font-semibold tabular-nums">{value}</p>
+      <p className={`mt-1 text-lg font-semibold tabular-nums ${accentCls}`}>{value}</p>
       {sub && <p className="mt-0.5 text-[11px] text-gray-400">{sub}</p>}
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: EventStatus }) {
+  if (status === "voided")
+    return (
+      <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">
+        Storniert
+      </span>
+    );
+  if (status === "confirmed")
+    return (
+      <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+        Bestätigt
+      </span>
+    );
+  return (
+    <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      Voraussichtlich
+    </span>
   );
 }
 

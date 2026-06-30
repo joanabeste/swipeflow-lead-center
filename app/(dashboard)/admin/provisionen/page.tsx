@@ -53,7 +53,7 @@ export default async function AdminProvisionenPage({
       db
         .from("commission_events")
         .select(
-          "id, amount_cents, currency, earned_at, voided_at, void_reason, rule_id, lead_id, user_id, note, leads(company_name), profiles:user_id(name, email), commission_rules(name)",
+          "id, amount_cents, currency, earned_at, voided_at, void_reason, confirmed_at, rule_id, lead_id, user_id, note, leads(company_name), profiles:user_id(name, email), commission_rules(name)",
         )
         .gte("earned_at", range.from.toISOString())
         .lt("earned_at", range.to.toISOString())

@@ -33,7 +33,7 @@ function isMissingColumn(message: string): boolean {
 }
 
 const MIGRATION_HINT =
-  "Spalten fehlen — Migration 069 (commission_events_maintenance) muss in Supabase ausgeführt werden.";
+  "Spalten fehlen — Migration 069/070 (commission_events) muss in Supabase ausgeführt werden.";
 
 /** Provision stornieren (reversibel): zaehlt nicht mehr zur Auszahlung. */
 export async function voidCommissionEvent(eventId: string, reason?: string): Promise<ActionResult> {
@@ -183,7 +183,58 @@ export async function updateCommissionEventEarnedAt(eventId: string, earnedAtIso
   return { success: true };
 }
 
-/** Provision manuell anlegen (ohne Regel): Bonus / nicht automatisch erfasst. */
+/** Provision bestaetigen (z.B. Termin hat stattgefunden) → zaehlt als bestaetigt. */
+export async function confirmCommissionEvent(eventId: string): Promise<ActionResult> {
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return { error: ctx.error };
+
+  const { error } = await ctx.db
+    .from("commission_events")
+    .update({ confirmed_at: new Date().toISOString(), confirmed_by: ctx.user.id })
+    .eq("id", eventId);
+  if (error) {
+    if (isMissingColumn(error.message)) return { error: MIGRATION_HINT };
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "commission.event_confirmed",
+    entityType: "commission_event",
+    entityId: eventId,
+    details: {},
+  });
+  revalidateCommissionViews();
+  return { success: true };
+}
+
+/** Bestaetigung zuruecknehmen → Provision wieder "voraussichtlich". */
+export async function unconfirmCommissionEvent(eventId: string): Promise<ActionResult> {
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return { error: ctx.error };
+
+  const { error } = await ctx.db
+    .from("commission_events")
+    .update({ confirmed_at: null, confirmed_by: null })
+    .eq("id", eventId);
+  if (error) {
+    if (isMissingColumn(error.message)) return { error: MIGRATION_HINT };
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "commission.event_unconfirmed",
+    entityType: "commission_event",
+    entityId: eventId,
+    details: {},
+  });
+  revalidateCommissionViews();
+  return { success: true };
+}
+
+/** Provision manuell anlegen (ohne Regel): Bonus / nicht automatisch erfasst.
+ *  Gilt sofort als bestaetigt (der Admin legt sie bewusst an). */
 export async function createManualCommissionEvent(input: {
   leadId: string;
   userId: string;
@@ -222,6 +273,8 @@ export async function createManualCommissionEvent(input: {
       earned_at: earnedAt.toISOString(),
       created_by: ctx.user.id,
       note: input.note?.trim() || null,
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: ctx.user.id,
     })
     .select("id")
     .single();
