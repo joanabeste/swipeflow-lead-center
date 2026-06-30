@@ -23,6 +23,7 @@ import {
   reassignCommissionEvent,
   updateCommissionEventAmount,
   updateCommissionEventEarnedAt,
+  updateCommissionEventPayoutAt,
   confirmCommissionEvent,
   unconfirmCommissionEvent,
   createManualCommissionEvent,
@@ -37,6 +38,7 @@ export interface LedgerEvent {
   voided_at: string | null;
   void_reason: string | null;
   confirmed_at: string | null;
+  payout_at: string | null;
   rule_id: string | null;
   lead_id: string;
   user_id: string;
@@ -69,6 +71,10 @@ function fmtDate(iso: string): string {
     month: "2-digit",
     year: "numeric",
   });
+}
+
+function fmtMonth(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-DE", { month: "short", year: "numeric" });
 }
 
 function personName(p: ProfileLite | { name: string | null; email: string } | null): string {
@@ -183,11 +189,17 @@ export function CommissionLedger({
     run(e.id, () => updateCommissionEventAmount(e.id, cents), "Betrag geändert.");
   }
 
-  async function onEarnedAt(e: LedgerEvent) {
+  // Editiert den Zuordnungs-Monat: bei bestätigt den Auszahlungsmonat (payout_at),
+  // sonst das Termindatum (earned_at) — beides steuert attributed_at.
+  async function onChangeMonth(e: LedgerEvent) {
+    const confirmed = !!e.confirmed_at;
+    const current = confirmed ? e.payout_at ?? e.earned_at : e.earned_at;
     const val = await dialog.prompt({
-      title: "Datum / Monat ändern",
-      body: "Bestimmt, welchem Monat die Provision zugeordnet wird (Format JJJJ-MM-TT).",
-      defaultValue: new Date(e.earned_at).toISOString().slice(0, 10),
+      title: confirmed ? "Auszahlungsmonat ändern" : "Monat ändern",
+      body: confirmed
+        ? "Bestimmt den Auszahlungsmonat (Format JJJJ-MM-TT). Das Termindatum bleibt unverändert."
+        : "Bestimmt, welchem Monat die voraussichtliche Provision zugeordnet wird (Format JJJJ-MM-TT).",
+      defaultValue: new Date(current).toISOString().slice(0, 10),
       placeholder: "2026-06-30",
       validate: (v) =>
         /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) && !isNaN(new Date(v).getTime())
@@ -195,10 +207,11 @@ export function CommissionLedger({
           : "Ungültiges Datum (JJJJ-MM-TT).",
     });
     if (val == null) return;
+    const iso = `${val.trim()}T12:00:00`;
     run(
       e.id,
-      () => updateCommissionEventEarnedAt(e.id, `${val.trim()}T12:00:00`),
-      "Datum geändert.",
+      () => (confirmed ? updateCommissionEventPayoutAt(e.id, iso) : updateCommissionEventEarnedAt(e.id, iso)),
+      confirmed ? "Auszahlungsmonat geändert." : "Monat geändert.",
     );
   }
 
@@ -226,7 +239,7 @@ export function CommissionLedger({
   }
 
   function onConfirm(e: LedgerEvent) {
-    run(e.id, () => confirmCommissionEvent(e.id), "Provision bestätigt.");
+    run(e.id, () => confirmCommissionEvent(e.id), "Bestätigt & aktuellem Monat zugeordnet.");
   }
 
   async function onUnconfirm(e: LedgerEvent) {
@@ -355,10 +368,11 @@ export function CommissionLedger({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-500 dark:bg-[#161618]">
               <tr>
-                <th className="px-3 py-2 text-left">Datum</th>
+                <th className="px-3 py-2 text-left">Termin</th>
                 <th className="px-3 py-2 text-left">Lead</th>
                 <th className="px-3 py-2 text-left">Empfänger</th>
                 <th className="px-3 py-2 text-left">Grund</th>
+                <th className="px-3 py-2 text-left">Auszahlung</th>
                 <th className="px-3 py-2 text-right">Betrag</th>
                 <th className="px-3 py-2 text-left">Status</th>
                 <th className="px-3 py-2 text-right">Aktionen</th>
@@ -386,6 +400,9 @@ export function CommissionLedger({
                       {e.rule_id
                         ? e.commission_rules?.name ?? "—"
                         : `Manuell${e.note ? `: ${e.note}` : ""}`}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 dark:text-gray-300">
+                      {e.payout_at ? fmtMonth(e.payout_at) : <span className="text-gray-400">—</span>}
                     </td>
                     <td
                       className={`px-3 py-2 text-right tabular-nums font-medium ${
@@ -420,7 +437,11 @@ export function CommissionLedger({
                             <IconBtn title="Betrag anpassen" onClick={() => onAmount(e)} disabled={busy}>
                               <Pencil className="h-4 w-4" />
                             </IconBtn>
-                            <IconBtn title="Datum / Monat ändern" onClick={() => onEarnedAt(e)} disabled={busy}>
+                            <IconBtn
+                              title={status === "confirmed" ? "Auszahlungsmonat ändern" : "Monat ändern"}
+                              onClick={() => onChangeMonth(e)}
+                              disabled={busy}
+                            >
                               <CalendarClock className="h-4 w-4" />
                             </IconBtn>
                             <IconBtn title="Stornieren" danger onClick={() => onVoid(e)} disabled={busy}>

@@ -38,8 +38,8 @@ async function loadKpis() {
     .from("commission_events")
     .select("amount_cents")
     .is("voided_at", null) // stornierte Provisionen nicht mitzaehlen
-    .gte("earned_at", range.from.toISOString())
-    .lt("earned_at", range.to.toISOString());
+    .gte("attributed_at", range.from.toISOString())
+    .lt("attributed_at", range.to.toISOString());
   // Offene Abwesenheits-Antraege
   const absP = db.from("absences").select("id", { count: "exact", head: true }).eq("status", "pending");
 

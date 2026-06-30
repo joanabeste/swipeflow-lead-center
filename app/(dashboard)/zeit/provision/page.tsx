@@ -60,12 +60,12 @@ export default async function ProvisionPage({
     loadEntriesInRange(targetUserId, range.from, range.to),
     db
       .from("commission_events")
-      .select("id, amount_cents, currency, earned_at, lead_id, rule_id, confirmed_at, leads(company_name), commission_rules(name)")
+      .select("id, amount_cents, currency, earned_at, lead_id, rule_id, confirmed_at, payout_at, attributed_at, leads(company_name), commission_rules(name)")
       .eq("user_id", targetUserId)
       .is("voided_at", null) // stornierte Provisionen zaehlen nicht zur Auszahlung
-      .gte("earned_at", range.from.toISOString())
-      .lt("earned_at", range.to.toISOString())
-      .order("earned_at", { ascending: false }),
+      .gte("attributed_at", range.from.toISOString())
+      .lt("attributed_at", range.to.toISOString())
+      .order("attributed_at", { ascending: false }),
     isAdmin
       ? db.from("profiles").select("id, name, email").eq("status", "active").order("name", { ascending: true })
       : Promise.resolve({ data: null } as { data: null }),
@@ -85,15 +85,16 @@ export default async function ProvisionPage({
     lead_id: string;
     rule_id: string;
     confirmed_at: string | null;
+    payout_at: string | null;
     leads: { company_name: string } | null;
     commission_rules: { name: string } | null;
   };
-  // Fallback, falls Migration 069/070 (Spalten voided_at/confirmed_at) noch nicht
-  // eingespielt sind: ohne diese Spalten/Filter erneut laden, statt zu brechen →
-  // dann gilt alles als "voraussichtlich".
+  // Fallback, falls Migration 069/070/071 (voided_at/confirmed_at/attributed_at)
+  // noch nicht eingespielt sind: ohne diese Spalten/Filter erneut laden (Filter dann
+  // auf earned_at), statt zu brechen → es gilt alles als "voraussichtlich".
   let evData: unknown[] | null = eventsRes.data;
   let evErr = eventsRes.error;
-  if (evErr && /column .*(voided_at|confirmed_at).* does not exist/i.test(evErr.message)) {
+  if (evErr && /column .*(voided_at|confirmed_at|attributed_at|payout_at).* does not exist/i.test(evErr.message)) {
     const retry = await db
       .from("commission_events")
       .select("id, amount_cents, currency, earned_at, lead_id, rule_id, leads(company_name), commission_rules(name)")

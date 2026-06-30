@@ -33,7 +33,7 @@ function isMissingColumn(message: string): boolean {
 }
 
 const MIGRATION_HINT =
-  "Spalten fehlen — Migration 069/070 (commission_events) muss in Supabase ausgeführt werden.";
+  "Spalten fehlen — Migration 069/070/071 (commission_events) muss in Supabase ausgeführt werden.";
 
 /** Provision stornieren (reversibel): zaehlt nicht mehr zur Auszahlung. */
 export async function voidCommissionEvent(eventId: string, reason?: string): Promise<ActionResult> {
@@ -183,14 +183,46 @@ export async function updateCommissionEventEarnedAt(eventId: string, earnedAtIso
   return { success: true };
 }
 
-/** Provision bestaetigen (z.B. Termin hat stattgefunden) → zaehlt als bestaetigt. */
+/** Auszahlungsmonat manuell setzen (nur sinnvoll fuer bestaetigte Provisionen). */
+export async function updateCommissionEventPayoutAt(
+  eventId: string,
+  payoutIso: string,
+): Promise<ActionResult> {
+  const ctx = await requireAdmin();
+  if ("error" in ctx) return { error: ctx.error };
+  const ts = new Date(payoutIso);
+  if (isNaN(ts.getTime())) return { error: "Ungültiges Datum." };
+
+  const { error } = await ctx.db
+    .from("commission_events")
+    .update({ payout_at: ts.toISOString() })
+    .eq("id", eventId);
+  if (error) {
+    if (isMissingColumn(error.message)) return { error: MIGRATION_HINT };
+    return { error: `DB-Fehler: ${error.message}` };
+  }
+
+  await logAudit({
+    userId: ctx.user.id,
+    action: "commission.event_payout_updated",
+    entityType: "commission_event",
+    entityId: eventId,
+    details: { payout_at: ts.toISOString() },
+  });
+  revalidateCommissionViews();
+  return { success: true };
+}
+
+/** Provision bestaetigen (z.B. Termin hat stattgefunden) → zaehlt als bestaetigt
+ *  und wird dem aktuellen Monat zugeordnet (payout_at = jetzt, manuell anpassbar). */
 export async function confirmCommissionEvent(eventId: string): Promise<ActionResult> {
   const ctx = await requireAdmin();
   if ("error" in ctx) return { error: ctx.error };
 
+  const now = new Date().toISOString();
   const { error } = await ctx.db
     .from("commission_events")
-    .update({ confirmed_at: new Date().toISOString(), confirmed_by: ctx.user.id })
+    .update({ confirmed_at: now, confirmed_by: ctx.user.id, payout_at: now })
     .eq("id", eventId);
   if (error) {
     if (isMissingColumn(error.message)) return { error: MIGRATION_HINT };
@@ -215,7 +247,7 @@ export async function unconfirmCommissionEvent(eventId: string): Promise<ActionR
 
   const { error } = await ctx.db
     .from("commission_events")
-    .update({ confirmed_at: null, confirmed_by: null })
+    .update({ confirmed_at: null, confirmed_by: null, payout_at: null })
     .eq("id", eventId);
   if (error) {
     if (isMissingColumn(error.message)) return { error: MIGRATION_HINT };
@@ -275,6 +307,7 @@ export async function createManualCommissionEvent(input: {
       note: input.note?.trim() || null,
       confirmed_at: new Date().toISOString(),
       confirmed_by: ctx.user.id,
+      payout_at: earnedAt.toISOString(), // bestaetigt → Auszahlungsmonat = gewaehltes Datum
     })
     .select("id")
     .single();

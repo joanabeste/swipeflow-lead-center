@@ -60,8 +60,8 @@ export default async function AdminTeamPage() {
     .from("commission_events")
     .select("user_id, amount_cents")
     .is("voided_at", null) // stornierte Provisionen nicht mitzaehlen
-    .gte("earned_at", range.from.toISOString())
-    .lt("earned_at", range.to.toISOString());
+    .gte("attributed_at", range.from.toISOString())
+    .lt("attributed_at", range.to.toISOString());
   const commByUser = new Map<string, number>();
   for (const e of (commData ?? []) as CommissionEvent[]) {
     commByUser.set(e.user_id, (commByUser.get(e.user_id) ?? 0) + e.amount_cents);
