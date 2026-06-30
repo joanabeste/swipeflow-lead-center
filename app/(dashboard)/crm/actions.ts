@@ -68,9 +68,13 @@ export async function updateCrmStatus(leadId: string, statusId: string | null) {
     details: { old_status: before?.crm_status_id ?? null, new_status: statusId },
   });
 
-  // Provisions-Trigger. Idempotent (UNIQUE in 068); ein erneutes Setzen
-  // desselben Status erzeugt kein zweites Event.
-  const award = await awardCommissionsForStatusChange(db, leadId, statusId);
+  // Provisions-Trigger: gutgeschrieben wird dem Bearbeiter, der den Status
+  // setzt. Idempotent (UNIQUE in 068); ein erneutes Setzen desselben Status
+  // erzeugt kein zweites Event.
+  const award = await awardCommissionsForStatusChange(db, leadId, statusId, {
+    id: ctx.user.id,
+    role: ctx.profile.role,
+  });
   if (award.error) {
     console.warn("[updateCrmStatus] commission award failed:", award.error);
     await logAudit({
@@ -232,8 +236,8 @@ export async function bulkUpdateCrmStatus(
     if (auditErr) console.warn("[bulkUpdateCrmStatus] audit insert failed:", auditErr);
   }
 
-  // Provisions-Trigger: pro Lead (Logik haengt vom Lead-Assignee ab).
-  // UNIQUE(rule_id, lead_id) in Migration 068 macht den Aufruf idempotent.
+  // Provisions-Trigger: pro Lead (gutgeschrieben dem Bearbeiter, der den Status
+  // setzt). UNIQUE(rule_id, lead_id) in Migration 068 macht den Aufruf idempotent.
   const commissionErrors: string[] = [];
   let anyAwarded = false;
   const awardAuditRows: {
@@ -244,7 +248,10 @@ export async function bulkUpdateCrmStatus(
     details: Record<string, unknown>;
   }[] = [];
   for (const id of ids) {
-    const award = await awardCommissionsForStatusChange(db, id, statusId);
+    const award = await awardCommissionsForStatusChange(db, id, statusId, {
+      id: ctx.user.id,
+      role: ctx.profile.role,
+    });
     if (award.error) {
       console.warn("[bulkUpdateCrmStatus] commission award failed:", id, award.error);
       commissionErrors.push(`${id}: ${award.error}`);

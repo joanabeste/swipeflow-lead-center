@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 /**
  * Wird nach jedem CRM-Status-Wechsel aufgerufen. Findet aktive
  * commission_rules, deren trigger_status_id mit dem neuen Status uebereinstimmt
- * und deren Scope (all / role / user) auf den assigned_to-User des Leads passt.
+ * und deren Scope (all / role / user) auf den BEARBEITER passt, der den Status
+ * gesetzt hat (actor). Die Provision wird diesem Bearbeiter gutgeschrieben.
  * Inserts sind idempotent (UNIQUE(rule_id, lead_id) in 068).
  *
  * Schluckt Fehler bewusst weich (return statt throw), damit ein fehlendes
@@ -13,25 +14,10 @@ export async function awardCommissionsForStatusChange(
   db: SupabaseClient,
   leadId: string,
   newStatusId: string | null,
+  actor: { id: string; role: string },
 ): Promise<{ inserted: number; skipped: number; error?: string }> {
   if (!newStatusId) return { inserted: 0, skipped: 0 };
-
-  const { data: lead, error: leadErr } = await db
-    .from("leads")
-    .select("id, assigned_to")
-    .eq("id", leadId)
-    .single();
-  if (leadErr || !lead) return { inserted: 0, skipped: 0, error: leadErr?.message };
-  const assignedTo = (lead as { assigned_to: string | null }).assigned_to;
-  if (!assignedTo) return { inserted: 0, skipped: 0 };
-
-  const { data: profile, error: profErr } = await db
-    .from("profiles")
-    .select("id, role")
-    .eq("id", assignedTo)
-    .single();
-  if (profErr || !profile) return { inserted: 0, skipped: 0, error: profErr?.message };
-  const assigneeRole = (profile as { role: string }).role;
+  if (!actor?.id) return { inserted: 0, skipped: 0 };
 
   const { data: rules, error: rulesErr } = await db
     .from("commission_rules")
@@ -58,8 +44,8 @@ export async function awardCommissionsForStatusChange(
 
   const matching = (rules as Rule[]).filter((r) => {
     if (r.scope === "all") return true;
-    if (r.scope === "role") return r.scope_role === assigneeRole;
-    if (r.scope === "user") return r.scope_user_id === assignedTo;
+    if (r.scope === "role") return r.scope_role === actor.role;
+    if (r.scope === "user") return r.scope_user_id === actor.id;
     return false;
   });
   if (matching.length === 0) return { inserted: 0, skipped: 0 };
@@ -67,7 +53,7 @@ export async function awardCommissionsForStatusChange(
   const rows = matching.map((r) => ({
     rule_id: r.id,
     lead_id: leadId,
-    user_id: assignedTo,
+    user_id: actor.id,
     amount_cents: r.amount_cents,
     currency: r.currency,
     trigger_status_id: newStatusId,
