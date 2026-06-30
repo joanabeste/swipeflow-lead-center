@@ -62,6 +62,7 @@ export default async function ProvisionPage({
       .from("commission_events")
       .select("id, amount_cents, currency, earned_at, lead_id, rule_id, leads(company_name), commission_rules(name)")
       .eq("user_id", targetUserId)
+      .is("voided_at", null) // stornierte Provisionen zaehlen nicht zur Auszahlung
       .gte("earned_at", range.from.toISOString())
       .lt("earned_at", range.to.toISOString())
       .order("earned_at", { ascending: false }),
@@ -86,11 +87,26 @@ export default async function ProvisionPage({
     leads: { company_name: string } | null;
     commission_rules: { name: string } | null;
   };
-  const tableMissing = eventsRes.error && /relation.*does not exist/i.test(eventsRes.error.message);
-  if (eventsRes.error && !tableMissing) {
-    console.error("[provision] commission_events query failed:", eventsRes.error);
+  // Fallback, falls Migration 069 (Spalte voided_at) noch nicht eingespielt ist:
+  // ohne den Storno-Filter erneut laden, statt die Seite zu brechen.
+  let evData = eventsRes.data;
+  let evErr = eventsRes.error;
+  if (evErr && /column .*voided_at.* does not exist/i.test(evErr.message)) {
+    const retry = await db
+      .from("commission_events")
+      .select("id, amount_cents, currency, earned_at, lead_id, rule_id, leads(company_name), commission_rules(name)")
+      .eq("user_id", targetUserId)
+      .gte("earned_at", range.from.toISOString())
+      .lt("earned_at", range.to.toISOString())
+      .order("earned_at", { ascending: false });
+    evData = retry.data;
+    evErr = retry.error;
   }
-  const events = ((eventsRes.data ?? []) as unknown as EventRow[]) ?? [];
+  const tableMissing = evErr && /relation.*does not exist/i.test(evErr.message);
+  if (evErr && !tableMissing) {
+    console.error("[provision] commission_events query failed:", evErr);
+  }
+  const events = ((evData ?? []) as unknown as EventRow[]) ?? [];
   const commissionCents = events.reduce((sum, e) => sum + e.amount_cents, 0);
   const totalCents = wageCents + commissionCents;
 

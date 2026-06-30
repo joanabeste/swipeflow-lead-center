@@ -59,6 +59,7 @@ export default async function AdminTeamPage() {
   const { data: commData } = await db
     .from("commission_events")
     .select("user_id, amount_cents")
+    .is("voided_at", null) // stornierte Provisionen nicht mitzaehlen
     .gte("earned_at", range.from.toISOString())
     .lt("earned_at", range.to.toISOString());
   const commByUser = new Map<string, number>();
