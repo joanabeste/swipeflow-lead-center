@@ -149,58 +149,15 @@ export async function updateLead(
   return { success: true };
 }
 
-/** Login der Inhaberin — für die Grün-im-Queue-Sonderregel unten. */
-const JOANA_EMAIL = "joana@swipeflow.agency";
-
 /**
  * Manuelle Ampel-Korrektur im Lead-Detail. Setzt `source='manual'`, damit ein
  * erneuter Anreicherungs-Lauf die Korrektur nicht überschreibt (Guard in
  * enrich-lead.ts). Nutzt updateLead → Change-Tracking + Audit + Revalidation.
- *
- * `opts.queueGreen` meldet das Cockpit: „grün gesetzt, aber NICHT sofort ins CRM"
- * (immediateQualify AUS). Nur in diesem Fall greift die Sonderregel für Joana.
  */
-export async function setTrafficLightManual(
-  leadId: string,
-  rating: TrafficLightRating,
-  opts?: { queueGreen?: boolean },
-) {
+export async function setTrafficLightManual(leadId: string, rating: TrafficLightRating) {
   if (!["green", "amber", "red"].includes(rating)) {
     return { error: "Ungültiger Ampel-Wert." };
   }
-
-  // Sonderregel NUR für Joana: setzt sie im Qualifizier-Cockpit (ohne Sofort-CRM)
-  // einen Lead auf grün, soll der Lead wie heute frisch importiert wirken
-  // (created_at = jetzt) und der Grün-Wechsel bewusst NICHT im Verlauf auftauchen.
-  // Deshalb umgehen wir hier updateLead komplett (kein lead_changes, kein Audit).
-  if (opts?.queueGreen && rating === "green") {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.email?.toLowerCase() === JOANA_EMAIL) {
-      const db = createServiceClient();
-      const now = new Date().toISOString();
-      const { error } = await db
-        .from("leads")
-        .update({
-          traffic_light_rating: "green",
-          traffic_light_score: scoreForRating("green"),
-          traffic_light_source: "manual",
-          traffic_light_rated_at: now,
-          created_at: now,
-          updated_at: now,
-        })
-        .eq("id", leadId);
-      if (error) return { error: error.message };
-      // Bewusst KEIN lead_changes-Insert und KEIN logAudit → kein Verlaufseintrag.
-      revalidatePath("/leads");
-      revalidatePath("/crm");
-      revalidatePath(`/crm/${leadId}`);
-      return { success: true };
-    }
-  }
-
   return updateLead(leadId, {
     traffic_light_rating: rating,
     traffic_light_score: scoreForRating(rating),
