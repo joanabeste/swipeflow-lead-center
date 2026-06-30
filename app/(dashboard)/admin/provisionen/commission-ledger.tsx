@@ -194,20 +194,22 @@ export function CommissionLedger({
   async function onChangeMonth(e: LedgerEvent) {
     const confirmed = !!e.confirmed_at;
     const current = confirmed ? e.payout_at ?? e.earned_at : e.earned_at;
-    const val = await dialog.prompt({
-      title: confirmed ? "Auszahlungsmonat ändern" : "Monat ändern",
-      body: confirmed
-        ? "Bestimmt den Auszahlungsmonat (Format JJJJ-MM-TT). Das Termindatum bleibt unverändert."
-        : "Bestimmt, welchem Monat die voraussichtliche Provision zugeordnet wird (Format JJJJ-MM-TT).",
-      defaultValue: new Date(current).toISOString().slice(0, 10),
-      placeholder: "2026-06-30",
-      validate: (v) =>
-        /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) && !isNaN(new Date(v).getTime())
-          ? null
-          : "Ungültiges Datum (JJJJ-MM-TT).",
+    const month = await dialog.show<string>({
+      render: (close) => (
+        <MonthPicker
+          title={confirmed ? "Auszahlungsmonat ändern" : "Monat ändern"}
+          hint={
+            confirmed
+              ? "Wähle den Auszahlungsmonat. Das Termindatum bleibt unverändert."
+              : "Wähle den Monat, dem die voraussichtliche Provision zugeordnet wird."
+          }
+          defaultMonth={new Date(current).toISOString().slice(0, 7)}
+          onClose={close}
+        />
+      ),
     });
-    if (val == null) return;
-    const iso = `${val.trim()}T12:00:00`;
+    if (!month) return;
+    const iso = `${month}-01T12:00:00`; // 1. des gewählten Monats (Monats-Zuordnung)
     run(
       e.id,
       () => (confirmed ? updateCommissionEventPayoutAt(e.id, iso) : updateCommissionEventEarnedAt(e.id, iso)),
@@ -556,6 +558,53 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{label}</span>
       {children}
     </label>
+  );
+}
+
+// ─── Monats-Auswahl (Dialog) ────────────────────────────────────
+
+function MonthPicker({
+  title,
+  hint,
+  defaultMonth,
+  onClose,
+}: {
+  title: string;
+  hint: string;
+  defaultMonth: string; // YYYY-MM
+  onClose: (value?: string) => void;
+}) {
+  const [val, setVal] = useState(defaultMonth);
+  return (
+    <div>
+      <header className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-[#2c2c2e]/50">
+        <h3 className="text-base font-semibold">{title}</h3>
+        <button onClick={() => onClose(undefined)} className="rounded p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5">
+          <X className="h-4 w-4" />
+        </button>
+      </header>
+      <div className="space-y-3 px-6 py-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400">{hint}</p>
+        <Field label="Monat">
+          <input type="month" value={val} onChange={(e) => setVal(e.target.value)} className={inputCls} />
+        </Field>
+      </div>
+      <footer className="flex items-center justify-end gap-2 border-t border-gray-100 px-6 py-3 dark:border-[#2c2c2e]/50">
+        <button
+          onClick={() => onClose(undefined)}
+          className="rounded-xl px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
+        >
+          Abbrechen
+        </button>
+        <button
+          onClick={() => onClose(val || undefined)}
+          disabled={!val}
+          className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-gray-900 hover:bg-primary-dark disabled:opacity-40"
+        >
+          Übernehmen
+        </button>
+      </footer>
+    </div>
   );
 }
 
