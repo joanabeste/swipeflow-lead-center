@@ -75,7 +75,6 @@ export default async function ProvisionPage({
   const aggregate = aggregateEntries(entries, breakMode);
   const workedSeconds = aggregate.totalSeconds;
   const hourlyCents = targetProfile?.hourly_wage_cents ?? 0;
-  const wageCents = Math.round((workedSeconds / 3600) * hourlyCents);
 
   type EventRow = {
     id: string;
@@ -220,7 +219,7 @@ export default async function ProvisionPage({
       </div>
 
       {/* Lohn/Stunden nur als kleine KPIs */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2">
         <KpiCard
           label="Stundenlohn"
           value={hourlyCents > 0 ? fmtMoney(hourlyCents) + "/h" : "—"}
@@ -231,7 +230,6 @@ export default async function ProvisionPage({
           value={`${formatHours(workedSeconds)} h`}
           sub={`${entries.length} Einträge`}
         />
-        <KpiCard label="Lohn (Std × Lohn)" value={fmtMoney(wageCents)} />
       </div>
 
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-[#2c2c2e]/50 dark:bg-[#161618]">
