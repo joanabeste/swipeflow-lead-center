@@ -31,7 +31,7 @@ type PermField =
 const PERMISSIONS: { field: PermField; label: string; title: string }[] = [
   { field: "can_vertrieb", label: "Vertrieb", title: "Vertrieb" },
   { field: "can_fulfillment", label: "Fulfillment", title: "Fulfillment" },
-  { field: "can_zeit", label: "Zeit", title: "Zeit & Lohn" },
+  { field: "can_zeit", label: "Zeit", title: "Zeit & Gehalt" },
   { field: "can_learning", label: "Learning", title: "Learning ansehen" },
   { field: "can_learning_edit", label: "L-Edit", title: "Learning bearbeiten" },
   { field: "can_vertraege", label: "Verträge", title: "Verträge — Vertragsverwaltung" },
@@ -40,7 +40,7 @@ const PERMISSIONS: { field: PermField; label: string; title: string }[] = [
 const FIELD_LABELS: Record<PermField, string> = {
   can_vertrieb: "Vertrieb",
   can_fulfillment: "Fulfillment",
-  can_zeit: "Zeit & Lohn",
+  can_zeit: "Zeit & Gehalt",
   can_learning: "Learning",
   can_learning_edit: "Learning-Bearbeitung",
   can_vertraege: "Verträge",

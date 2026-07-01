@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 
 function labelFromPath(pathname: string): string {
-  if (pathname.startsWith("/zeit")) return "Zeit & Lohn";
+  if (pathname.startsWith("/zeit")) return "Zeit & Gehalt";
   if (pathname.startsWith("/fulfillment")) return "Fulfillment";
   if (pathname.startsWith("/admin") || pathname.startsWith("/einstellungen") || pathname.startsWith("/nutzer") || pathname.startsWith("/zeit/admin") || pathname === "/aktivitaet" || pathname === "/export") return "Admin";
   return "Vertrieb";

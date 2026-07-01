@@ -116,7 +116,7 @@ export default async function AdminTeamPage() {
 
       {entriesErr && (entriesErr.code === "42P01" || /relation.*does not exist/i.test(entriesErr.message)) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Zeit & Lohn-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
+          Zeit & Gehalt-Modul ist noch nicht migriert (062–064). Stunden bleiben 0.
         </div>
       )}
 
@@ -146,7 +146,7 @@ export default async function AdminTeamPage() {
                 <td className="px-4 py-3 text-center text-[10px] font-mono">
                   <span className={perms.can_vertrieb ? "text-primary" : "text-gray-300"} title="Vertrieb">V</span>{" · "}
                   <span className={perms.can_fulfillment ? "text-primary" : "text-gray-300"} title="Fulfillment">F</span>{" · "}
-                  <span className={perms.can_zeit ? "text-primary" : "text-gray-300"} title="Zeit & Lohn">Z</span>{" · "}
+                  <span className={perms.can_zeit ? "text-primary" : "text-gray-300"} title="Zeit & Gehalt">Z</span>{" · "}
                   <span className={perms.can_learning ? "text-primary" : "text-gray-300"} title="Learning">L</span>{" · "}
                   <span className={perms.can_vertraege ? "text-primary" : "text-gray-300"} title="Verträge">Vt</span>
                 </td>
@@ -170,7 +170,7 @@ export default async function AdminTeamPage() {
       </div>
 
       <p className="text-[11px] text-gray-400">
-        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit & Lohn · L=Learning · Vt=Verträge. Admins haben implizit alle.
+        <Users className="mr-1 inline-block h-3 w-3" /> Bereiche-Spalte: V=Vertrieb · F=Fulfillment · Z=Zeit & Gehalt · L=Learning · Vt=Verträge. Admins haben implizit alle.
       </p>
 
       <section id="nutzer-verwalten" className="scroll-mt-20">
