@@ -13,6 +13,7 @@ import {
   deleteDealNote as deleteDealNoteHelper,
 } from "@/lib/deals/server";
 import { parseAmountToCents } from "@/lib/deals/types";
+import type { DealVertical } from "@/lib/deals/types";
 import type { DealActivityType, DealStageKind } from "@/lib/deals/types";
 import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 import { updateCrmStatus } from "@/app/(dashboard)/crm/actions";
@@ -39,6 +40,7 @@ export async function createDealAction(input: {
   amountRaw: string;               // Nutzer-Eingabe, parsen nach Cent
   stageId: string;
   assignedTo: string | null;
+  vertical?: DealVertical | null;
   expectedCloseDate?: string | null;
   actualCloseDate?: string | null;
   probability?: number | null;
@@ -92,6 +94,7 @@ export async function createDealAction(input: {
     amountCents: cents,
     stageId: input.stageId,
     assignedTo: input.assignedTo ?? user.id,
+    vertical: input.vertical ?? null,
     expectedCloseDate: input.expectedCloseDate ?? null,
     actualCloseDate: input.actualCloseDate ?? null,
     probability: input.probability ?? null,
@@ -133,6 +136,7 @@ export async function updateDealAction(
     amountRaw?: string;
     stageId?: string;
     assignedTo?: string | null;
+    vertical?: DealVertical | null;
     expectedCloseDate?: string | null;
     actualCloseDate?: string | null;
     probability?: number | null;
@@ -159,6 +163,7 @@ export async function updateDealAction(
   }
   if (updates.stageId !== undefined) patch.stageId = updates.stageId;
   if (updates.assignedTo !== undefined) patch.assignedTo = updates.assignedTo;
+  if (updates.vertical !== undefined) patch.vertical = updates.vertical;
   if (updates.expectedCloseDate !== undefined) patch.expectedCloseDate = updates.expectedCloseDate;
   if (updates.actualCloseDate !== undefined) patch.actualCloseDate = updates.actualCloseDate;
   if (updates.probability !== undefined) {

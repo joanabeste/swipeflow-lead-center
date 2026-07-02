@@ -5,6 +5,7 @@ import type {
   KpiTotals,
   RepRow,
   SalesKpiReport,
+  SettingAppointment,
   StageVolume,
   VerticalKey,
 } from "./kpi-report";
@@ -235,6 +236,11 @@ export function renderSalesKpiReportHtml(report: SalesKpiReport, generatedAtIso:
     ${dealsDetail(report.dealsList)}
   </div>
 
+  <div class="section">
+    <h2>Setting-Termine im Detail <span class="sub">${esc(report.monthLabel)}</span></h2>
+    ${settingSection(report.settingList)}
+  </div>
+
   <div class="foot">
     ${
       hasUnassigned
@@ -388,10 +394,11 @@ function dealGroup(g: DealListGroup): string {
       (d) => `<tr>
       <td class="name">${esc(d.title)}</td>
       <td>${esc(d.company)}</td>
+      <td>${esc(d.bereich)}</td>
       <td class="r">${money(d.amountCents)}</td>
       <td>${esc(d.assignee)}</td>
       <td class="r">${d.probabilityPct == null ? "—" : num(d.probabilityPct) + " %"}</td>
-      <td>${d.nextStep ? esc(truncate(d.nextStep, 60)) : "—"}</td>
+      <td>${d.nextStep ? esc(truncate(d.nextStep, 48)) : "—"}</td>
     </tr>`,
     )
     .join("");
@@ -402,11 +409,34 @@ function dealGroup(g: DealListGroup): string {
     </div>
     <table>
       <thead><tr>
-        <th>Titel</th><th>Firma</th><th class="r">Betrag</th><th>Vertriebler</th><th class="r">Wahrsch.</th><th>Next Step</th>
+        <th>Titel</th><th>Firma</th><th>Bereich</th><th class="r">Betrag</th><th>Vertriebler</th><th class="r">Wahrsch.</th><th>Next Step</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
   </div>`;
+}
+
+function settingSection(list: SettingAppointment[]): string {
+  if (list.length === 0) return `<div class="empty">Keine Setting-Termine in diesem Monat.</div>`;
+  const rows = list
+    .map(
+      (s) => `<tr>
+      <td>${esc(formatDay(s.date))}</td>
+      <td class="name">${esc(s.company)}</td>
+      <td>${esc(s.setter)}</td>
+    </tr>`,
+    )
+    .join("");
+  return `<table>
+    <thead><tr><th>Datum</th><th>Firma / Lead</th><th>Setter</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+/** "2026-06-15" → "15.06.2026". */
+function formatDay(dateOnly: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOnly);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : dateOnly;
 }
 
 function truncate(s: string, max: number): string {

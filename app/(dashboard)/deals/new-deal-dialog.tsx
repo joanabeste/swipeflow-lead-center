@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, Check } from "lucide-react";
-import type { DealStage } from "@/lib/deals/types";
+import type { DealStage, DealVertical } from "@/lib/deals/types";
 import { createDealAction } from "./actions";
 import { CompanyPicker } from "./_components/company-picker";
 import { closeMonthOptions, monthValueToDate } from "./_lib/close-month";
@@ -35,6 +35,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
   const [stageId, setStageId] = useState(stages.find((s) => s.kind === "open")?.id ?? stages[0]?.id ?? "");
   const [assignedTo, setAssignedTo] = useState<string>("");
   const [closeMonth, setCloseMonth] = useState<string>("");
+  const [vertical, setVertical] = useState<"" | DealVertical>("");
   const [probability, setProbability] = useState<string>("");
   const [nextStep, setNextStep] = useState<string>("");
   const [lastFollowupAt, setLastFollowupAt] = useState<string>("");
@@ -77,6 +78,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
         amountRaw,
         stageId,
         assignedTo: assignedTo || null,
+        vertical: vertical || null,
         actualCloseDate: monthValueToDate(closeMonth),
         probability: probNum,
         nextStep: nextStep.trim() || null,
@@ -181,6 +183,21 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="d-vertical" className="block text-sm font-medium">Bereich</label>
+            <select
+              id="d-vertical"
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value as "" | DealVertical)}
+              className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
+            >
+              <option value="">—</option>
+              <option value="webdesign">Webdesign</option>
+              <option value="recruiting">Recruiting</option>
+              <option value="sonstiges">Sonstiges</option>
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

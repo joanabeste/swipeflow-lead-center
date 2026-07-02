@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { toBerlinDayKey } from "@/lib/date/day-key";
 import { permissionsFromProfile, type Profile } from "@/lib/types";
 import { listDeals, listStages } from "@/lib/deals/server";
+import { DEAL_VERTICAL_LABELS } from "@/lib/deals/types";
 import { computeKpis } from "@/app/(dashboard)/deals/_lib/compute-kpis";
 
 /**
@@ -71,10 +72,18 @@ export interface StageVolume {
 export interface DealListItem {
   title: string;
   company: string;
+  bereich: string; // Bereich-Label (Webdesign/Recruiting/Sonstiges) oder „—"
   amountCents: number;
   assignee: string;
   probabilityPct: number | null;
   nextStep: string | null;
+}
+
+/** Eine Setting-Termin-Zeile mit heuristischem Setter (letzter Anrufer vor Termin). */
+export interface SettingAppointment {
+  date: string; // Berlin-Tag (YYYY-MM-DD)
+  company: string;
+  setter: string;
 }
 
 export interface DealListGroup {
@@ -101,6 +110,7 @@ export interface SalesKpiReport {
   dealsByStage: StageVolume[]; // Volumen/Anzahl pro aktiver Stage (Snapshot)
   dealsMonth: DealsMonth; // erstellt/gewonnen/verloren im Monat
   dealsList: DealListGroup[]; // offene Deals + im Monat abgeschlossene, je Stage
+  settingList: SettingAppointment[]; // Setting-Termine des Monats mit Setter
 }
 
 const PAGE = 1000;
@@ -180,7 +190,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
         // Abgrenzung nach `scheduled_at` (Termin-Datum), NICHT `created_at`:
         // `created_at` ist die DB-Insert-Zeit und bei backfill-importierten
         // Terminen für alle Zeilen identisch → für Monatszahlen unbrauchbar.
-        .select("scheduled_at, event_type_uri, lead_id, lead:leads(vertical)")
+        .select("scheduled_at, event_type_uri, lead_id, invitee_name, lead:leads(vertical, company_name)")
         .eq("status", "booked")
         .gte("scheduled_at", sinceMinusIso)
         .lte("scheduled_at", untilPlusIso)
@@ -191,7 +201,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
       ? fetchPaged<WonDealRow>(db, (from) =>
           db
             .from("deals")
-            .select("amount_cents, assigned_to, actual_close_date, lead:leads(vertical)")
+            .select("amount_cents, assigned_to, actual_close_date, vertical, lead:leads(vertical)")
             .in("stage_id", wonIds)
             .is("deleted_at", null)
             .gte("actual_close_date", firstDay)
@@ -282,6 +292,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   };
 
   // ---- Termine (Setting vs. Closing) im Monat nach Termin-Datum (scheduled_at).
+  const settingList: SettingAppointment[] = [];
   for (const a of appointments) {
     if (!a.scheduled_at) continue; // ohne Termin-Datum nicht einordenbar
     if (!monthDaySet.has(toBerlinDayKey(a.scheduled_at))) continue;
@@ -295,12 +306,19 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
       const setterId = lastCallerBefore(a.lead_id, a.scheduled_at);
       const r = rep(setterId);
       if (r) r.settingTermine += 1;
+      settingList.push({
+        date: toBerlinDayKey(a.scheduled_at),
+        company: a.lead?.company_name ?? a.invitee_name ?? "—",
+        setter: setterId ? nameById.get(setterId) ?? "—" : "—",
+      });
     }
   }
+  settingList.sort((a, b) => a.date.localeCompare(b.date));
 
   // ---- Closings (gewonnene Deals im Monat nach actual_close_date).
+  // Bereich = Deal-Bereich (deal.vertical) mit Fallback auf Lead-Bereich.
   for (const d of wonDeals) {
-    const v = verticalOf(d.lead?.vertical);
+    const v = verticalOf(d.vertical ?? d.lead?.vertical);
     const cents = d.amount_cents ?? 0;
     addVertical(v, (t) => {
       t.closings += 1;
@@ -397,6 +415,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
           .map((d) => ({
             title: d.title,
             company: d.company_name,
+            bereich: d.vertical ? DEAL_VERTICAL_LABELS[d.vertical] : "—",
             amountCents: d.amountCents,
             assignee: d.assignee_name ?? "—",
             probabilityPct: d.probability,
@@ -420,6 +439,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     dealsByStage,
     dealsMonth,
     dealsList,
+    settingList,
   };
 }
 
@@ -427,6 +447,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
 
 interface LeadVerticalEmbed {
   vertical: string | null;
+  company_name?: string | null;
 }
 interface OutboundCall {
   created_by: string | null;
@@ -438,12 +459,14 @@ interface AppointmentRow {
   scheduled_at: string | null;
   event_type_uri: string | null;
   lead_id: string | null;
+  invitee_name: string | null;
   lead: LeadVerticalEmbed | null;
 }
 interface WonDealRow {
   amount_cents: number | null;
   assigned_to: string | null;
   actual_close_date: string | null;
+  vertical: string | null;
   lead: LeadVerticalEmbed | null;
 }
 

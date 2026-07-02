@@ -7,6 +7,7 @@ import type {
   DealWithRelations,
   DealChange,
   DealStageKind,
+  DealVertical,
   DealNote,
   DealActivityType,
 } from "./types";
@@ -72,7 +73,7 @@ export async function deleteStage(id: string): Promise<void> {
 
 const DEAL_SELECT = `
   id, lead_id, title, description, amount_cents, currency, stage_id,
-  assigned_to, expected_close_date, actual_close_date,
+  assigned_to, vertical, expected_close_date, actual_close_date,
   probability, next_step, last_followup_at,
   company_name,
   created_by, created_at, updated_at,
@@ -110,6 +111,7 @@ export async function createDeal(input: {
   amountCents: number;
   stageId: string;
   assignedTo: string | null;
+  vertical?: DealVertical | null;
   expectedCloseDate: string | null;
   actualCloseDate?: string | null;
   probability?: number | null;
@@ -129,6 +131,7 @@ export async function createDeal(input: {
       amount_cents: input.amountCents,
       stage_id: input.stageId,
       assigned_to: input.assignedTo,
+      vertical: input.vertical ?? null,
       expected_close_date: input.expectedCloseDate,
       actual_close_date: input.actualCloseDate ?? null,
       probability: input.probability ?? null,
@@ -162,6 +165,7 @@ export async function updateDeal(
     amountCents: number;
     stageId: string;
     assignedTo: string | null;
+    vertical: DealVertical | null;
     expectedCloseDate: string | null;
     actualCloseDate: string | null;
     probability: number | null;
@@ -174,7 +178,7 @@ export async function updateDeal(
   const db = createServiceClient();
   const { data: before } = await db
     .from("deals")
-    .select("title, description, amount_cents, stage_id, assigned_to, expected_close_date, actual_close_date, probability, next_step, last_followup_at, lead_id, company_name")
+    .select("title, description, amount_cents, stage_id, assigned_to, vertical, expected_close_date, actual_close_date, probability, next_step, last_followup_at, lead_id, company_name")
     .eq("id", id)
     .maybeSingle();
   if (!before) return { error: "Deal nicht gefunden." };
@@ -217,6 +221,10 @@ export async function updateDeal(
   if (updates.assignedTo !== undefined) {
     row.assigned_to = updates.assignedTo;
     track("assigned_to", before.assigned_to, updates.assignedTo);
+  }
+  if (updates.vertical !== undefined) {
+    row.vertical = updates.vertical;
+    track("vertical", before.vertical, updates.vertical);
   }
   if (updates.expectedCloseDate !== undefined) {
     row.expected_close_date = updates.expectedCloseDate;
@@ -400,6 +408,7 @@ type DealRelRow = {
   currency: string;
   stage_id: string;
   assigned_to: string | null;
+  vertical: DealVertical | null;
   expected_close_date: string | null;
   actual_close_date: string | null;
   probability: number | null;
@@ -433,6 +442,7 @@ function mapDealRelRow(r: unknown): DealWithRelations {
     currency: row.currency,
     stageId: row.stage_id,
     assignedTo: row.assigned_to,
+    vertical: row.vertical ?? null,
     expectedCloseDate: row.expected_close_date,
     actualCloseDate: row.actual_close_date,
     probability: row.probability,
@@ -464,6 +474,7 @@ export function dealCore(d: DealWithRelations): Deal {
     currency: d.currency,
     stageId: d.stageId,
     assignedTo: d.assignedTo,
+    vertical: d.vertical,
     expectedCloseDate: d.expectedCloseDate,
     actualCloseDate: d.actualCloseDate,
     probability: d.probability,

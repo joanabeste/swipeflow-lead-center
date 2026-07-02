@@ -10,9 +10,9 @@ import {
   Trophy, Send, X,
 } from "lucide-react";
 import type {
-  DealChange, DealStage, DealWithRelations, DealNote, DealActivityType,
+  DealChange, DealStage, DealWithRelations, DealNote, DealActivityType, DealVertical,
 } from "@/lib/deals/types";
-import { formatAmount, weightedForecastCents, DEAL_ACTIVITY_LABELS } from "@/lib/deals/types";
+import { formatAmount, weightedForecastCents, DEAL_ACTIVITY_LABELS, DEAL_VERTICAL_LABELS } from "@/lib/deals/types";
 import { updateDealAction, deleteDealAction, addDealNoteAction, deleteDealNoteAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
 import { useConfetti } from "@/components/confetti";
@@ -79,6 +79,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
   const [assignedTo, setAssignedTo] = useState(deal.assignedTo ?? "");
   // Abschluss-MONAT (Dropdown) → gespeichert als actual_close_date (15. des Monats).
   const [closeMonth, setCloseMonth] = useState(dateToMonthValue(deal.actualCloseDate));
+  const [vertical, setVertical] = useState<"" | DealVertical>(deal.vertical ?? "");
   const [probability, setProbability] = useState<string>(
     deal.probability != null ? String(deal.probability) : "",
   );
@@ -133,6 +134,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
         amountRaw,
         stageId,
         assignedTo: assignedTo || null,
+        vertical: vertical || null,
         actualCloseDate: monthValueToDate(closeMonth),
         probability: probNum,
         nextStep: nextStep.trim() || null,
@@ -230,6 +232,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
                       setStageId(deal.stageId);
                       setAssignedTo(deal.assignedTo ?? "");
                       setCloseMonth(dateToMonthValue(deal.actualCloseDate));
+                      setVertical(deal.vertical ?? "");
                       setProbability(deal.probability != null ? String(deal.probability) : "");
                       setNextStep(deal.nextStep ?? "");
                       setLastFollowupAt(deal.lastFollowupAt ?? "");
@@ -344,6 +347,27 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
                 </p>
               )}
             </div>
+
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Bereich
+              </p>
+              {editing ? (
+                <select
+                  value={vertical}
+                  onChange={(e) => setVertical(e.target.value as "" | DealVertical)}
+                  className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
+                >
+                  <option value="">—</option>
+                  <option value="webdesign">Webdesign</option>
+                  <option value="recruiting">Recruiting</option>
+                  <option value="sonstiges">Sonstiges</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm">{deal.vertical ? DEAL_VERTICAL_LABELS[deal.vertical] : "—"}</p>
+              )}
+            </div>
+
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 Abschluss-Monat

@@ -171,7 +171,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       .from("deals")
       .select(`
         id, lead_id, title, description, amount_cents, currency, stage_id,
-        assigned_to, expected_close_date, actual_close_date,
+        assigned_to, vertical, expected_close_date, actual_close_date,
         probability, next_step, last_followup_at,
         company_name,
         created_by, created_at, updated_at,
@@ -204,6 +204,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       currency: row.currency as string,
       stageId: row.stage_id as string,
       assignedTo: (row.assigned_to as string | null) ?? null,
+      vertical: (row.vertical as DealWithRelations["vertical"]) ?? null,
       expectedCloseDate: (row.expected_close_date as string | null) ?? null,
       actualCloseDate: (row.actual_close_date as string | null) ?? null,
       probability: (row.probability as number | null) ?? null,

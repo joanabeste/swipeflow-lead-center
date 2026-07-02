@@ -1,5 +1,14 @@
 export type DealStageKind = "open" | "won" | "lost";
 
+/** Bereich eines Deals (analog leads.vertical, inkl. „sonstiges"). */
+export type DealVertical = "webdesign" | "recruiting" | "sonstiges";
+
+export const DEAL_VERTICAL_LABELS: Record<DealVertical, string> = {
+  webdesign: "Webdesign",
+  recruiting: "Recruiting",
+  sonstiges: "Sonstiges",
+};
+
 export interface DealStage {
   id: string;
   label: string;
@@ -19,6 +28,7 @@ export interface Deal {
   currency: string;
   stageId: string;
   assignedTo: string | null;
+  vertical: DealVertical | null; // Bereich (Recruiting/Webdesign/Sonstiges)
   expectedCloseDate: string | null; // ISO date
   actualCloseDate: string | null;
   probability: number | null;       // 0–100
