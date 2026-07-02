@@ -1,6 +1,13 @@
 import { formatAmount } from "@/lib/deals/types";
 import { esc, LOGO_SVG } from "@/lib/contracts/template";
-import type { KpiTotals, RepRow, SalesKpiReport, VerticalKey } from "./kpi-report";
+import type {
+  DealListGroup,
+  KpiTotals,
+  RepRow,
+  SalesKpiReport,
+  StageVolume,
+  VerticalKey,
+} from "./kpi-report";
 
 /**
  * Rendert den Sales-KPI-Report als vollständiges A4-HTML-Dokument. Wird von
@@ -121,6 +128,11 @@ export function renderSalesKpiReportHtml(report: SalesKpiReport, generatedAtIso:
 
   .foot { margin-top: 26px; padding-top: 10px; border-top: 1px solid #ece7dd; font-size: 9px; color: ${MUTE}; line-height: 1.5; }
   .empty { color: ${MUTE}; font-size: 10px; font-style: italic; padding: 8px 0; }
+
+  /* Deal-Detail-Gruppen */
+  .dealgroup { page-break-inside: avoid; margin-top: 14px; }
+  .dealgroup:first-of-type { margin-top: 4px; }
+  .dealgroup-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 700; padding: 5px 8px; background: #f7f2e8; border-radius: 6px; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -191,6 +203,36 @@ export function renderSalesKpiReportHtml(report: SalesKpiReport, generatedAtIso:
   <div class="section">
     <h2>Leistung je Mitarbeiter</h2>
     ${repTable(report.reps, report.total)}
+  </div>
+
+  <div class="section">
+    <h2>Deals-Pipeline <span class="sub">Stand: ${esc(genLabel)}</span></h2>
+    <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+      ${kpiCard("Offenes Volumen", money(report.dealsSnapshot.openVolumeCents), `${num(report.dealsSnapshot.openCount)} offene Deals`, true)}
+      ${kpiCard("Gewichteter Forecast", money(report.dealsSnapshot.weightedForecastCents), "Volumen × Wahrscheinlichkeit")}
+      ${kpiCard("Ø Deal-Größe", money(report.dealsSnapshot.avgDealSizeCents), "über alle Deals")}
+      ${kpiCard("Gewinn-Quote", `${num(report.dealsSnapshot.winRatePct)} %`, `${num(report.dealsSnapshot.wonCountAll)} / ${num(report.dealsSnapshot.wonCountAll + report.dealsSnapshot.lostCountAll)} abgeschlossen`)}
+      ${kpiCard("Gewonnen gesamt", num(report.dealsSnapshot.wonCountAll), "alle Zeit")}
+      ${kpiCard("Verloren gesamt", num(report.dealsSnapshot.lostCountAll), "alle Zeit")}
+    </div>
+    <div style="margin-top:14px">
+      <p style="font-size:11px;font-weight:700;margin-bottom:8px">Volumen pro Stage</p>
+      ${stageVolumeBars(report.dealsByStage)}
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Deals im Monat <span class="sub">${esc(report.monthLabel)}</span></h2>
+    <div class="grp">
+      ${dealsMonthCol("Erstellt", report.dealsMonth.createdCount, report.dealsMonth.createdVolumeCents, GOLD_DARK)}
+      ${dealsMonthCol("Gewonnen", report.dealsMonth.wonCount, report.dealsMonth.wonVolumeCents, "#2e9e6b")}
+      ${dealsMonthCol("Verloren", report.dealsMonth.lostCount, report.dealsMonth.lostVolumeCents, "#c2543f")}
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Deals im Detail <span class="sub">offen + im Monat abgeschlossen</span></h2>
+    ${dealsDetail(report.dealsList)}
   </div>
 
   <div class="foot">
@@ -309,4 +351,64 @@ function repTable(reps: RepRow[], total: KpiTotals): string {
       <td class="r">${money(total.closingVolumeCents)}</td>
     </tr></tfoot>
   </table>`;
+}
+
+function stageVolumeBars(stages: StageVolume[]): string {
+  const withVolume = stages.filter((s) => s.volumeCents > 0 || s.count > 0);
+  if (withVolume.length === 0) return `<div class="empty">Keine Deals in der Pipeline.</div>`;
+  return horizontalBars(
+    withVolume.map((s) => ({
+      name: `${s.label} · ${num(s.count)}`,
+      value: s.volumeCents,
+      color: s.color,
+      display: money(s.volumeCents),
+    })),
+    GOLD,
+    "Keine Deals in der Pipeline.",
+    150,
+  );
+}
+
+function dealsMonthCol(label: string, count: number, volumeCents: number, color: string): string {
+  return `<div class="grpcol">
+    <div class="title"><span class="dot" style="background:${color}"></span>${esc(label)}</div>
+    ${metricRow("Anzahl", num(count))}
+    ${metricRow("Volumen", money(volumeCents))}
+  </div>`;
+}
+
+function dealsDetail(groups: DealListGroup[]): string {
+  if (groups.length === 0) return `<div class="empty">Keine offenen oder in diesem Monat abgeschlossenen Deals.</div>`;
+  return groups.map(dealGroup).join("");
+}
+
+function dealGroup(g: DealListGroup): string {
+  const rows = g.items
+    .map(
+      (d) => `<tr>
+      <td class="name">${esc(d.title)}</td>
+      <td>${esc(d.company)}</td>
+      <td class="r">${money(d.amountCents)}</td>
+      <td>${esc(d.assignee)}</td>
+      <td class="r">${d.probabilityPct == null ? "—" : num(d.probabilityPct) + " %"}</td>
+      <td>${d.nextStep ? esc(truncate(d.nextStep, 60)) : "—"}</td>
+    </tr>`,
+    )
+    .join("");
+  return `<div class="dealgroup">
+    <div class="dealgroup-head">
+      <span><span class="dot" style="background:${g.stageColor}"></span>${esc(g.stageLabel)} <span style="color:${MUTE}">· ${num(g.count)}</span></span>
+      <span>${money(g.volumeCents)}</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Titel</th><th>Firma</th><th class="r">Betrag</th><th>Vertriebler</th><th class="r">Wahrsch.</th><th>Next Step</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 }

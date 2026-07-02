@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
 import { toBerlinDayKey } from "@/lib/date/day-key";
 import { permissionsFromProfile, type Profile } from "@/lib/types";
+import { listDeals, listStages } from "@/lib/deals/server";
+import { computeKpis } from "@/app/(dashboard)/deals/_lib/compute-kpis";
 
 /**
  * Monatlicher Sales-KPI-Report für die PDF-Ausgabe.
@@ -37,6 +39,53 @@ export interface RepRow {
   closingVolumeCents: number;
 }
 
+/** Aktueller Pipeline-Snapshot (Stand Report-Datum, wie Deals-Seite). */
+export interface DealsSnapshot {
+  openVolumeCents: number;
+  openCount: number;
+  weightedForecastCents: number;
+  avgDealSizeCents: number;
+  winRatePct: number;
+  wonCountAll: number;
+  lostCountAll: number;
+}
+
+/** Deal-Aktivität im gewählten Monat. */
+export interface DealsMonth {
+  createdCount: number;
+  createdVolumeCents: number;
+  wonCount: number;
+  wonVolumeCents: number;
+  lostCount: number;
+  lostVolumeCents: number;
+}
+
+export interface StageVolume {
+  label: string;
+  color: string;
+  kind: string; // open | won | lost
+  count: number;
+  volumeCents: number;
+}
+
+export interface DealListItem {
+  title: string;
+  company: string;
+  amountCents: number;
+  assignee: string;
+  probabilityPct: number | null;
+  nextStep: string | null;
+}
+
+export interface DealListGroup {
+  stageLabel: string;
+  stageColor: string;
+  stageKind: string;
+  count: number;
+  volumeCents: number;
+  items: DealListItem[];
+}
+
 export interface SalesKpiReport {
   month: string; // YYYY-MM
   monthLabel: string; // z. B. "Juli 2026"
@@ -47,6 +96,11 @@ export interface SalesKpiReport {
   unassigned: KpiTotals; // nur-in-total-Rest (für die Fußnote)
   reps: RepRow[]; // absteigend nach Anwahlen
   callsPerDay: Array<{ date: string; count: number }>; // Berlin-Tage des Monats
+  // Deals-Bereich (nicht vertical-gesplittet):
+  dealsSnapshot: DealsSnapshot; // Pipeline-Stand jetzt
+  dealsByStage: StageVolume[]; // Volumen/Anzahl pro aktiver Stage (Snapshot)
+  dealsMonth: DealsMonth; // erstellt/gewonnen/verloren im Monat
+  dealsList: DealListGroup[]; // offene Deals + im Monat abgeschlossene, je Stage
 }
 
 const PAGE = 1000;
@@ -104,7 +158,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     .eq("deal_kind", "won");
   const wonIds = (wonStageRows ?? []).map((s) => (s as { id: string }).id);
 
-  const [profiles, mappingRows, outboundCalls, appointments, wonDeals] = await Promise.all([
+  const [profiles, mappingRows, outboundCalls, appointments, wonDeals, dealsAll, stages] = await Promise.all([
     db
       .from("profiles")
       .select("id, name, role, status, can_vertrieb, can_fulfillment, can_zeit, can_learning, can_vertraege")
@@ -146,6 +200,9 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
             .range(from, from + PAGE - 1),
         )
       : Promise.resolve([] as WonDealRow[]),
+    // Deals-Bereich: globaler Snapshot aller nicht-gelöschten Deals + Stages.
+    listDeals(),
+    listStages(),
   ]);
 
   // Namen aller aktiven Profile (für die Mitarbeiter-Tabelle).
@@ -267,6 +324,88 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   const repCount = rosterIds.size;
   const anwahlenProKopf = repCount > 0 ? Math.round((total.anwahlen / repCount) * 10) / 10 : 0;
 
+  // ---- Deals-Bereich (Snapshot + Monat + Liste), nicht vertical-gesplittet.
+  const kpis = computeKpis(dealsAll, stages);
+  const dealsSnapshot: DealsSnapshot = {
+    openVolumeCents: kpis.openVolume,
+    openCount: kpis.openCount,
+    weightedForecastCents: kpis.weightedForecastCents,
+    avgDealSizeCents: kpis.avgDealSize,
+    winRatePct: Math.round(kpis.winRate * 100),
+    wonCountAll: kpis.wonCount,
+    lostCountAll: kpis.lostCount,
+  };
+
+  const activeStages = stages.filter((s) => s.isActive);
+  const dealsByStage: StageVolume[] = activeStages.map((s) => {
+    const inStage = dealsAll.filter((d) => d.stageId === s.id);
+    return {
+      label: s.label,
+      color: s.color,
+      kind: s.kind,
+      count: inStage.length,
+      volumeCents: inStage.reduce((sum, d) => sum + d.amountCents, 0),
+    };
+  });
+
+  // Abschluss-/Erstell-Datum im Monat? actual_close_date/created_at.
+  const closedInMonth = (dateOnly: string | null): boolean =>
+    !!dateOnly && dateOnly.slice(0, 10) >= firstDay && dateOnly.slice(0, 10) <= lastDay;
+  const stageKindById = new Map(stages.map((s) => [s.id, s.kind]));
+
+  const dealsMonth: DealsMonth = {
+    createdCount: 0,
+    createdVolumeCents: 0,
+    wonCount: 0,
+    wonVolumeCents: 0,
+    lostCount: 0,
+    lostVolumeCents: 0,
+  };
+  for (const d of dealsAll) {
+    if (monthDaySet.has(toBerlinDayKey(d.createdAt))) {
+      dealsMonth.createdCount += 1;
+      dealsMonth.createdVolumeCents += d.amountCents;
+    }
+    const kind = stageKindById.get(d.stageId) ?? d.stage_kind;
+    if (closedInMonth(d.actualCloseDate)) {
+      if (kind === "won") {
+        dealsMonth.wonCount += 1;
+        dealsMonth.wonVolumeCents += d.amountCents;
+      } else if (kind === "lost") {
+        dealsMonth.lostCount += 1;
+        dealsMonth.lostVolumeCents += d.amountCents;
+      }
+    }
+  }
+
+  // Deal-Liste je Stage: offene Stages → alle offenen Deals; won/lost →
+  // nur die im Monat abgeschlossenen. Leere Gruppen weglassen.
+  const dealsList: DealListGroup[] = activeStages
+    .map((s) => {
+      const items =
+        s.kind === "open"
+          ? dealsAll.filter((d) => d.stageId === s.id)
+          : dealsAll.filter((d) => d.stageId === s.id && closedInMonth(d.actualCloseDate));
+      return {
+        stageLabel: s.label,
+        stageColor: s.color,
+        stageKind: s.kind,
+        count: items.length,
+        volumeCents: items.reduce((sum, d) => sum + d.amountCents, 0),
+        items: items
+          .sort((a, b) => b.amountCents - a.amountCents)
+          .map((d) => ({
+            title: d.title,
+            company: d.company_name,
+            amountCents: d.amountCents,
+            assignee: d.assignee_name ?? "—",
+            probabilityPct: d.probability,
+            nextStep: d.nextStep,
+          })),
+      };
+    })
+    .filter((g) => g.count > 0);
+
   return {
     month,
     monthLabel,
@@ -277,6 +416,10 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     unassigned,
     reps,
     callsPerDay,
+    dealsSnapshot,
+    dealsByStage,
+    dealsMonth,
+    dealsList,
   };
 }
 
