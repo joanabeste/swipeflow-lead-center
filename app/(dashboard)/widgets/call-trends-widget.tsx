@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { PhoneCall } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition, type ComponentType } from "react";
+import { PhoneCall, PhoneOutgoing, CalendarCheck, Handshake } from "lucide-react";
 import type { DashboardData } from "./data";
+import { loadCallTrendRange, type CallTrendRange } from "./call-trend-range";
+import { formatAmount } from "@/lib/deals/types";
 import { MEMBER_PALETTE, OTHERS_COLOR, OTHERS_KEY, MEMBER_TOP_N, type MemberColor } from "./member-colors";
 
-type Range = "7" | "30" | "90";
+type Range = "7" | "30" | "90" | "custom";
 type ColorMode = "direction" | "member";
+
+type DayRow = { date: string; outbound: number; inbound: number; missed: number; byUser: Record<string, number> };
 
 type Bar = {
   label: string;
@@ -39,6 +43,21 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   // null = alle aktiv; sonst Set der aktiven Member-Keys.
   const [selected, setSelected] = useState<Set<string> | null>(null);
+  // Frei gewählter Zeitraum: Von/Bis (YYYY-MM-DD) + serverseitig geladene Daten.
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const [rangeData, setRangeData] = useState<CallTrendRange | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const isCustom = range === "custom";
+
+  // Custom-Zeitraum serverseitig nachladen, sobald Von+Bis gesetzt sind.
+  useEffect(() => {
+    if (range !== "custom" || !customFrom || !customTo) return;
+    startTransition(async () => {
+      const res = await loadCallTrendRange(customFrom, customTo);
+      setRangeData(res);
+    });
+  }, [range, customFrom, customTo]);
 
   const nameById = useMemo(() => {
     const m = new Map<string, string>();
@@ -46,69 +65,40 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
     return m;
   }, [data.teamCallStats]);
 
-  const { bars, total, outbound, inbound, missed } = useMemo(() => {
-    const days = parseInt(range, 10);
-    const slice = data.callsByDay90.slice(-days);
-
-    let totalOut = 0, totalIn = 0, totalMiss = 0;
-    for (const d of slice) {
-      totalOut += d.outbound;
-      totalIn += d.inbound;
-      totalMiss += d.missed;
-    }
-
-    // 90 Tage → wöchentlich bündeln. Ältester Balken = älteste Woche.
-    if (range === "90") {
-      const weekly: Bar[] = [];
-      for (let i = 0; i < slice.length; i += 7) {
-        const chunk = slice.slice(i, i + 7);
-        if (chunk.length === 0) continue;
-        const byUser: Record<string, number> = {};
-        const sum = chunk.reduce(
-          (acc, d) => {
-            for (const [uid, n] of Object.entries(d.byUser)) byUser[uid] = (byUser[uid] ?? 0) + n;
-            return {
-              outbound: acc.outbound + d.outbound,
-              inbound: acc.inbound + d.inbound,
-              missed: acc.missed + d.missed,
-            };
-          },
-          { outbound: 0, inbound: 0, missed: 0 },
-        );
-        const firstDate = new Date(chunk[0].date);
-        const lastDate = new Date(chunk[chunk.length - 1].date);
-        weekly.push({
-          label: `KW ${isoWeek(firstDate)}`,
-          tooltipLabel: `KW ${isoWeek(firstDate)} (${formatShortDate(firstDate)} – ${formatShortDate(lastDate)})`,
-          byUser,
-          ...sum,
-        });
-      }
+  const { bars, total, outbound, inbound, missed, kpis } = useMemo(() => {
+    // Custom → serverseitig geladene Daten; Presets → Slice der 90-Tage-Reihen.
+    if (isCustom) {
+      const cd = rangeData?.callsByDay ?? [];
+      const b = buildBars(cd, cd.length);
       return {
-        bars: weekly,
-        total: totalOut + totalIn + totalMiss,
-        outbound: totalOut,
-        inbound: totalIn,
-        missed: totalMiss,
+        ...b,
+        total: b.outbound + b.inbound + b.missed,
+        kpis: {
+          anwahlen: rangeData?.totals.outbound ?? 0,
+          termine: rangeData?.appointmentsBooked ?? 0,
+          dealsCreated: rangeData?.dealsCreated ?? 0,
+          dealsWon: rangeData?.dealsWon ?? 0,
+          wonCents: rangeData?.wonCents ?? 0,
+        },
       };
     }
 
-    // 7 / 30 Tage → täglich
+    const days = parseInt(range, 10);
+    const b = buildBars(data.callsByDay90.slice(-days), days);
+    const apptSlice = data.appointmentsByDay90.slice(-days);
+    const dealSlice = data.dealsByDay90.slice(-days);
     return {
-      bars: slice.map<Bar>((d) => ({
-        label: daysBackLabel(d.date, days),
-        tooltipLabel: tooltipLabelForDay(d.date),
-        outbound: d.outbound,
-        inbound: d.inbound,
-        missed: d.missed,
-        byUser: d.byUser,
-      })),
-      total: totalOut + totalIn + totalMiss,
-      outbound: totalOut,
-      inbound: totalIn,
-      missed: totalMiss,
+      ...b,
+      total: b.outbound + b.inbound + b.missed,
+      kpis: {
+        anwahlen: b.outbound,
+        termine: apptSlice.reduce((s, d) => s + d.count, 0),
+        dealsCreated: dealSlice.reduce((s, d) => s + d.created, 0),
+        dealsWon: dealSlice.reduce((s, d) => s + d.won, 0),
+        wonCents: dealSlice.reduce((s, d) => s + d.wonCents, 0),
+      },
     };
-  }, [data.callsByDay90, range]);
+  }, [data.callsByDay90, data.appointmentsByDay90, data.dealsByDay90, range, rangeData, isCustom]);
 
   // Mitarbeiter-Ranking über den gewählten Range: Top-N bekommen Farben,
   // Rest wird zu "Andere" gebündelt. Reihenfolge/Farbe pro Range fixiert,
@@ -210,6 +200,26 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
                 </button>
               );
             })}
+            <button
+              type="button"
+              onClick={() => {
+                // Beim Wechsel auf Custom sinnvolle Defaults setzen (letzte 30 Tage).
+                if (!customFrom || !customTo) {
+                  const today = new Date();
+                  const past = new Date(Date.now() - 29 * 24 * 3600_000);
+                  setCustomFrom(past.toISOString().slice(0, 10));
+                  setCustomTo(today.toISOString().slice(0, 10));
+                }
+                setRange("custom");
+              }}
+              className={`rounded px-2 py-0.5 ${
+                isCustom
+                  ? "bg-gray-200 font-medium dark:bg-white/10"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              }`}
+            >
+              Zeitraum
+            </button>
           </div>
           <div className="flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-[#2c2c2e]">
             {([
@@ -235,6 +245,32 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
           </div>
         </div>
       </div>
+
+      {isCustom && (
+        <div className="mt-3 flex flex-wrap items-end gap-2 text-xs">
+          <label className="flex flex-col gap-1">
+            <span className="text-gray-500 dark:text-gray-400">Von</span>
+            <input
+              type="date"
+              value={customFrom}
+              max={customTo || undefined}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#1c1c1e] dark:text-gray-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-gray-500 dark:text-gray-400">Bis</span>
+            <input
+              type="date"
+              value={customTo}
+              min={customFrom || undefined}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm dark:border-[#2c2c2e]/60 dark:bg-[#1c1c1e] dark:text-gray-100"
+            />
+          </label>
+          {isPending && <span className="pb-1.5 text-gray-400">Lädt…</span>}
+        </div>
+      )}
 
       <div className="mt-5 flex h-32 items-end gap-1">
         {bars.map((b, i) => {
@@ -298,6 +334,61 @@ export function CallTrendsWidget({ data }: { data: DashboardData }) {
           onReset={() => setSelected(null)}
         />
       )}
+
+      {/* KPIs passend zum Zeitraum. Presets clientseitig aus den 90-Tage-Reihen,
+          Custom aus der Server-Action. */}
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-100 pt-4 dark:border-[#2c2c2e]/60 sm:grid-cols-3">
+        <TrendStat
+          icon={PhoneOutgoing}
+          label="Getätigte Anwahlen"
+          value={kpis.anwahlen}
+          loading={isCustom && isPending}
+        />
+        <TrendStat
+          icon={CalendarCheck}
+          label="Gelegte Termine"
+          value={kpis.termine}
+          loading={isCustom && isPending}
+        />
+        <TrendStat
+          icon={Handshake}
+          label="Deals erstellt"
+          value={kpis.dealsCreated}
+          subtitle={`${kpis.dealsWon} gewonnen · ${formatAmount(kpis.wonCents)}`}
+          loading={isCustom && isPending}
+        />
+      </div>
+    </div>
+  );
+}
+
+function TrendStat({
+  icon: Icon,
+  label,
+  value,
+  subtitle,
+  loading,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  value: number;
+  subtitle?: string;
+  loading?: boolean;
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400">
+        <Icon className="h-3.5 w-3.5 text-emerald-500" />
+        {label}
+      </p>
+      {loading ? (
+        <div className="mt-1 h-6 w-14 animate-pulse rounded bg-gray-100 dark:bg-white/5" />
+      ) : (
+        <p className="mt-0.5 text-lg font-bold tabular-nums">{value.toLocaleString("de-DE")}</p>
+      )}
+      {subtitle && !loading && (
+        <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>
+      )}
     </div>
   );
 }
@@ -350,6 +441,68 @@ function MemberLegend({
       )}
     </div>
   );
+}
+
+/**
+ * Baut aus einer Tagesreihe die Chart-Balken. Bei mehr als ~35 Tagen wird
+ * wöchentlich gebündelt (sonst zu dünn/viele Balken), sonst täglich — geteilt
+ * von den 7/30/90-Presets und dem frei gewählten Zeitraum.
+ */
+function buildBars(
+  callsByDay: DayRow[],
+  days: number,
+): { bars: Bar[]; outbound: number; inbound: number; missed: number } {
+  let totalOut = 0, totalIn = 0, totalMiss = 0;
+  for (const d of callsByDay) {
+    totalOut += d.outbound;
+    totalIn += d.inbound;
+    totalMiss += d.missed;
+  }
+
+  if (days > 35) {
+    // Wöchentlich bündeln. Ältester Balken = älteste Woche.
+    const weekly: Bar[] = [];
+    for (let i = 0; i < callsByDay.length; i += 7) {
+      const chunk = callsByDay.slice(i, i + 7);
+      if (chunk.length === 0) continue;
+      const byUser: Record<string, number> = {};
+      const sum = chunk.reduce(
+        (acc, d) => {
+          for (const [uid, n] of Object.entries(d.byUser)) byUser[uid] = (byUser[uid] ?? 0) + n;
+          return {
+            outbound: acc.outbound + d.outbound,
+            inbound: acc.inbound + d.inbound,
+            missed: acc.missed + d.missed,
+          };
+        },
+        { outbound: 0, inbound: 0, missed: 0 },
+      );
+      const firstDate = new Date(chunk[0].date);
+      const lastDate = new Date(chunk[chunk.length - 1].date);
+      weekly.push({
+        label: `KW ${isoWeek(firstDate)}`,
+        tooltipLabel: `KW ${isoWeek(firstDate)} (${formatShortDate(firstDate)} – ${formatShortDate(lastDate)})`,
+        byUser,
+        ...sum,
+      });
+    }
+    return { bars: weekly, outbound: totalOut, inbound: totalIn, missed: totalMiss };
+  }
+
+  // Täglich
+  return {
+    bars: callsByDay.map<Bar>((d) => ({
+      label: daysBackLabel(d.date, days),
+      tooltipLabel: tooltipLabelForDay(d.date),
+      outbound: d.outbound,
+      inbound: d.inbound,
+      missed: d.missed,
+      byUser: d.byUser,
+    })),
+    outbound: totalOut,
+    inbound: totalIn,
+    missed: totalMiss,
+  };
 }
 
 function isoWeek(date: Date): number {

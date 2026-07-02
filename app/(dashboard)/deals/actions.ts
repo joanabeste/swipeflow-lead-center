@@ -135,11 +135,13 @@ export async function updateDealAction(
     probability?: number | null;
     nextStep?: string | null;
     lastFollowupAt?: string | null;
+    company?: { mode: "existing"; leadId: string } | { mode: "new"; name: string };
   },
 ): Promise<{ success: true } | { error: string }> {
   const user = await requireUser();
   if (!user) return { error: "Nicht angemeldet." };
 
+  const db = createServiceClient();
   const patch: Parameters<typeof updateDealHelper>[2] = {};
   if (updates.title !== undefined) {
     const t = updates.title.trim();
@@ -164,6 +166,34 @@ export async function updateDealAction(
   if (updates.nextStep !== undefined) patch.nextStep = updates.nextStep?.trim() || null;
   if (updates.lastFollowupAt !== undefined) patch.lastFollowupAt = updates.lastFollowupAt;
 
+  // Firma nachträglich ändern — spiegelt die Auflösung aus createDealAction:
+  // bestehender Lead → lead_id + Namens-Snapshot; neue Firma → nur Snapshot, kein Lead.
+  let newLeadId: string | null | undefined; // undefined = keine Firmenänderung
+  let oldLeadId: string | null = null;
+  if (updates.company) {
+    if (updates.company.mode === "existing") {
+      const { data: lead } = await db
+        .from("leads")
+        .select("id, company_name")
+        .eq("id", updates.company.leadId)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (!lead) return { error: "Ausgewählte Firma nicht gefunden." };
+      patch.leadId = lead.id as string;
+      patch.companyName = (lead.company_name as string | null) ?? "—";
+      newLeadId = lead.id as string;
+    } else {
+      const name = updates.company.name.trim();
+      if (!name) return { error: "Bitte den Namen der neuen Firma eingeben." };
+      patch.leadId = null;
+      patch.companyName = name;
+      newLeadId = null;
+    }
+    // Alten Lead-Bezug vor dem Update erfassen (für Revalidation der CRM-Seite).
+    const { data: prev } = await db.from("deals").select("lead_id").eq("id", dealId).maybeSingle();
+    oldLeadId = (prev?.lead_id as string | null) ?? null;
+  }
+
   const res = await updateDealHelper(dealId, user.id, patch);
   if ("error" in res) return { error: res.error };
 
@@ -180,7 +210,6 @@ export async function updateDealAction(
   // ist stageId direkt als crm_status_id verwendbar. Best-Effort: schlägt der Sync
   // fehl, bleibt der Deal-Move trotzdem bestehen.
   if (patch.stageId !== undefined) {
-    const db = createServiceClient();
     const { data: dealRow } = await db
       .from("deals")
       .select("lead_id")
@@ -192,6 +221,21 @@ export async function updateDealAction(
         console.warn("[updateDealAction] Lead-Status-Sync fehlgeschlagen:", sync.error);
       }
     }
+  }
+
+  // Neuen Lead in die Pipeline heben (analog createDealAction) und alte + neue
+  // CRM-Seite revalidieren. Guard auf lifecycle_stage='lead' verhindert, dass
+  // Kunden/archivierte Leads zurückgestuft werden.
+  if (newLeadId) {
+    await db
+      .from("leads")
+      .update({ lifecycle_stage: "deal" })
+      .eq("id", newLeadId)
+      .eq("lifecycle_stage", "lead");
+  }
+  if (updates.company) {
+    if (oldLeadId) revalidatePath(`/crm/${oldLeadId}`);
+    if (newLeadId && newLeadId !== oldLeadId) revalidatePath(`/crm/${newLeadId}`);
   }
 
   revalidatePath("/deals");

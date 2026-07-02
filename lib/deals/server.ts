@@ -165,12 +165,14 @@ export async function updateDeal(
     probability: number | null;
     nextStep: string | null;
     lastFollowupAt: string | null;
+    leadId: string | null;
+    companyName: string;
   }>,
 ): Promise<{ success: true } | { error: string }> {
   const db = createServiceClient();
   const { data: before } = await db
     .from("deals")
-    .select("title, description, amount_cents, stage_id, assigned_to, expected_close_date, actual_close_date, probability, next_step, last_followup_at")
+    .select("title, description, amount_cents, stage_id, assigned_to, expected_close_date, actual_close_date, probability, next_step, last_followup_at, lead_id, company_name")
     .eq("id", id)
     .maybeSingle();
   if (!before) return { error: "Deal nicht gefunden." };
@@ -235,6 +237,14 @@ export async function updateDeal(
   if (updates.lastFollowupAt !== undefined) {
     row.last_followup_at = updates.lastFollowupAt;
     track("last_followup_at", before.last_followup_at, updates.lastFollowupAt);
+  }
+  if (updates.leadId !== undefined) {
+    row.lead_id = updates.leadId;
+    track("lead_id", before.lead_id, updates.leadId);
+  }
+  if (updates.companyName !== undefined) {
+    row.company_name = updates.companyName;
+    track("company_name", before.company_name, updates.companyName);
   }
 
   const { error } = await db.from("deals").update(row).eq("id", id);

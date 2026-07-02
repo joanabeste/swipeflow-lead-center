@@ -82,6 +82,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     // Neue Widgets:
     followupCandidates, openDealsRaw, dealStages, emails7d,
     dealsClosed12m,
+    // Termine + erstellte Deals (90 Tage) für die KPI-Zeile im Anrufe-Trend-Widget.
+    appointments90, dealsCreated90,
     // Anruf-Statistik (heute / 7 / 90 Tage, pro Person/Status) aus EINER
     // DB-seitigen Aggregation — umgeht das PostgREST-1000-Zeilen-Limit, das die
     // Anrufzahlen vorher still gedeckelt hat. Fällt auf paginiertes Laden
@@ -118,6 +120,14 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .gte("actual_close_date", twelveMonthsAgoIso)
       .not("actual_close_date", "is", null)
       .is("deleted_at", null),
+    // Gebuchte Termine (90 Tage) — nach Buchungszeitpunkt (created_at). Bei
+    // fehlender Migration (133) liefert PostgREST einen Fehler statt zu werfen;
+    // wir werten dann `.data ?? []` als 0 aus (KPI zeigt 0 statt Crash).
+    db.from("lead_appointments").select("created_at, status")
+      .eq("status", "booked").gte("created_at", ninetyDaysAgoIso),
+    // Erstellte Deals (90 Tage) — nach created_at.
+    db.from("deals").select("created_at")
+      .gte("created_at", ninetyDaysAgoIso).is("deleted_at", null),
     // Anrufe (heute/7/90 Tage) DB-seitig aggregiert — siehe Kommentar oben.
     loadCallStats(db, ninetyDaysAgoIso),
   ]);
@@ -442,6 +452,37 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
   }
   const dealsByMonth12 = Object.entries(dealsByMonth12Buckets).map(([month, v]) => ({ month, ...v }));
 
+  // Termine + Deals 90 Tage — tägliche Aggregation (Berlin-Zeit), analog zu
+  // callsByDay90. Der Client slict daraus 7/30/90 für die KPI-Zeile im
+  // Anrufe-Trend-Widget; frei gewählte Zeiträume lädt eine Server-Action nach.
+  const apptByDay90Buckets: Record<string, number> = {};
+  const dealsByDay90Buckets: Record<string, { created: number; won: number; wonCents: number }> = {};
+  for (const key of dayKeys90) {
+    apptByDay90Buckets[key] = 0;
+    dealsByDay90Buckets[key] = { created: 0, won: 0, wonCents: 0 };
+  }
+  for (const a of (appointments90.data ?? []) as Array<{ created_at: string }>) {
+    const key = toBerlinDayKey(a.created_at);
+    if (apptByDay90Buckets[key] !== undefined) apptByDay90Buckets[key]++;
+  }
+  for (const d of (dealsCreated90.data ?? []) as Array<{ created_at: string }>) {
+    const key = toBerlinDayKey(d.created_at);
+    if (dealsByDay90Buckets[key]) dealsByDay90Buckets[key].created++;
+  }
+  // Gewonnene Deals aus den 12-Monats-Abschlüssen wiederverwenden (nur letzte 90
+  // Tage fallen in dayKeys90). actual_close_date ist ein date-Feld (ohne Zeit) →
+  // direkt als Tages-Key nutzen, keine Zeitzonen-Verschiebung nötig.
+  for (const d of (dealsClosed12m.data ?? []) as Array<{ stage_id: string; amount_cents: number; actual_close_date: string | null }>) {
+    if (!d.actual_close_date) continue;
+    if (stageKindById.get(d.stage_id) !== "won") continue;
+    const bucket = dealsByDay90Buckets[d.actual_close_date.slice(0, 10)];
+    if (!bucket) continue;
+    bucket.won++;
+    bucket.wonCents += d.amount_cents ?? 0;
+  }
+  const appointmentsByDay90 = dayKeys90.map((date) => ({ date, count: apptByDay90Buckets[date] }));
+  const dealsByDay90 = dayKeys90.map((date) => ({ date, ...dealsByDay90Buckets[date] }));
+
   // E-Mail-Performance 7d: sent/failed pro Tag (Berlin-Zeit).
   const emailBuckets: Record<string, { sent: number; failed: number }> = {};
   for (let i = 6; i >= 0; i--) {
@@ -502,6 +543,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     emailsSent7d,
     emailsFailed7d,
     callsByDay90,
+    appointmentsByDay90,
+    dealsByDay90,
     teamCallStats,
     dealsByMonth12,
     openTodoItems,

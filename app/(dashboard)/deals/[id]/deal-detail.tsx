@@ -18,6 +18,7 @@ import { useToastContext } from "../../toast-provider";
 import { useConfetti } from "@/components/confetti";
 import { CrmActivityFeed } from "../../crm/[id]/crm-activity-feed";
 import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
+import { CompanyPicker, type CompanyValue } from "../_components/company-picker";
 
 /** Aktivität des verknüpften Leads für den CRM-Feed in der rechten Spalte.
  *  Schmales Objekt (nur die Felder, die CrmActivityFeed braucht) → keine unnötige
@@ -81,6 +82,11 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
   );
   const [nextStep, setNextStep] = useState(deal.nextStep ?? "");
   const [lastFollowupAt, setLastFollowupAt] = useState(deal.lastFollowupAt ?? "");
+  const initialCompany = (): CompanyValue =>
+    deal.leadId
+      ? { mode: "existing", lead: { id: deal.leadId, company_name: deal.company_name } }
+      : { mode: "new", name: deal.company_name };
+  const [company, setCompany] = useState<CompanyValue>(initialCompany);
 
   function handleStageChange(newStageId: string) {
     setStageId(newStageId);
@@ -109,6 +115,14 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
   }
 
   function handleSave() {
+    if (company.mode === "existing" && !company.lead) {
+      addToast("Bitte eine bestehende Firma auswählen — oder auf „Neue Firma“ wechseln.", "error");
+      return;
+    }
+    if (company.mode === "new" && !company.name.trim()) {
+      addToast("Bitte den Namen der neuen Firma eingeben.", "error");
+      return;
+    }
     startTransition(async () => {
       const probNum = probability.trim() === "" ? null : Number(probability);
       const res = await updateDealAction(deal.id, {
@@ -121,6 +135,10 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
         probability: probNum,
         nextStep: nextStep.trim() || null,
         lastFollowupAt: lastFollowupAt || null,
+        company:
+          company.mode === "existing"
+            ? { mode: "existing", leadId: company.lead!.id }
+            : { mode: "new", name: company.name },
       });
       if ("error" in res) {
         addToast(res.error, "error");
@@ -172,7 +190,15 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
               ) : (
                 <h1 className="text-xl font-bold">{deal.title}</h1>
               )}
-              {deal.leadId ? (
+              {editing ? (
+                <div className="mt-2 max-w-sm">
+                  <CompanyPicker
+                    value={company}
+                    onChange={setCompany}
+                    newHint="Wird nur als Firmenname am Deal gespeichert (kein CRM-Lead)."
+                  />
+                </div>
+              ) : deal.leadId ? (
                 <Link
                   href={`/crm/${deal.leadId}`}
                   className="mt-1 inline-flex items-center gap-1 text-sm text-gray-600 hover:underline dark:text-gray-300"
@@ -205,6 +231,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
                       setProbability(deal.probability != null ? String(deal.probability) : "");
                       setNextStep(deal.nextStep ?? "");
                       setLastFollowupAt(deal.lastFollowupAt ?? "");
+                      setCompany(initialCompany());
                     }}
                     className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-white/5"
                   >
