@@ -15,7 +15,6 @@ import { closeMonthOptions } from "../_lib/close-month";
 import { useToastContext } from "../../toast-provider";
 
 const nf = new Intl.NumberFormat("de-DE");
-const nf1 = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 1 });
 const money = (c: number) => formatAmount(c);
 const num = (n: number) => nf.format(n);
 
@@ -97,11 +96,7 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
 
       {/* 1. Monats-KPIs */}
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        <HeroCard
-          label="Anwahlen Gesamt"
-          value={num(t.anwahlen)}
-          hint={`Ø ${nf1.format(report.anwahlenProKopf)} je Vertriebler · ausgehende Wählversuche`}
-        />
+        <HeroCard label="Anwahlen Gesamt" value={num(t.anwahlen)} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-2">
           <KpiCard icon={CalendarClock} label="Setting Termine" value={num(t.settingTermine)} subtitle="im Monat" tone="primary" />
           <KpiCard icon={CalendarCheck} label="Closing Termine" value={num(t.closingTermine)} subtitle="im Monat" tone="primary" />
@@ -241,8 +236,12 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
                     </thead>
                     <tbody>
                       {g.items.map((d, i) => (
-                        <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-[#2c2c2e]/30 dark:hover:bg-white/5">
-                          <Td><div className="max-w-[180px] truncate font-medium" title={d.title}>{d.title}</div></Td>
+                        <tr
+                          key={i}
+                          onClick={() => router.push(`/deals/${d.id}`)}
+                          className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-[#2c2c2e]/30 dark:hover:bg-white/5"
+                        >
+                          <Td><div className="max-w-[180px] truncate font-medium text-primary" title={d.title}>{d.title}</div></Td>
                           <Td><div className="max-w-[200px] truncate" title={d.company}>{d.company}</div></Td>
                           <Td>{d.bereich}</Td>
                           <Td right>{money(d.amountCents)}</Td>
@@ -303,7 +302,7 @@ function SectionTitle({ children, sub }: { children: React.ReactNode; sub?: stri
   );
 }
 
-function HeroCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+function HeroCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="relative overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 p-6 dark:border-primary/20">
       <div className="absolute -right-6 -top-6 h-28 w-28 rounded-full bg-primary/10 blur-2xl" />
@@ -313,10 +312,12 @@ function HeroCard({ label, value, hint }: { label: string; value: string; hint: 
           {label}
         </div>
         <p className="mt-2 text-4xl font-bold tracking-tight sm:text-5xl tabular-nums">{value}</p>
-        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-primary dark:bg-white/5">
-          <Sparkles className="h-3 w-3" />
-          {hint}
-        </p>
+        {hint && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-primary dark:bg-white/5">
+            <Sparkles className="h-3 w-3" />
+            {hint}
+          </p>
+        )}
       </div>
     </div>
   );

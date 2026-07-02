@@ -70,6 +70,7 @@ export interface StageVolume {
 }
 
 export interface DealListItem {
+  id: string;
   title: string;
   company: string;
   bereich: string; // Bereich-Label (Webdesign/Recruiting/Sonstiges) oder „—"
@@ -419,6 +420,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
         items: items
           .sort((a, b) => b.amountCents - a.amountCents)
           .map((d) => ({
+            id: d.id,
             title: d.title,
             company: d.company_name,
             bereich: d.vertical ? DEAL_VERTICAL_LABELS[d.vertical] : "—",
