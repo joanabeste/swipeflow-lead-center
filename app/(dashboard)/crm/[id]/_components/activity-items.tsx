@@ -59,6 +59,8 @@ export function AppointmentItem({ log }: { log: AuditRow }) {
     join_url?: string | null;
     cancel_reason?: string | null;
     created_lead?: boolean;
+    created_deal?: boolean;
+    deal_title?: string | null;
   };
   const canceled = log.action === "lead.appointment_canceled";
   const scheduled = d.scheduled_at
@@ -90,6 +92,11 @@ export function AppointmentItem({ log }: { log: AuditRow }) {
       )}
       {d.created_lead && (
         <p className="mt-1 text-[11px] text-gray-400">Lead automatisch aus der Buchung angelegt.</p>
+      )}
+      {d.created_deal && (
+        <p className="mt-1 text-[11px] text-gray-400">
+          Deal{d.deal_title ? ` „${d.deal_title}"` : ""} automatisch angelegt.
+        </p>
       )}
     </div>
   );

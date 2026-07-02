@@ -12,7 +12,26 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit-log";
 import { findExistingLeadForManual } from "@/lib/leads/find-existing";
 import { normalizeEmail, normalizePhone } from "@/lib/csv/normalizer";
+import { createDeal } from "@/lib/deals/server";
+import { APPOINTMENT_STATUS_ID } from "@/lib/service-mode-constants";
 import type { CalendlyWebhookEvent, CalendlyInviteePayload } from "./types";
+
+// Regeln für automatische Deal-Anlage bei Calendly-Buchungen. Erkennung bewusst simpel
+// über den Event-Namen (erste passende Regel gewinnt). Weitere Event-Typen hier ergänzbar.
+interface AutoDealRule {
+  match: (nameLower: string) => boolean;
+  title: string;
+  amountCents: number;
+  vertical: "webdesign" | "recruiting";
+}
+const AUTO_DEAL_RULES: AutoDealRule[] = [
+  { match: (n) => n.includes("web"),        title: "Website-Relaunch", amountCents: 310000, vertical: "webdesign" },
+  { match: (n) => n.includes("recruiting"), title: "Social Recruiting", amountCents: 250000, vertical: "recruiting" },
+];
+function matchAutoDealRule(name: string | null): AutoDealRule | null {
+  const n = (name ?? "").toLowerCase();
+  return AUTO_DEAL_RULES.find((r) => r.match(n)) ?? null;
+}
 
 export type IngestResult =
   | { ok: true; info: string; leadId?: string }
@@ -165,6 +184,70 @@ export async function handleCalendlyEvent(event: CalendlyWebhookEvent): Promise<
     // Kein harter Fehler — der Status/Lead ist bereits gesetzt; wir loggen trotzdem.
   }
 
+  // ── Buchung → passenden Deal automatisch anlegen ────────────────────────────
+  // Regelbasiert nach Event-Name (siehe AUTO_DEAL_RULES). Max. ein aktiver Deal pro
+  // (Lead, Titel) — idempotent gegen Retries/Reschedules. Best-effort: ein Fehler darf
+  // Lead/Status/Termin nicht kippen.
+  let createdDeal = false;
+  const dealRule = isCreate && !leadArchived ? matchAutoDealRule(eventTypeName) : null;
+  if (dealRule) {
+    try {
+      const { data: existing } = await db
+        .from("deals")
+        .select("id")
+        .eq("lead_id", leadId)
+        .eq("title", dealRule.title)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (!existing) {
+        const { data: leadRow } = await db
+          .from("leads")
+          .select("company_name, vertical")
+          .eq("id", leadId)
+          .maybeSingle();
+        const res = await createDeal({
+          leadId,
+          companyName: (leadRow?.company_name as string | null) ?? displayName ?? "—",
+          title: dealRule.title,
+          amountCents: dealRule.amountCents,
+          stageId: APPOINTMENT_STATUS_ID,
+          assignedTo: null,
+          expectedCloseDate: null,
+          createdBy: null,
+        });
+        if ("id" in res) {
+          createdDeal = true;
+          // Lead korrekt einordnen: Vertical (sonst nicht auf dem passenden CRM-Board
+          // sichtbar) + Lifecycle lead→deal — analog createDealAction.
+          if (leadRow && !leadRow.vertical) {
+            await db.from("leads").update({ vertical: dealRule.vertical }).eq("id", leadId);
+          }
+          await db
+            .from("leads")
+            .update({ lifecycle_stage: "deal" })
+            .eq("id", leadId)
+            .eq("lifecycle_stage", "lead");
+          await logAudit({
+            userId: null,
+            action: "deal.created",
+            entityType: "deal",
+            entityId: res.id,
+            details: {
+              title: dealRule.title,
+              amount_cents: dealRule.amountCents,
+              lead_id: leadId,
+              source: "calendly",
+            },
+          });
+        } else {
+          console.error("[calendly:ingest] auto-deal failed:", res.error);
+        }
+      }
+    } catch (e) {
+      console.error("[calendly:ingest] auto-deal exception:", e);
+    }
+  }
+
   // ── Historien-Eintrag ───────────────────────────────────────────────────────
   await logAudit({
     userId: null,
@@ -180,6 +263,8 @@ export async function handleCalendlyEvent(event: CalendlyWebhookEvent): Promise<
       cancel_reason: cancelReason,
       status_set: statusChangedTo,
       created_lead: !match,
+      created_deal: createdDeal,
+      deal_title: dealRule?.title ?? null,
       source: "calendly",
     },
   });

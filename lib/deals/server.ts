@@ -114,7 +114,8 @@ export async function createDeal(input: {
   probability?: number | null;
   nextStep?: string | null;
   lastFollowupAt?: string | null;
-  createdBy: string;
+  // null = System-Kontext (z.B. Calendly-Webhook ohne User-Session).
+  createdBy: string | null;
 }): Promise<{ id: string } | { error: string }> {
   const db = createServiceClient();
   const { data, error } = await db
