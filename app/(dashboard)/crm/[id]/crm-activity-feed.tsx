@@ -266,9 +266,12 @@ export function CrmActivityFeed({
               <div className="min-w-0 flex-1">
                 <p className="text-sm">
                   <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {item.author ?? "System"}
+                    {item.author ?? (item.kind === "appointment" ? "Calendly-Termin" : "System")}
                   </span>
-                  <span className="text-gray-500 dark:text-gray-400"> · {actionVerb(item.kind)}</span>
+                  {/* Für autorlose Calendly-Termine ist „Calendly-Termin" schon der Name → Verb weglassen. */}
+                  {!(item.kind === "appointment" && !item.author) && (
+                    <span className="text-gray-500 dark:text-gray-400"> · {actionVerb(item.kind)}</span>
+                  )}
                   <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500">
                     · {formatRelative(item.at)}
                   </span>

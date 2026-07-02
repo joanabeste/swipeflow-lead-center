@@ -15,6 +15,7 @@ import {
 import { parseAmountToCents } from "@/lib/deals/types";
 import type { DealActivityType, DealStageKind } from "@/lib/deals/types";
 import { findExistingLeadForManual } from "@/lib/leads/find-existing";
+import { updateCrmStatus } from "@/app/(dashboard)/crm/actions";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -173,6 +174,25 @@ export async function updateDealAction(
     entityId: dealId,
     details: patch,
   });
+
+  // Stage-Wechsel → CRM-Status des verknüpften Leads mitziehen. Deal-Stages und
+  // custom_lead_statuses teilen seit Migration 131 denselben Wertebereich, daher
+  // ist stageId direkt als crm_status_id verwendbar. Best-Effort: schlägt der Sync
+  // fehl, bleibt der Deal-Move trotzdem bestehen.
+  if (patch.stageId !== undefined) {
+    const db = createServiceClient();
+    const { data: dealRow } = await db
+      .from("deals")
+      .select("lead_id")
+      .eq("id", dealId)
+      .maybeSingle();
+    if (dealRow?.lead_id) {
+      const sync = await updateCrmStatus(dealRow.lead_id as string, patch.stageId);
+      if (sync && "error" in sync && sync.error) {
+        console.warn("[updateDealAction] Lead-Status-Sync fehlgeschlagen:", sync.error);
+      }
+    }
+  }
 
   revalidatePath("/deals");
   revalidatePath(`/deals/${dealId}`);

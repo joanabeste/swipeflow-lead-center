@@ -137,8 +137,11 @@ function StageColumn({
 function KanbanDealCard({ deal, stages }: { deal: DealWithRelations; stages: DealStage[] }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: deal.id });
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    // Translate statt Transform: nur verschieben, kein scaleX/scaleY — sonst
+    // wird die Karte beim Ziehen verzerrt/gestaucht.
+    transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
   };
   const stale = isStale(deal, stages);
 

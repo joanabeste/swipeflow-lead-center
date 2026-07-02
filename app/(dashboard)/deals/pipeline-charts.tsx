@@ -23,7 +23,7 @@ export function PipelineCharts({
   );
 }
 
-function StageVolumeChart({
+export function StageVolumeChart({
   deals,
   stages,
 }: {
@@ -75,7 +75,7 @@ function StageVolumeChart({
   );
 }
 
-function MonthlyTrendChart({
+export function MonthlyTrendChart({
   deals,
   stages,
 }: {

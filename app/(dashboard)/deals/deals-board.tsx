@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import { NewDealDialog } from "./new-deal-dialog";
-import { PipelineCharts } from "./pipeline-charts";
+import { StageVolumeChart, MonthlyTrendChart } from "./pipeline-charts";
 import { KpisRow } from "./_components/kpis-row";
 import { DealsToolbar } from "./_components/deals-toolbar";
 import { KanbanView } from "./_components/kanban-view";
@@ -123,6 +123,8 @@ export function DealsBoard({
     <div className="space-y-5">
       <KpisRow kpis={kpis} />
 
+      <StageVolumeChart deals={filtered} stages={stages} />
+
       <DealsToolbar
         view={view}
         onViewChange={setView}
@@ -158,7 +160,7 @@ export function DealsBoard({
         />
       )}
 
-      <PipelineCharts deals={filtered} stages={stages} />
+      <MonthlyTrendChart deals={filtered} stages={stages} />
 
       {createOpen && (
         <NewDealDialog

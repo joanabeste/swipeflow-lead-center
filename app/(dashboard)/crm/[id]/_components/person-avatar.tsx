@@ -31,11 +31,20 @@ export function PersonAvatar({
   };
   const c = config[kind] ?? config.all;
   const Icon = c.icon;
+  // Autorlose Calendly-Termine: Kalender-Icon direkt als Avatar (kein „·"-Kreis + Mini-Badge).
+  const iconAvatar = !avatarUrl && !name && kind === "appointment";
   return (
     <div className="relative">
       {avatarUrl ? (
         <div className="relative h-9 w-9 overflow-hidden rounded-full">
           <Image src={avatarUrl} alt={name ?? ""} fill sizes="36px" className="object-cover" unoptimized />
+        </div>
+      ) : iconAvatar ? (
+        <div
+          className="flex h-9 w-9 items-center justify-center rounded-full text-white"
+          style={{ backgroundColor: c.color }}
+        >
+          <Icon className="h-4 w-4" />
         </div>
       ) : (
         <div
@@ -45,12 +54,14 @@ export function PersonAvatar({
           {initials}
         </div>
       )}
-      <div
-        className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white dark:border-[#1c1c1e]"
-        style={{ backgroundColor: c.color }}
-      >
-        <Icon className="h-2.5 w-2.5 text-white" />
-      </div>
+      {!iconAvatar && (
+        <div
+          className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white dark:border-[#1c1c1e]"
+          style={{ backgroundColor: c.color }}
+        >
+          <Icon className="h-2.5 w-2.5 text-white" />
+        </div>
+      )}
     </div>
   );
 }

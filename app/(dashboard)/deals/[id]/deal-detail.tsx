@@ -16,6 +16,29 @@ import { formatAmount, weightedForecastCents, DEAL_ACTIVITY_LABELS } from "@/lib
 import { updateDealAction, deleteDealAction, addDealNoteAction, deleteDealNoteAction } from "../actions";
 import { useToastContext } from "../../toast-provider";
 import { useConfetti } from "@/components/confetti";
+import { CrmActivityFeed } from "../../crm/[id]/crm-activity-feed";
+import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
+
+/** Aktivität des verknüpften Leads für den CRM-Feed in der rechten Spalte.
+ *  Schmales Objekt (nur die Felder, die CrmActivityFeed braucht) → keine unnötige
+ *  Serialisierung des kompletten CrmDetailBundle über die Server/Client-Grenze. */
+export interface LeadActivityProps {
+  leadId: string;
+  leadPhone: string | null;
+  companyName: string;
+  senderName: string | null;
+  currentStatusId: string | null;
+  statuses: CrmDetailBundle["statuses"];
+  contacts: CrmDetailBundle["contacts"];
+  notes: CrmDetailBundle["notes"];
+  calls: CrmDetailBundle["calls"];
+  emails: CrmDetailBundle["emails"];
+  enrichments: CrmDetailBundle["enrichments"];
+  changes: CrmDetailBundle["changes"];
+  auditLogs: CrmDetailBundle["auditLogs"];
+  callProviders: CrmDetailBundle["callProviders"];
+  importInfo: CrmDetailBundle["importInfo"];
+}
 
 interface Props {
   deal: DealWithRelations;
@@ -23,6 +46,7 @@ interface Props {
   team: { id: string; name: string; avatarUrl: string | null }[];
   changes: DealChange[];
   notes: DealNote[];
+  leadActivity?: LeadActivityProps | null;
 }
 
 const ACTIVITY_ICON: Record<DealActivityType, typeof StickyNote> = {
@@ -35,13 +59,16 @@ const ACTIVITY_ICON: Record<DealActivityType, typeof StickyNote> = {
 
 const ACTIVITY_ORDER: DealActivityType[] = ["call", "meeting", "email", "closing", "note"];
 
-export function DealDetail({ deal, stages, team, changes, notes }: Props) {
+export function DealDetail({ deal, stages, team, changes, notes, leadActivity }: Props) {
   const router = useRouter();
   const { addToast } = useToastContext();
   const fireConfetti = useConfetti();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
   const [deletePending, startDelete] = useTransition();
+  const [stagePending, startStageTransition] = useTransition();
+  // Optimistischer Override der Stage beim Inline-Wechsel (per Klick auf die Pille).
+  const [inlineStageId, setInlineStageId] = useState<string | null>(null);
 
   const [title, setTitle] = useState(deal.title);
   const [description, setDescription] = useState(deal.description ?? "");
@@ -60,6 +87,25 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
     const newStage = stages.find((s) => s.id === newStageId);
     if (newStage?.kind === "won") setProbability("100");
     else if (newStage?.kind === "lost") setProbability("0");
+  }
+
+  // Inline-Stagewechsel direkt auf der Pille (ohne Edit-Modus) — analog zum Kanban-Drop.
+  function handleInlineStageChange(newStageId: string) {
+    if (newStageId === deal.stageId) return;
+    const prevKind = deal.stage_kind;
+    const newKind = stages.find((s) => s.id === newStageId)?.kind;
+    setInlineStageId(newStageId); // optimistisch
+    startStageTransition(async () => {
+      const res = await updateDealAction(deal.id, { stageId: newStageId });
+      if ("error" in res) {
+        addToast(res.error, "error");
+        setInlineStageId(null); // Rollback
+      } else {
+        if (newKind === "won" && prevKind !== "won") fireConfetti();
+        addToast("Stage aktualisiert.", "success");
+        router.refresh();
+      }
+    });
   }
 
   function handleSave() {
@@ -106,6 +152,8 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
 
   const activeStages = stages.filter((s) => s.isActive || s.id === stageId);
   const currentStage = stages.find((s) => s.id === deal.stageId);
+  const displayedStageId = inlineStageId ?? deal.stageId;
+  const displayedStage = stages.find((s) => s.id === displayedStageId);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -228,16 +276,20 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
                   ))}
                 </select>
               ) : (
-                <span
-                  className="mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-medium"
-                  style={{ backgroundColor: `${deal.stage_color}20`, color: deal.stage_color }}
+                <select
+                  value={displayedStageId}
+                  onChange={(e) => handleInlineStageChange(e.target.value)}
+                  disabled={stagePending}
+                  title="Stage per Klick ändern"
+                  className="mt-1 cursor-pointer rounded-full px-2.5 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60"
+                  style={{ backgroundColor: `${displayedStage?.color}20`, color: displayedStage?.color }}
                 >
-                  <span
-                    className="inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: deal.stage_color }}
-                  />
-                  {deal.stage_label}
-                </span>
+                  {stages
+                    .filter((s) => s.isActive || s.id === displayedStageId)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.label}</option>
+                    ))}
+                </select>
               )}
             </div>
 
@@ -396,6 +448,37 @@ export function DealDetail({ deal, stages, team, changes, notes }: Props) {
 
       {/* Historie */}
       <aside className="space-y-3">
+        {/* Aktivität des verknüpften Leads — voller CRM-Feed (Anruf/Notiz/E-Mail loggen,
+            Status ändern, Calendly-Termine). Abgegrenzt von der darunter liegenden
+            Deal-Historie. */}
+        {leadActivity && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
+            <div className="mb-3 flex items-center gap-2">
+              <Activity className="h-4 w-4 text-gray-400" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Lead-Aktivität
+              </p>
+            </div>
+            <CrmActivityFeed
+              leadId={leadActivity.leadId}
+              leadPhone={leadActivity.leadPhone}
+              companyName={leadActivity.companyName}
+              senderName={leadActivity.senderName}
+              currentStatusId={leadActivity.currentStatusId}
+              statuses={leadActivity.statuses}
+              contacts={leadActivity.contacts}
+              notes={leadActivity.notes}
+              calls={leadActivity.calls}
+              emails={leadActivity.emails}
+              enrichments={leadActivity.enrichments}
+              changes={leadActivity.changes}
+              auditLogs={leadActivity.auditLogs}
+              callProviders={leadActivity.callProviders}
+              importInfo={leadActivity.importInfo}
+            />
+          </div>
+        )}
+
         <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
           <div className="mb-3 flex items-center gap-2">
             <Activity className="h-4 w-4 text-gray-400" />

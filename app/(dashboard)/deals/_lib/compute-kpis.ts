@@ -69,8 +69,6 @@ export function computeKpis(deals: DealWithRelations[], stages: DealStage[]): De
     motivationalMessage = `🔥 ${wonCount30d} Abschlüsse im letzten Monat — weiter so.`;
   } else if (winRate >= 0.5 && closedCount >= 3) {
     motivationalMessage = `Starke ${Math.round(winRate * 100)}% Gewinn-Quote — dran bleiben.`;
-  } else if (openCount >= 5) {
-    motivationalMessage = `${openCount} offene Deals — ein Closing-Call pro Tag macht den Unterschied.`;
   } else if (openCount > 0) {
     motivationalMessage = "Jeder Follow-Up zählt. Nächster Schritt?";
   }

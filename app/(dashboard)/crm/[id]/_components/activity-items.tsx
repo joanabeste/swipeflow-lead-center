@@ -7,7 +7,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
   Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail, Paperclip, X,
-  Undo2, Loader2, CalendarCheck, CalendarX, Video, Clock,
+  Undo2, Loader2, CalendarCheck, CalendarX, Clock,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange, LoadedNoteAttachment } from "@/lib/types";
 import type { LeadImportInfo } from "./types";
@@ -87,16 +87,6 @@ export function AppointmentItem({ log }: { log: AuditRow }) {
       )}
       {canceled && d.cancel_reason && (
         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Grund: {d.cancel_reason}</p>
-      )}
-      {!canceled && d.join_url && (
-        <a
-          href={d.join_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          <Video className="h-3 w-3" /> Meeting-Link
-        </a>
       )}
       {d.created_lead && (
         <p className="mt-1 text-[11px] text-gray-400">Lead automatisch aus der Buchung angelegt.</p>
