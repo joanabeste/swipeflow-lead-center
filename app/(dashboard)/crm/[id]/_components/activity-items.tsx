@@ -541,7 +541,7 @@ export function CallItem({ call }: { call: CallRow }) {
 
   return (
     <div className="text-sm">
-      <p className="inline-flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-gray-700 dark:text-gray-300">
         {directionIcon}
         {call.direction === "inbound" ? "Eingehend" : "Ausgehend"}
         <span className="text-gray-500 dark:text-gray-400">· {statusLabel[call.status] ?? call.status}</span>
@@ -549,10 +549,10 @@ export function CallItem({ call }: { call: CallRow }) {
           <span className="text-xs text-gray-500 dark:text-gray-400">· {formatDur(call.duration_seconds)}</span>
         )}
         {call.phone_number && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">· {call.phone_number}</span>
+          <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">· {call.phone_number}</span>
         )}
         {providerLabel && (
-          <span className="ml-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-400">
+          <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-600 dark:bg-white/5 dark:text-gray-400">
             {providerLabel}
           </span>
         )}
