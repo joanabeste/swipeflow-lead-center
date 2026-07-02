@@ -95,7 +95,7 @@ export function AppointmentItem({ log }: { log: AuditRow }) {
   );
 }
 
-export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
+export function NoteItem({ note, leadId, readOnly = false }: { note: NoteRow; leadId: string; readOnly?: boolean }) {
   const notify = usePreviewRefresh();
   const { addToast } = useToastContext();
   const [editing, setEditing] = useState(false);
@@ -339,7 +339,7 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
             </span>
           )}
           {/* „Trennen" nur an der echten Merge-Notiz (🔀) — nicht an übernommenen Kind-Notizen. */}
-          {note.merged_from_lead_id && note.content?.startsWith("🔀") && (
+          {!readOnly && note.merged_from_lead_id && note.content?.startsWith("🔀") && (
             <button
               onClick={handleUnmerge}
               disabled={pending}
@@ -365,25 +365,28 @@ export function NoteItem({ note, leadId }: { note: NoteRow; leadId: string }) {
           bearbeitet {new Date(note.updated_at).toLocaleString("de-DE")}
         </p>
       )}
-      <div className="mt-2 flex items-center gap-1">
-        <button
-          onClick={() => setEditing(true)}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-primary hover:bg-primary/10 hover:text-primary dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-primary/20"
-          title="Notiz bearbeiten"
-        >
-          <Pencil className="h-3 w-3" />
-          Bearbeiten
-        </button>
-        <button
-          onClick={handleDelete}
-          disabled={pending}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:border-red-800 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-          title="Notiz löschen"
-        >
-          <Trash2 className="h-3 w-3" />
-          Löschen
-        </button>
-      </div>
+      {/* Bearbeiten/Löschen nur im interaktiven Modus — in der Deal-Detail-Lesedarstellung ausgeblendet. */}
+      {!readOnly && (
+        <div className="mt-2 flex items-center gap-1">
+          <button
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-primary hover:bg-primary/10 hover:text-primary dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:bg-primary/20"
+            title="Notiz bearbeiten"
+          >
+            <Pencil className="h-3 w-3" />
+            Bearbeiten
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={pending}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-300 dark:hover:border-red-800 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            title="Notiz löschen"
+          >
+            <Trash2 className="h-3 w-3" />
+            Löschen
+          </button>
+        </div>
+      )}
     </div>
   );
 }

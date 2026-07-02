@@ -32,6 +32,12 @@ interface Props {
   callProviders: { phonemondo: boolean; webex: boolean };
   /** Lead-Herkunft → ältester „Importiert"-Eintrag in der Historie. */
   importInfo?: LeadImportInfo | null;
+  /**
+   * Nur-lesen-Modus (z.B. Deal-Detail): blendet die Compose-Aktionen
+   * (Anruf/Notiz/E-Mail loggen) sowie Notiz-Bearbeiten/-Löschen aus.
+   * Filter und CRM-Status-Auswahl bleiben erhalten. Default: interaktiv.
+   */
+  readOnly?: boolean;
 }
 
 interface UnifiedItem {
@@ -44,7 +50,7 @@ interface UnifiedItem {
 }
 
 export function CrmActivityFeed({
-  leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders, importInfo,
+  leadId, leadPhone, companyName, senderName, currentStatusId, statuses, contacts, notes, calls, emails, enrichments, changes, auditLogs, callProviders, importInfo, readOnly = false,
 }: Props) {
   const notify = usePreviewRefresh();
   const fireConfetti = useConfetti();
@@ -71,7 +77,7 @@ export function CrmActivityFeed({
       id: `n-${n.id}`, kind: "note", at: n.created_at,
       author: n.profiles?.name ?? null,
       authorAvatarUrl: n.profiles?.avatar_url ?? null,
-      render: () => <NoteItem note={n} leadId={leadId} />,
+      render: () => <NoteItem note={n} leadId={leadId} readOnly={readOnly} />,
     });
   }
   for (const c of calls) {
@@ -156,28 +162,33 @@ export function CrmActivityFeed({
   return (
     <div className="rounded-lg border border-gray-200 bg-white dark:border-[#2c2c2e] dark:bg-[#1c1c1e]">
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 p-3 dark:border-[#2c2c2e]">
-        <div className="flex items-center gap-1">
-          <ToolbarButton
-            icon={PhoneCall}
-            label="Anruf"
-            active={composeMode === "call"}
-            onClick={() => setComposeMode(composeMode === "call" ? "idle" : "call")}
-          />
-          <ToolbarButton
-            icon={StickyNote}
-            label="Notiz"
-            active={composeMode === "note"}
-            onClick={() => setComposeMode(composeMode === "note" ? "idle" : "note")}
-          />
-          <ToolbarButton
-            icon={Mail}
-            label="E-Mail"
-            active={composeMode === "email"}
-            onClick={() => setComposeMode(composeMode === "email" ? "idle" : "email")}
-          />
-        </div>
+        {/* Compose-Aktionen nur im interaktiven Modus (nicht in der Deal-Detail-Lesedarstellung). */}
+        {!readOnly && (
+          <>
+            <div className="flex items-center gap-1">
+              <ToolbarButton
+                icon={PhoneCall}
+                label="Anruf"
+                active={composeMode === "call"}
+                onClick={() => setComposeMode(composeMode === "call" ? "idle" : "call")}
+              />
+              <ToolbarButton
+                icon={StickyNote}
+                label="Notiz"
+                active={composeMode === "note"}
+                onClick={() => setComposeMode(composeMode === "note" ? "idle" : "note")}
+              />
+              <ToolbarButton
+                icon={Mail}
+                label="E-Mail"
+                active={composeMode === "email"}
+                onClick={() => setComposeMode(composeMode === "email" ? "idle" : "email")}
+              />
+            </div>
 
-        <div className="mx-1 h-5 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
+            <div className="mx-1 h-5 w-px bg-gray-200 dark:bg-[#2c2c2e]" />
+          </>
+        )}
 
         <label className="inline-flex items-center gap-1.5 text-xs">
           <span className="text-gray-500 dark:text-gray-400">Anzeigen:</span>
@@ -224,14 +235,14 @@ export function CrmActivityFeed({
         </div>
       </div>
 
-      {composeMode === "note" && (
+      {!readOnly && composeMode === "note" && (
         <ComposeNote
           leadId={leadId}
           onClose={() => setComposeMode("idle")}
           onSaved={() => { setComposeMode("idle"); notify(); }}
         />
       )}
-      {composeMode === "call" && (
+      {!readOnly && composeMode === "call" && (
         <ComposeCall
           leadId={leadId}
           leadPhone={leadPhone}
@@ -241,7 +252,7 @@ export function CrmActivityFeed({
           onSaved={() => { setComposeMode("idle"); notify(); }}
         />
       )}
-      {composeMode === "email" && (
+      {!readOnly && composeMode === "email" && (
         <ComposeEmail
           leadId={leadId}
           contacts={contacts}

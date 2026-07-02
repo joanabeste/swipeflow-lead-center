@@ -448,9 +448,10 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
 
       {/* Historie */}
       <aside className="space-y-3">
-        {/* Aktivität des verknüpften Leads — voller CRM-Feed (Anruf/Notiz/E-Mail loggen,
-            Status ändern, Calendly-Termine). Abgegrenzt von der darunter liegenden
-            Deal-Historie. */}
+        {/* Aktivität des verknüpften Leads — NUR-LESEN (readOnly): zeigt was mit dem Lead
+            passiert ist (Anrufe, Notizen, E-Mails, Calendly-Termine, Status-Wechsel).
+            Kein Compose-Composer hier; geloggt wird über „Aktivitäten & Notizen" links.
+            Der CRM-Status bleibt änderbar. Abgegrenzt von der Deal-Historie darunter. */}
         {leadActivity && (
           <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-[#2c2c2e]/50 dark:bg-[#1c1c1e]">
             <div className="mb-3 flex items-center gap-2">
@@ -475,6 +476,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
               auditLogs={leadActivity.auditLogs}
               callProviders={leadActivity.callProviders}
               importInfo={leadActivity.importInfo}
+              readOnly
             />
           </div>
         )}
