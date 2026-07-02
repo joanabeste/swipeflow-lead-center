@@ -231,7 +231,7 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 text-left text-[11px] uppercase tracking-wide text-gray-400 dark:border-[#2c2c2e]/40">
-                        <Th>Titel</Th><Th>Firma</Th><Th>Bereich</Th><Th right>Betrag</Th><Th>Vertriebler</Th><Th right>Wahrsch.</Th>
+                        <Th>Titel</Th><Th>Firma</Th><Th>Bereich</Th><Th right>Betrag</Th><Th>{g.showSetter ? "Setter" : "Vertriebler"}</Th><Th right>Wahrsch.</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -245,7 +245,7 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
                           <Td><div className="max-w-[200px] truncate" title={d.company}>{d.company}</div></Td>
                           <Td>{d.bereich}</Td>
                           <Td right>{money(d.amountCents)}</Td>
-                          <Td><span className="whitespace-nowrap">{d.assignee}</span></Td>
+                          <Td><span className="whitespace-nowrap">{g.showSetter ? (d.setter ?? "—") : d.assignee}</span></Td>
                           <Td right>{d.probabilityPct == null ? "—" : `${num(d.probabilityPct)} %`}</Td>
                         </tr>
                       ))}

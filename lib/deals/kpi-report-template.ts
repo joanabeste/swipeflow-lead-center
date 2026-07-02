@@ -396,7 +396,7 @@ function dealGroup(g: DealListGroup): string {
       <td>${esc(d.company)}</td>
       <td>${esc(d.bereich)}</td>
       <td class="r">${money(d.amountCents)}</td>
-      <td>${esc(d.assignee)}</td>
+      <td>${esc(g.showSetter ? d.setter ?? "—" : d.assignee)}</td>
       <td class="r">${d.probabilityPct == null ? "—" : num(d.probabilityPct) + " %"}</td>
       <td>${d.nextStep ? esc(truncate(d.nextStep, 48)) : "—"}</td>
     </tr>`,
@@ -409,7 +409,7 @@ function dealGroup(g: DealListGroup): string {
     </div>
     <table>
       <thead><tr>
-        <th>Titel</th><th>Firma</th><th>Bereich</th><th class="r">Betrag</th><th>Vertriebler</th><th class="r">Wahrsch.</th><th>Next Step</th>
+        <th>Titel</th><th>Firma</th><th>Bereich</th><th class="r">Betrag</th><th>${g.showSetter ? "Setter" : "Vertriebler"}</th><th class="r">Wahrsch.</th><th>Next Step</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>

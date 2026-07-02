@@ -5,6 +5,7 @@ import { toBerlinDayKey } from "@/lib/date/day-key";
 import { permissionsFromProfile, type Profile } from "@/lib/types";
 import { listDeals, listStages } from "@/lib/deals/server";
 import { DEAL_VERTICAL_LABELS } from "@/lib/deals/types";
+import { APPOINTMENT_STATUS_ID } from "@/lib/service-mode-constants";
 import { computeKpis } from "@/app/(dashboard)/deals/_lib/compute-kpis";
 
 /**
@@ -76,6 +77,7 @@ export interface DealListItem {
   bereich: string; // Bereich-Label (Webdesign/Recruiting/Sonstiges) oder „—"
   amountCents: number;
   assignee: string;
+  setter: string | null; // Setter (nur bei Setting-Stage-Deals; heuristisch)
   probabilityPct: number | null;
   nextStep: string | null;
 }
@@ -91,6 +93,7 @@ export interface DealListGroup {
   stageLabel: string;
   stageColor: string;
   stageKind: string;
+  showSetter: boolean; // true = Personen-Spalte zeigt Setter statt Vertriebler (Setting-Stage)
   count: number;
   volumeCents: number;
   items: DealListItem[];
@@ -405,8 +408,16 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
 
   // Deal-Liste je Stage: offene Stages → alle offenen Deals; won/lost →
   // nur die im Monat abgeschlossenen. Leere Gruppen weglassen.
+  // Setter eines Deals (nur Setting-Stage): letzter ausgehender Anrufer des Leads
+  // (heuristisch, wie „Setting-Termine pro Mitarbeiter").
+  const setterForLead = (leadId: string | null): string | null => {
+    const callerId = lastCallerBefore(leadId, untilPlusIso);
+    return callerId ? nameById.get(callerId) ?? null : null;
+  };
+
   const dealsList: DealListGroup[] = activeStages
     .map((s) => {
+      const isSettingStage = s.id === APPOINTMENT_STATUS_ID;
       const items =
         s.kind === "open"
           ? dealsAll.filter((d) => d.stageId === s.id)
@@ -415,6 +426,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
         stageLabel: s.label,
         stageColor: s.color,
         stageKind: s.kind,
+        showSetter: isSettingStage,
         count: items.length,
         volumeCents: items.reduce((sum, d) => sum + d.amountCents, 0),
         items: items
@@ -426,6 +438,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
             bereich: d.vertical ? DEAL_VERTICAL_LABELS[d.vertical] : "—",
             amountCents: d.amountCents,
             assignee: d.assignee_name ?? "—",
+            setter: isSettingStage ? setterForLead(d.leadId) : null,
             probabilityPct: d.probability,
             nextStep: d.nextStep,
           })),
