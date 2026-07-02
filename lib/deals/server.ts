@@ -111,6 +111,7 @@ export async function createDeal(input: {
   stageId: string;
   assignedTo: string | null;
   expectedCloseDate: string | null;
+  actualCloseDate?: string | null;
   probability?: number | null;
   nextStep?: string | null;
   lastFollowupAt?: string | null;
@@ -129,6 +130,7 @@ export async function createDeal(input: {
       stage_id: input.stageId,
       assigned_to: input.assignedTo,
       expected_close_date: input.expectedCloseDate,
+      actual_close_date: input.actualCloseDate ?? null,
       probability: input.probability ?? null,
       next_step: input.nextStep ?? null,
       last_followup_at: input.lastFollowupAt ?? null,
@@ -198,21 +200,19 @@ export async function updateDeal(
     row.amount_cents = updates.amountCents;
     track("amount_cents", before.amount_cents, updates.amountCents);
   }
+  let movedToTerminalStage = false;
   if (updates.stageId !== undefined) {
     row.stage_id = updates.stageId;
     track("stage_id", before.stage_id, updates.stageId);
-    // Bei Wechsel auf terminalen Stage (won/lost) das actual_close_date setzen.
+    // Merken, ob auf einen terminalen Stage (won/lost) gewechselt wird — der
+    // Auto-Stempel des actual_close_date passiert weiter unten, NACH einem evtl.
+    // explizit gesetzten Wert (Abschluss-Monat-Dropdown), damit dieser Vorrang hat.
     const { data: newStage } = await db
       .from("custom_lead_statuses")
       .select("deal_kind")
       .eq("id", updates.stageId)
       .maybeSingle();
-    if (newStage && (newStage.deal_kind === "won" || newStage.deal_kind === "lost")) {
-      if (!before.actual_close_date) {
-        row.actual_close_date = new Date().toISOString().slice(0, 10);
-        track("actual_close_date", before.actual_close_date, row.actual_close_date);
-      }
-    }
+    movedToTerminalStage = !!newStage && (newStage.deal_kind === "won" || newStage.deal_kind === "lost");
   }
   if (updates.assignedTo !== undefined) {
     row.assigned_to = updates.assignedTo;
@@ -225,6 +225,17 @@ export async function updateDeal(
   if (updates.actualCloseDate !== undefined) {
     row.actual_close_date = updates.actualCloseDate;
     track("actual_close_date", before.actual_close_date, updates.actualCloseDate);
+  }
+  // Auto-Stempel bei Wechsel auf won/lost: nur wenn danach KEIN Abschlussdatum
+  // gesetzt ist (weder Bestand noch explizit im selben Save) → heute. Ein manuell
+  // gewählter Abschluss-Monat bleibt so erhalten; leer-lassen stempelt wie bisher.
+  if (movedToTerminalStage) {
+    const effectiveClose =
+      "actual_close_date" in row ? (row.actual_close_date as string | null) : before.actual_close_date;
+    if (!effectiveClose) {
+      row.actual_close_date = new Date().toISOString().slice(0, 10);
+      track("actual_close_date", before.actual_close_date, row.actual_close_date);
+    }
   }
   if (updates.probability !== undefined) {
     row.probability = updates.probability;

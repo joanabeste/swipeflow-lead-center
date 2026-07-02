@@ -19,6 +19,7 @@ import { useConfetti } from "@/components/confetti";
 import { CrmActivityFeed } from "../../crm/[id]/crm-activity-feed";
 import type { CrmDetailBundle } from "@/lib/crm/load-crm-detail";
 import { CompanyPicker, type CompanyValue } from "../_components/company-picker";
+import { closeMonthLabel, closeMonthOptions, dateToMonthValue, monthValueToDate } from "../_lib/close-month";
 
 /** Aktivität des verknüpften Leads für den CRM-Feed in der rechten Spalte.
  *  Schmales Objekt (nur die Felder, die CrmActivityFeed braucht) → keine unnötige
@@ -76,7 +77,8 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
   const [amountRaw, setAmountRaw] = useState((deal.amountCents / 100).toString());
   const [stageId, setStageId] = useState(deal.stageId);
   const [assignedTo, setAssignedTo] = useState(deal.assignedTo ?? "");
-  const [expectedCloseDate, setExpectedCloseDate] = useState(deal.expectedCloseDate ?? "");
+  // Abschluss-MONAT (Dropdown) → gespeichert als actual_close_date (15. des Monats).
+  const [closeMonth, setCloseMonth] = useState(dateToMonthValue(deal.actualCloseDate));
   const [probability, setProbability] = useState<string>(
     deal.probability != null ? String(deal.probability) : "",
   );
@@ -131,7 +133,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
         amountRaw,
         stageId,
         assignedTo: assignedTo || null,
-        expectedCloseDate: expectedCloseDate || null,
+        actualCloseDate: monthValueToDate(closeMonth),
         probability: probNum,
         nextStep: nextStep.trim() || null,
         lastFollowupAt: lastFollowupAt || null,
@@ -227,7 +229,7 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
                       setAmountRaw((deal.amountCents / 100).toString());
                       setStageId(deal.stageId);
                       setAssignedTo(deal.assignedTo ?? "");
-                      setExpectedCloseDate(deal.expectedCloseDate ?? "");
+                      setCloseMonth(dateToMonthValue(deal.actualCloseDate));
                       setProbability(deal.probability != null ? String(deal.probability) : "");
                       setNextStep(deal.nextStep ?? "");
                       setLastFollowupAt(deal.lastFollowupAt ?? "");
@@ -344,21 +346,23 @@ export function DealDetail({ deal, stages, team, changes, notes, leadActivity }:
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Erwartetes Abschluss-Datum
+                Abschluss-Monat
               </p>
               {editing ? (
-                <input
-                  type="date"
-                  value={expectedCloseDate}
-                  onChange={(e) => setExpectedCloseDate(e.target.value)}
+                <select
+                  value={closeMonth}
+                  onChange={(e) => setCloseMonth(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325]"
-                />
+                >
+                  <option value="">— Kein Monat</option>
+                  {closeMonthOptions(closeMonth).map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
               ) : (
                 <p className="mt-1 inline-flex items-center gap-1.5 text-sm">
                   <Calendar className="h-3.5 w-3.5 text-gray-400" />
-                  {deal.expectedCloseDate
-                    ? new Date(deal.expectedCloseDate).toLocaleDateString("de-DE")
-                    : "—"}
+                  {deal.actualCloseDate ? closeMonthLabel(dateToMonthValue(deal.actualCloseDate)) : "—"}
                 </p>
               )}
             </div>

@@ -6,6 +6,7 @@ import { X, Check } from "lucide-react";
 import type { DealStage } from "@/lib/deals/types";
 import { createDealAction } from "./actions";
 import { CompanyPicker } from "./_components/company-picker";
+import { closeMonthOptions, monthValueToDate } from "./_lib/close-month";
 import { useToastContext } from "../toast-provider";
 import { useConfetti } from "@/components/confetti";
 
@@ -33,7 +34,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
   const [description, setDescription] = useState("");
   const [stageId, setStageId] = useState(stages.find((s) => s.kind === "open")?.id ?? stages[0]?.id ?? "");
   const [assignedTo, setAssignedTo] = useState<string>("");
-  const [expectedCloseDate, setExpectedCloseDate] = useState<string>("");
+  const [closeMonth, setCloseMonth] = useState<string>("");
   const [probability, setProbability] = useState<string>("");
   const [nextStep, setNextStep] = useState<string>("");
   const [lastFollowupAt, setLastFollowupAt] = useState<string>("");
@@ -76,7 +77,7 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
         amountRaw,
         stageId,
         assignedTo: assignedTo || null,
-        expectedCloseDate: expectedCloseDate || null,
+        actualCloseDate: monthValueToDate(closeMonth),
         probability: probNum,
         nextStep: nextStep.trim() || null,
         lastFollowupAt: lastFollowupAt || null,
@@ -198,14 +199,18 @@ export function NewDealDialog({ stages, team, preselectedLead = null, onClose }:
               </select>
             </div>
             <div>
-              <label htmlFor="d-close" className="block text-sm font-medium">Erwartetes Abschluss-Datum</label>
-              <input
+              <label htmlFor="d-close" className="block text-sm font-medium">Abschluss-Monat</label>
+              <select
                 id="d-close"
-                type="date"
-                value={expectedCloseDate}
-                onChange={(e) => setExpectedCloseDate(e.target.value)}
+                value={closeMonth}
+                onChange={(e) => setCloseMonth(e.target.value)}
                 className="mt-1.5 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none dark:border-[#2c2c2e] dark:bg-[#232325] dark:text-gray-100"
-              />
+              >
+                <option value="">— Kein Monat</option>
+                {closeMonthOptions(closeMonth).map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
             </div>
           </div>
 

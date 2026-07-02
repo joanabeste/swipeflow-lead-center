@@ -39,7 +39,8 @@ export async function createDealAction(input: {
   amountRaw: string;               // Nutzer-Eingabe, parsen nach Cent
   stageId: string;
   assignedTo: string | null;
-  expectedCloseDate: string | null;
+  expectedCloseDate?: string | null;
+  actualCloseDate?: string | null;
   probability?: number | null;
   nextStep?: string | null;
   lastFollowupAt?: string | null;
@@ -91,7 +92,8 @@ export async function createDealAction(input: {
     amountCents: cents,
     stageId: input.stageId,
     assignedTo: input.assignedTo ?? user.id,
-    expectedCloseDate: input.expectedCloseDate,
+    expectedCloseDate: input.expectedCloseDate ?? null,
+    actualCloseDate: input.actualCloseDate ?? null,
     probability: input.probability ?? null,
     nextStep: input.nextStep?.trim() || null,
     lastFollowupAt: input.lastFollowupAt ?? null,
@@ -132,6 +134,7 @@ export async function updateDealAction(
     stageId?: string;
     assignedTo?: string | null;
     expectedCloseDate?: string | null;
+    actualCloseDate?: string | null;
     probability?: number | null;
     nextStep?: string | null;
     lastFollowupAt?: string | null;
@@ -157,6 +160,7 @@ export async function updateDealAction(
   if (updates.stageId !== undefined) patch.stageId = updates.stageId;
   if (updates.assignedTo !== undefined) patch.assignedTo = updates.assignedTo;
   if (updates.expectedCloseDate !== undefined) patch.expectedCloseDate = updates.expectedCloseDate;
+  if (updates.actualCloseDate !== undefined) patch.actualCloseDate = updates.actualCloseDate;
   if (updates.probability !== undefined) {
     if (updates.probability != null && (updates.probability < 0 || updates.probability > 100)) {
       return { error: "Wahrscheinlichkeit muss zwischen 0 und 100 liegen." };
