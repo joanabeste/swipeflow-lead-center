@@ -1,15 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   BarChart3, CalendarCheck, CalendarClock, Coins, Euro, FileDown, Loader2,
-  Percent, PhoneOutgoing, Sparkles, TrendingUp, Trophy, Users, Wallet,
+  Percent, PhoneOutgoing, Sparkles, TrendingUp, Trophy, Wallet,
 } from "lucide-react";
 import { formatAmount } from "@/lib/deals/types";
 import type { KpiTotals, SalesKpiReport } from "@/lib/deals/kpi-report";
 import { Card } from "../../widgets/_widgets/shared";
-import { MEMBER_PALETTE } from "../../widgets/member-colors";
+import { MEMBER_PALETTE, OTHERS_COLOR, OTHERS_KEY, MEMBER_TOP_N } from "../../widgets/member-colors";
 import { KpiCard } from "../_components/kpi-card";
 import { closeMonthOptions } from "../_lib/close-month";
 import { useToastContext } from "../../toast-provider";
@@ -103,7 +103,6 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
           hint={`Ø ${nf1.format(report.anwahlenProKopf)} je Vertriebler · ausgehende Wählversuche`}
         />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:col-span-2">
-          <KpiCard icon={Users} label="Anwahlen / Kopf" value={nf1.format(report.anwahlenProKopf)} subtitle={`${report.repCount} Vertriebler`} tone="neutral" />
           <KpiCard icon={CalendarClock} label="Setting Termine" value={num(t.settingTermine)} subtitle="im Monat" tone="primary" />
           <KpiCard icon={CalendarCheck} label="Closing Termine" value={num(t.closingTermine)} subtitle="im Monat" tone="primary" />
           <KpiCard icon={Trophy} label="Closings" value={num(t.closings)} subtitle="gewonnene Deals" tone="success" />
@@ -113,7 +112,7 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
       </div>
 
       {/* 2. Anwahlen pro Tag */}
-      <DailyCallsChart data={report.callsPerDay} monthLabel={report.monthLabel} />
+      <DailyCallsChart data={report.callsPerDay} reps={report.reps} monthLabel={report.monthLabel} />
 
       {/* 3. Anwahlen pro Mitarbeiter */}
       <Card>
@@ -243,11 +242,11 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
                     <tbody>
                       {g.items.map((d, i) => (
                         <tr key={i} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 dark:border-[#2c2c2e]/30 dark:hover:bg-white/5">
-                          <Td><span className="font-medium">{d.title}</span></Td>
-                          <Td>{d.company}</Td>
+                          <Td><div className="max-w-[180px] truncate font-medium" title={d.title}>{d.title}</div></Td>
+                          <Td><div className="max-w-[200px] truncate" title={d.company}>{d.company}</div></Td>
                           <Td>{d.bereich}</Td>
                           <Td right>{money(d.amountCents)}</Td>
-                          <Td>{d.assignee}</Td>
+                          <Td><span className="whitespace-nowrap">{d.assignee}</span></Td>
                           <Td right>{d.probabilityPct == null ? "—" : `${num(d.probabilityPct)} %`}</Td>
                         </tr>
                       ))}
@@ -395,43 +394,163 @@ function HBars({ rows, empty }: { rows: BarRow[]; empty: string }) {
   );
 }
 
-function DailyCallsChart({ data, monthLabel }: { data: Array<{ date: string; count: number }>; monthLabel: string }) {
+type DayCalls = { date: string; count: number; byUser: Record<string, number> };
+type Member = { key: string; name: string; color: { bar: string; dot: string }; total: number };
+
+function DailyCallsChart({
+  data,
+  reps,
+  monthLabel,
+}: {
+  data: DayCalls[];
+  reps: SalesKpiReport["reps"];
+  monthLabel: string;
+}) {
   const [hover, setHover] = useState<number | null>(null);
-  const max = Math.max(1, ...data.map((d) => d.count));
+  const [mode, setMode] = useState<"total" | "member">("total");
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+
+  const nameById = useMemo(() => new Map(reps.map((r) => [r.id, r.name])), [reps]);
   const total = data.reduce((s, d) => s + d.count, 0);
+
+  // Mitarbeiter-Ranking über den Monat: Top-N bekommen Farben, Rest → „Andere".
+  const { members, coloredIds } = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const d of data) for (const [uid, n] of Object.entries(d.byUser)) totals.set(uid, (totals.get(uid) ?? 0) + n);
+    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    const colored = new Set(ranked.slice(0, MEMBER_TOP_N).map(([uid]) => uid));
+    const list: Member[] = ranked.slice(0, MEMBER_TOP_N).map(([uid, count], i) => ({
+      key: uid, name: nameById.get(uid) ?? "Unbekannt", color: MEMBER_PALETTE[i % MEMBER_PALETTE.length], total: count,
+    }));
+    const restTotal = ranked.slice(MEMBER_TOP_N).reduce((s, [, n]) => s + n, 0);
+    if (restTotal > 0) list.push({ key: OTHERS_KEY, name: "Andere", color: OTHERS_COLOR, total: restTotal });
+    return { members: list, coloredIds: colored };
+  }, [data, nameById]);
+
+  const isActive = (key: string) => selected === null || selected.has(key);
+  const toggleMember = (key: string) =>
+    setSelected((cur) => {
+      if (cur === null) return new Set([key]);
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next.size === 0 ? null : next;
+    });
+  const memberCount = (d: DayCalls, m: Member): number => {
+    if (m.key === OTHERS_KEY) {
+      let s = 0;
+      for (const [uid, n] of Object.entries(d.byUser)) if (!coloredIds.has(uid)) s += n;
+      return s;
+    }
+    return d.byUser[m.key] ?? 0;
+  };
+
+  const max = useMemo(() => {
+    if (mode === "member") return Math.max(1, ...data.map((d) => Object.values(d.byUser).reduce((s, n) => s + n, 0)));
+    return Math.max(1, ...data.map((d) => d.count));
+  }, [data, mode]);
+
   return (
     <Card>
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-bold tracking-tight">Anwahlen pro Tag</h2>
-        <span className="text-xs text-gray-400">{monthLabel} · {num(total)} gesamt · Spitze {num(max)}/Tag</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{monthLabel} · {num(total)} gesamt · Spitze {num(max)}/Tag</span>
+          <div className="flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-[#2c2c2e]">
+            {([["total", "Gesamt"], ["member", "Mitarbeiter"]] as const).map(([m, label]) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMode(m)}
+                className={`rounded px-2 py-0.5 ${mode === m ? "bg-gray-200 font-medium dark:bg-white/10" : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
       {total === 0 ? (
         <Empty>Keine Anwahlen in diesem Monat.</Empty>
       ) : (
-        <div className="flex h-40 items-end gap-1">
-          {data.map((d, i) => {
-            const h = (d.count / max) * 100;
-            return (
-              <div
-                key={d.date}
-                className="relative flex h-full flex-1 items-end"
-                onMouseEnter={() => setHover(i)}
-                onMouseLeave={() => setHover((c) => (c === i ? null : c))}
-              >
+        <>
+          <div className="flex h-40 items-end gap-1">
+            {data.map((d, i) => {
+              const rendered = mode === "member"
+                ? members.reduce((s, m) => s + (isActive(m.key) ? memberCount(d, m) : 0), 0)
+                : d.count;
+              const h = (rendered / max) * 100;
+              return (
                 <div
-                  className={`w-full rounded-t transition-colors ${hover === i ? "bg-primary-dark" : "bg-primary"}`}
-                  style={{ height: `${h.toFixed(1)}%`, minHeight: d.count > 0 ? 2 : 0 }}
-                />
-                {hover === i && (
-                  <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs shadow-lg dark:border-[#3a3a3c] dark:bg-[#2c2c2e]">
-                    <span className="font-semibold">{formatDay(d.date)}</span>
-                    <span className="ml-2 tabular-nums">{num(d.count)} Anwahlen</span>
+                  key={d.date}
+                  className="relative flex h-full flex-1 flex-col justify-end"
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover((c) => (c === i ? null : c))}
+                >
+                  <div className="flex w-full flex-col overflow-hidden rounded-t" style={{ height: `${h.toFixed(1)}%`, minHeight: rendered > 0 ? 2 : 0 }}>
+                    {mode === "member" ? (
+                      members.map((m) => {
+                        if (!isActive(m.key)) return null;
+                        const c = memberCount(d, m);
+                        return c > 0 ? <div key={m.key} className={m.color.bar} style={{ flexGrow: c }} /> : null;
+                      })
+                    ) : (
+                      <div className={`h-full w-full ${hover === i ? "bg-primary-dark" : "bg-primary"}`} />
+                    )}
                   </div>
+                  {hover === i && (
+                    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white p-2.5 text-xs shadow-lg dark:border-[#3a3a3c] dark:bg-[#2c2c2e]">
+                      <p className="mb-1 font-semibold">{formatDay(d.date)}</p>
+                      {mode === "member" ? (
+                        (() => {
+                          const rows = members.filter((m) => isActive(m.key)).map((m) => ({ m, c: memberCount(d, m) })).filter((r) => r.c > 0);
+                          if (rows.length === 0) return <p className="text-gray-400">Keine Anwahlen</p>;
+                          return (
+                            <>
+                              {rows.map((r) => (
+                                <div key={r.m.key} className="flex items-center justify-between gap-4 py-0.5">
+                                  <span className="flex items-center gap-1.5"><span className={`inline-block h-2 w-2 rounded-full ${r.m.color.dot}`} />{r.m.name}</span>
+                                  <span className="tabular-nums">{r.c}</span>
+                                </div>
+                              ))}
+                              <div className="my-1 border-t border-gray-100 dark:border-[#3a3a3c]" />
+                              <div className="flex items-center justify-between gap-4 font-semibold"><span>Gesamt</span><span className="tabular-nums">{rendered}</span></div>
+                            </>
+                          );
+                        })()
+                      ) : (
+                        <span className="tabular-nums">{num(d.count)} Anwahlen</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {mode === "member" && (
+            members.length === 0 ? (
+              <p className="mt-4 text-xs text-gray-400">Keine zugeordneten Anrufe im Monat.</p>
+            ) : (
+              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                {members.map((m) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggleMember(m.key)}
+                    className={`flex items-center gap-1.5 text-xs transition-opacity ${isActive(m.key) ? "opacity-100" : "opacity-35"}`}
+                  >
+                    <span className={`inline-block h-2 w-2 rounded-full ${m.color.dot}`} />
+                    <span className="text-gray-600 dark:text-gray-300">{m.name}</span>
+                    <span className="tabular-nums text-gray-400">{m.total}</span>
+                  </button>
+                ))}
+                {selected !== null && (
+                  <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 underline-offset-2 hover:text-gray-600 hover:underline dark:hover:text-gray-300">Alle</button>
                 )}
               </div>
-            );
-          })}
-        </div>
+            )
+          )}
+        </>
       )}
     </Card>
   );

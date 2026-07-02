@@ -104,7 +104,7 @@ export interface SalesKpiReport {
   byVertical: Record<VerticalKey, KpiTotals>;
   unassigned: KpiTotals; // nur-in-total-Rest (für die Fußnote)
   reps: RepRow[]; // absteigend nach Anwahlen
-  callsPerDay: Array<{ date: string; count: number }>; // Berlin-Tage des Monats
+  callsPerDay: Array<{ date: string; count: number; byUser: Record<string, number> }>; // Berlin-Tage; byUser: repId→Anwahlen
   // Deals-Bereich (nicht vertical-gesplittet):
   dealsSnapshot: DealsSnapshot; // Pipeline-Stand jetzt
   dealsByStage: StageVolume[]; // Volumen/Anzahl pro aktiver Stage (Snapshot)
@@ -237,6 +237,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   const unassigned = emptyTotals();
   const repAgg = new Map<string, RepRow>();
   const dayCount = new Map<string, number>(monthDayKeys.map((d) => [d, 0]));
+  const dayByUser = new Map<string, Record<string, number>>(); // Berlin-Tag → repId → Anwahlen
 
   const rep = (id: string | null): RepRow | null => {
     if (!id) return null;
@@ -264,6 +265,11 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     dayCount.set(day, (dayCount.get(day) ?? 0) + 1);
     const r = rep(c.created_by);
     if (r) r.anwahlen += 1;
+    if (c.created_by) {
+      const bu = dayByUser.get(day) ?? {};
+      bu[c.created_by] = (bu[c.created_by] ?? 0) + 1;
+      dayByUser.set(day, bu);
+    }
   }
 
   // ---- Setter-Heuristik: letzter ausgehender Call je Lead vor Buchung.
@@ -338,7 +344,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     .filter((r) => rosterIds.has(r.id) || r.anwahlen > 0 || r.settingTermine > 0 || r.closings > 0)
     .sort((a, b) => b.anwahlen - a.anwahlen || b.closings - a.closings || a.name.localeCompare(b.name));
 
-  const callsPerDay = monthDayKeys.map((date) => ({ date, count: dayCount.get(date) ?? 0 }));
+  const callsPerDay = monthDayKeys.map((date) => ({ date, count: dayCount.get(date) ?? 0, byUser: dayByUser.get(date) ?? {} }));
   const repCount = rosterIds.size;
   const anwahlenProKopf = repCount > 0 ? Math.round((total.anwahlen / repCount) * 10) / 10 : 0;
 
