@@ -306,30 +306,47 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   };
 
   // ---- Termine (Setting vs. Closing) im Monat nach Termin-Datum (scheduled_at).
+  // Closings zählen je Datensatz. Setting-Termine werden pro Lead und Monat
+  // zusammengeführt: mehrere bzw. verschobene Termine desselben Leads gelten als
+  // ein Setting-Termin. Maßgeblich ist der späteste Termin des Leads (bei einem
+  // Reschedule der aktuell gültige). Termine ohne `lead_id` bleiben einzeln —
+  // sie lassen sich nicht sicher einem Lead zuordnen.
   const settingList: SettingAppointment[] = [];
+  const settingByLead = new Map<string, AppointmentRow>();
+  let noLeadSeq = 0;
   for (const a of appointments) {
     if (!a.scheduled_at) continue; // ohne Termin-Datum nicht einordenbar
     const day = toBerlinDayKey(a.scheduled_at);
     if (!monthDaySet.has(day)) continue;
     const isClosing = a.event_type_uri ? closingEventUris.has(a.event_type_uri) : false;
-    const v = verticalOf(a.lead?.vertical);
-    const bucket = dayTermine.get(day);
     if (isClosing) {
+      const v = verticalOf(a.lead?.vertical);
       addVertical(v, (t) => (t.closingTermine += 1));
+      const bucket = dayTermine.get(day);
       if (bucket) bucket.closingTermine += 1;
-    } else {
-      addVertical(v, (t) => (t.settingTermine += 1));
-      if (bucket) bucket.settingTermine += 1;
-      // Setter = letzter ausgehender Anrufer des Leads vor dem Termin.
-      const setterId = lastCallerBefore(a.lead_id, a.scheduled_at);
-      const r = rep(setterId);
-      if (r) r.settingTermine += 1;
-      settingList.push({
-        date: toBerlinDayKey(a.scheduled_at),
-        company: a.lead?.company_name ?? a.invitee_name ?? "—",
-        setter: setterId ? nameById.get(setterId) ?? "—" : "—",
-      });
+      continue;
     }
+    const key = a.lead_id ?? `nolead:${noLeadSeq++}`;
+    const prev = settingByLead.get(key);
+    if (!prev || a.scheduled_at > (prev.scheduled_at ?? "")) settingByLead.set(key, a);
+  }
+  // Zusammengeführte Setting-Termine zählen (je Lead genau einmal).
+  for (const a of settingByLead.values()) {
+    const scheduledAt = a.scheduled_at!; // in Pass 1 gefiltert: nie null
+    const day = toBerlinDayKey(scheduledAt);
+    const v = verticalOf(a.lead?.vertical);
+    addVertical(v, (t) => (t.settingTermine += 1));
+    const bucket = dayTermine.get(day);
+    if (bucket) bucket.settingTermine += 1;
+    // Setter = letzter ausgehender Anrufer des Leads vor dem Termin.
+    const setterId = lastCallerBefore(a.lead_id, scheduledAt);
+    const r = rep(setterId);
+    if (r) r.settingTermine += 1;
+    settingList.push({
+      date: day,
+      company: a.lead?.company_name ?? a.invitee_name ?? "—",
+      setter: setterId ? nameById.get(setterId) ?? "—" : "—",
+    });
   }
   settingList.sort((a, b) => a.date.localeCompare(b.date));
 
