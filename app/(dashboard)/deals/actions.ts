@@ -166,10 +166,19 @@ export async function updateDealAction(
   if (updates.nextStep !== undefined) patch.nextStep = updates.nextStep?.trim() || null;
   if (updates.lastFollowupAt !== undefined) patch.lastFollowupAt = updates.lastFollowupAt;
 
+  // Aktuellen Deal-Zustand einmal laden — für den Stage-Sync-Guard (nur bei
+  // echtem Stage-Wechsel) und die CRM-Revalidation des vorherigen Leads.
+  const { data: beforeDeal } = await db
+    .from("deals")
+    .select("stage_id, lead_id")
+    .eq("id", dealId)
+    .maybeSingle();
+  if (!beforeDeal) return { error: "Deal nicht gefunden." };
+  const oldLeadId = (beforeDeal.lead_id as string | null) ?? null;
+
   // Firma nachträglich ändern — spiegelt die Auflösung aus createDealAction:
   // bestehender Lead → lead_id + Namens-Snapshot; neue Firma → nur Snapshot, kein Lead.
   let newLeadId: string | null | undefined; // undefined = keine Firmenänderung
-  let oldLeadId: string | null = null;
   if (updates.company) {
     if (updates.company.mode === "existing") {
       const { data: lead } = await db
@@ -189,9 +198,6 @@ export async function updateDealAction(
       patch.companyName = name;
       newLeadId = null;
     }
-    // Alten Lead-Bezug vor dem Update erfassen (für Revalidation der CRM-Seite).
-    const { data: prev } = await db.from("deals").select("lead_id").eq("id", dealId).maybeSingle();
-    oldLeadId = (prev?.lead_id as string | null) ?? null;
   }
 
   const res = await updateDealHelper(dealId, user.id, patch);
@@ -207,16 +213,13 @@ export async function updateDealAction(
 
   // Stage-Wechsel → CRM-Status des verknüpften Leads mitziehen. Deal-Stages und
   // custom_lead_statuses teilen seit Migration 131 denselben Wertebereich, daher
-  // ist stageId direkt als crm_status_id verwendbar. Best-Effort: schlägt der Sync
-  // fehl, bleibt der Deal-Move trotzdem bestehen.
-  if (patch.stageId !== undefined) {
-    const { data: dealRow } = await db
-      .from("deals")
-      .select("lead_id")
-      .eq("id", dealId)
-      .maybeSingle();
-    if (dealRow?.lead_id) {
-      const sync = await updateCrmStatus(dealRow.lead_id as string, patch.stageId);
+  // ist stageId direkt als crm_status_id verwendbar. Nur bei ECHTEM Stage-Wechsel
+  // syncen — sonst würde jedes Deal-Speichern (z.B. eine reine Firmen-Zuordnung)
+  // eine No-op-Statusänderung im Lead-Aktivitätsfeed erzeugen. Best-Effort:
+  // schlägt der Sync fehl, bleibt der Deal-Move trotzdem bestehen.
+  if (patch.stageId !== undefined && patch.stageId !== beforeDeal.stage_id) {
+    if (beforeDeal.lead_id) {
+      const sync = await updateCrmStatus(beforeDeal.lead_id as string, patch.stageId);
       if (sync && "error" in sync && sync.error) {
         console.warn("[updateDealAction] Lead-Status-Sync fehlgeschlagen:", sync.error);
       }
