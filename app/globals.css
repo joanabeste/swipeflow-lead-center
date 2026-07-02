@@ -46,6 +46,16 @@ html {
   color: #f3f4f6;
 }
 
+/* Native Datums-/Zeit-Picker im Dark Mode lesbar (Text, Spinner, Icon, Popup) —
+   ohne color-scheme rendert das OS-Control dunkel auf dunkel. */
+.dark input[type="date"],
+.dark input[type="time"],
+.dark input[type="datetime-local"],
+.dark input[type="month"],
+.dark input[type="week"] {
+  color-scheme: dark;
+}
+
 /* Focus ring styling */
 *:focus-visible {
   outline: 2px solid var(--color-primary);

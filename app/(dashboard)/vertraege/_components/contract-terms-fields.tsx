@@ -108,7 +108,7 @@ export function ContractTermsFields({
           </Field>
           <div className="grid gap-3 sm:grid-cols-3">
             <Field label="Vertragsbeginn (optional)">
-              <input type="date" value={value.campaignStart} onChange={(e) => set({ campaignStart: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert`} />
+              <input type="date" value={value.campaignStart} onChange={(e) => set({ campaignStart: e.target.value })} className={inputCls} />
             </Field>
             <Field label="Mindestlaufzeit (Monate)">
               <input inputMode="numeric" value={value.minTermMonths} onChange={(e) => set({ minTermMonths: e.target.value })} className={inputCls} />
@@ -125,7 +125,7 @@ export function ContractTermsFields({
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Startzeitpunkt">
-              <input type="date" value={value.campaignStart} onChange={(e) => setCampaign({ campaignStart: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert`} />
+              <input type="date" value={value.campaignStart} onChange={(e) => setCampaign({ campaignStart: e.target.value })} className={inputCls} />
             </Field>
             <Field label="Laufzeit (Tage)">
               <input inputMode="numeric" value={value.campaignDays} onChange={(e) => setCampaign({ campaignDays: e.target.value })} className={inputCls} />

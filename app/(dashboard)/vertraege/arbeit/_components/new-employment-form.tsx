@@ -130,7 +130,7 @@ export function NewEmploymentForm() {
       <Section title="Eckdaten">
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Eintrittsdatum">
-            <input type="date" value={terms.startDate} onChange={(e) => setT({ startDate: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert`} />
+            <input type="date" value={terms.startDate} onChange={(e) => setT({ startDate: e.target.value })} className={inputCls} />
           </Field>
           <Field label="Probezeit (Monate)">
             <input inputMode="numeric" value={terms.probationMonths} onChange={(e) => setT({ probationMonths: e.target.value })} className={inputCls} />
@@ -144,7 +144,7 @@ export function NewEmploymentForm() {
         </div>
         {terms.fixedTerm && (
           <Field label="Befristet bis *">
-            <input type="date" value={terms.endDate} onChange={(e) => setT({ endDate: e.target.value })} className={`${inputCls} dark:[&::-webkit-calendar-picker-indicator]:invert max-w-[220px]`} />
+            <input type="date" value={terms.endDate} onChange={(e) => setT({ endDate: e.target.value })} className={`${inputCls} max-w-[220px]`} />
           </Field>
         )}
       </Section>
