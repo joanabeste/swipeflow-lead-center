@@ -215,9 +215,10 @@ export async function updateDealAction(
   // custom_lead_statuses teilen seit Migration 131 denselben Wertebereich, daher
   // ist stageId direkt als crm_status_id verwendbar. Nur bei ECHTEM Stage-Wechsel
   // syncen — sonst würde jedes Deal-Speichern (z.B. eine reine Firmen-Zuordnung)
-  // eine No-op-Statusänderung im Lead-Aktivitätsfeed erzeugen. Best-Effort:
-  // schlägt der Sync fehl, bleibt der Deal-Move trotzdem bestehen.
-  if (patch.stageId !== undefined && patch.stageId !== beforeDeal.stage_id) {
+  // eine No-op-Statusänderung im Lead-Aktivitätsfeed erzeugen. Und niemals beim
+  // Verknüpfen/Wechseln der Firma: das darf den Lead-Status grundsätzlich nicht
+  // anfassen. Best-Effort: schlägt der Sync fehl, bleibt der Deal-Move bestehen.
+  if (!updates.company && patch.stageId !== undefined && patch.stageId !== beforeDeal.stage_id) {
     if (beforeDeal.lead_id) {
       const sync = await updateCrmStatus(beforeDeal.lead_id as string, patch.stageId);
       if (sync && "error" in sync && sync.error) {
