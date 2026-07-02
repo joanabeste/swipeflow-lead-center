@@ -109,6 +109,7 @@ export interface SalesKpiReport {
   unassigned: KpiTotals; // nur-in-total-Rest (für die Fußnote)
   reps: RepRow[]; // absteigend nach Anwahlen
   callsPerDay: Array<{ date: string; count: number; byUser: Record<string, number> }>; // Berlin-Tage; byUser: repId→Anwahlen
+  terminePerDay: Array<{ date: string; settingTermine: number; closingTermine: number }>; // Berlin-Tage; Termine nach scheduled_at
   // Deals-Bereich (nicht vertical-gesplittet):
   dealsSnapshot: DealsSnapshot; // Pipeline-Stand jetzt
   dealsByStage: StageVolume[]; // Volumen/Anzahl pro aktiver Stage (Snapshot)
@@ -242,6 +243,9 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   const repAgg = new Map<string, RepRow>();
   const dayCount = new Map<string, number>(monthDayKeys.map((d) => [d, 0]));
   const dayByUser = new Map<string, Record<string, number>>(); // Berlin-Tag → repId → Anwahlen
+  const dayTermine = new Map<string, { settingTermine: number; closingTermine: number }>(
+    monthDayKeys.map((d) => [d, { settingTermine: 0, closingTermine: 0 }]),
+  ); // Berlin-Tag → Termine nach scheduled_at
 
   const rep = (id: string | null): RepRow | null => {
     if (!id) return null;
@@ -305,13 +309,17 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
   const settingList: SettingAppointment[] = [];
   for (const a of appointments) {
     if (!a.scheduled_at) continue; // ohne Termin-Datum nicht einordenbar
-    if (!monthDaySet.has(toBerlinDayKey(a.scheduled_at))) continue;
+    const day = toBerlinDayKey(a.scheduled_at);
+    if (!monthDaySet.has(day)) continue;
     const isClosing = a.event_type_uri ? closingEventUris.has(a.event_type_uri) : false;
     const v = verticalOf(a.lead?.vertical);
+    const bucket = dayTermine.get(day);
     if (isClosing) {
       addVertical(v, (t) => (t.closingTermine += 1));
+      if (bucket) bucket.closingTermine += 1;
     } else {
       addVertical(v, (t) => (t.settingTermine += 1));
+      if (bucket) bucket.settingTermine += 1;
       // Setter = letzter ausgehender Anrufer des Leads vor dem Termin.
       const setterId = lastCallerBefore(a.lead_id, a.scheduled_at);
       const r = rep(setterId);
@@ -349,6 +357,10 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     .sort((a, b) => b.anwahlen - a.anwahlen || b.closings - a.closings || a.name.localeCompare(b.name));
 
   const callsPerDay = monthDayKeys.map((date) => ({ date, count: dayCount.get(date) ?? 0, byUser: dayByUser.get(date) ?? {} }));
+  const terminePerDay = monthDayKeys.map((date) => {
+    const b = dayTermine.get(date);
+    return { date, settingTermine: b?.settingTermine ?? 0, closingTermine: b?.closingTermine ?? 0 };
+  });
   const repCount = rosterIds.size;
   const anwahlenProKopf = repCount > 0 ? Math.round((total.anwahlen / repCount) * 10) / 10 : 0;
 
@@ -456,6 +468,7 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     unassigned,
     reps,
     callsPerDay,
+    terminePerDay,
     dealsSnapshot,
     dealsByStage,
     dealsMonth,

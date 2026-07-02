@@ -109,6 +109,9 @@ export function StatsDashboard({ report, month }: { report: SalesKpiReport; mont
       {/* 2. Anwahlen pro Tag */}
       <DailyCallsChart data={report.callsPerDay} reps={report.reps} monthLabel={report.monthLabel} />
 
+      {/* 2b. Termine pro Tag (Setting/Closing) */}
+      <DailyTermineChart data={report.terminePerDay} monthLabel={report.monthLabel} />
+
       {/* 3. Anwahlen pro Mitarbeiter */}
       <Card>
         <SectionTitle>Anwahlen pro Mitarbeiter</SectionTitle>
@@ -551,6 +554,113 @@ function DailyCallsChart({
               </div>
             )
           )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+type DayTermine = { date: string; settingTermine: number; closingTermine: number };
+type TermineSeries = { key: "settingTermine" | "closingTermine"; name: string; barClass: string; dotClass: string };
+
+const TERMINE_SERIES: TermineSeries[] = [
+  { key: "settingTermine", name: "Setting-Termine", barClass: "bg-[#7c5cff]", dotClass: "bg-[#7c5cff]" },
+  { key: "closingTermine", name: "Closing-Termine", barClass: "bg-[#2e9e6b]", dotClass: "bg-[#2e9e6b]" },
+];
+
+function DailyTermineChart({ data, monthLabel }: { data: DayTermine[]; monthLabel: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+
+  const isActive = (key: string) => selected === null || selected.has(key);
+  const toggleSeries = (key: string) =>
+    setSelected((cur) => {
+      if (cur === null) return new Set([key]);
+      const next = new Set(cur);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next.size === 0 ? null : next;
+    });
+
+  const seriesTotals = useMemo(
+    () => TERMINE_SERIES.map((s) => ({ s, total: data.reduce((sum, d) => sum + d[s.key], 0) })),
+    [data],
+  );
+  const grandTotal = seriesTotals.reduce((sum, r) => sum + r.total, 0);
+
+  const activeSum = (d: DayTermine) => TERMINE_SERIES.reduce((s, ser) => s + (isActive(ser.key) ? d[ser.key] : 0), 0);
+  const max = useMemo(() => Math.max(1, ...data.map((d) => activeSum(d))), [data, selected]);
+
+  return (
+    <Card>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-bold tracking-tight">Termine pro Tag</h2>
+        <span className="text-xs text-gray-400">{monthLabel} · {num(grandTotal)} Termine · Spitze {num(max)}/Tag</span>
+      </div>
+      {grandTotal === 0 ? (
+        <Empty>Keine Termine in diesem Monat.</Empty>
+      ) : (
+        <>
+          <div className="flex h-40 items-end gap-1">
+            {data.map((d, i) => {
+              const rendered = activeSum(d);
+              const h = (rendered / max) * 100;
+              return (
+                <div
+                  key={d.date}
+                  className="relative flex h-full flex-1 flex-col justify-end"
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover((c) => (c === i ? null : c))}
+                >
+                  <div className="flex w-full flex-col overflow-hidden rounded-t" style={{ height: `${h.toFixed(1)}%`, minHeight: rendered > 0 ? 2 : 0 }}>
+                    {TERMINE_SERIES.map((s) => {
+                      if (!isActive(s.key)) return null;
+                      const c = d[s.key];
+                      return c > 0 ? <div key={s.key} className={s.barClass} style={{ flexGrow: c }} /> : null;
+                    })}
+                  </div>
+                  {hover === i && (
+                    <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg border border-gray-200 bg-white p-2.5 text-xs shadow-lg dark:border-[#3a3a3c] dark:bg-[#2c2c2e]">
+                      <p className="mb-1 font-semibold">{formatDay(d.date)}</p>
+                      {(() => {
+                        const rows = TERMINE_SERIES.filter((s) => isActive(s.key)).map((s) => ({ s, c: d[s.key] })).filter((r) => r.c > 0);
+                        if (rows.length === 0) return <p className="text-gray-400">Keine Termine</p>;
+                        return (
+                          <>
+                            {rows.map((r) => (
+                              <div key={r.s.key} className="flex items-center justify-between gap-4 py-0.5">
+                                <span className="flex items-center gap-1.5"><span className={`inline-block h-2 w-2 rounded-full ${r.s.dotClass}`} />{r.s.name}</span>
+                                <span className="tabular-nums">{r.c}</span>
+                              </div>
+                            ))}
+                            <div className="my-1 border-t border-gray-100 dark:border-[#3a3a3c]" />
+                            <div className="flex items-center justify-between gap-4 font-semibold"><span>Gesamt</span><span className="tabular-nums">{rendered}</span></div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {seriesTotals.map(({ s, total }) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => toggleSeries(s.key)}
+                className={`flex items-center gap-1.5 text-xs transition-opacity ${isActive(s.key) ? "opacity-100" : "opacity-35"}`}
+              >
+                <span className={`inline-block h-2 w-2 rounded-full ${s.dotClass}`} />
+                <span className="text-gray-600 dark:text-gray-300">{s.name}</span>
+                <span className="tabular-nums text-gray-400">{total}</span>
+              </button>
+            ))}
+            {selected !== null && (
+              <button type="button" onClick={() => setSelected(null)} className="text-xs text-gray-400 underline-offset-2 hover:text-gray-600 hover:underline dark:hover:text-gray-300">Alle</button>
+            )}
+          </div>
         </>
       )}
     </Card>
