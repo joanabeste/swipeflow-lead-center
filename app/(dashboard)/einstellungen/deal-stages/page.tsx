@@ -10,8 +10,8 @@ export default async function DealStagesPage() {
       <PageHeader
         icon={Banknote}
         category="Organisation"
-        title="Deal-Stages"
-        subtitle="Phasen im Vertriebsprozess — in der Reihenfolge, in der Deals typischerweise durchwandern. Jede Stage hat einen Typ (offen / gewonnen / verloren)."
+        title="Deal-Pipeline (CRM-Vertriebsphasen)"
+        subtitle="Phasen im Vertriebsprozess — dieselben Status wie im CRM. Sie bilden die Kanban-Spalten der Deals, in der Reihenfolge, in der Deals durchwandern. Jede Phase hat einen Typ (offen / gewonnen / verloren)."
       />
       <DealStagesManager stages={stages} />
     </div>

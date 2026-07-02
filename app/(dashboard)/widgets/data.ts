@@ -108,8 +108,8 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .order("updated_at", { ascending: true }).limit(50),
     // Offene Deals gruppiert nach Stage (open kind), mit Amount.
     db.from("deals").select("stage_id, amount_cents").is("deleted_at", null),
-    db.from("deal_stages").select("id, label, color, kind, display_order")
-      .eq("is_active", true).order("display_order", { ascending: true }),
+    db.from("custom_lead_statuses").select("id, label, color, kind:deal_kind, display_order")
+      .eq("is_deal_stage", true).eq("is_active", true).order("display_order", { ascending: true }),
     // E-Mails 7 Tage: sent/failed pro Tag.
     db.from("email_messages").select("status, sent_at")
       .gte("sent_at", sevenDaysIso),

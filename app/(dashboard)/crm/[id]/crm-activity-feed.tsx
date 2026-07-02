@@ -8,7 +8,7 @@ import { StickyNote, PhoneCall, Mail } from "lucide-react";
 import type { CustomLeadStatus, LeadContact, LeadEnrichment, LeadChange } from "@/lib/types";
 import { updateCrmStatus } from "../actions";
 import { PersonAvatar } from "./_components/person-avatar";
-import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem, ImportItem, MovedToCrmItem } from "./_components/activity-items";
+import { NoteItem, CallItem, EmailItem, StatusChangeItem, EnrichmentItem, ChangeItem, ImportItem, MovedToCrmItem, AppointmentItem } from "./_components/activity-items";
 import { ComposeNote } from "./_components/compose-note";
 import { ComposeCall } from "./_components/compose-call";
 import { ComposeEmail } from "./_components/compose-email";
@@ -121,6 +121,13 @@ export function CrmActivityFeed({
         authorAvatarUrl: log.profiles?.avatar_url ?? null,
         render: () => <StatusChangeItem log={log} statuses={statuses} kind="pipeline" />,
       });
+    } else if (log.action === "lead.appointment_booked" || log.action === "lead.appointment_canceled") {
+      items.push({
+        id: `a-${log.id}`, kind: "appointment", at: log.created_at,
+        author: log.profiles?.name ?? null,
+        authorAvatarUrl: log.profiles?.avatar_url ?? null,
+        render: () => <AppointmentItem log={log} />,
+      });
     }
   }
   for (const ch of changes) {
@@ -188,6 +195,7 @@ export function CrmActivityFeed({
             <option value="call">Nur Anrufe</option>
             <option value="email">Nur E-Mails</option>
             <option value="status">Nur Status-Wechsel</option>
+            <option value="appointment">Nur Termine</option>
             <option value="enrichment">Nur Anreicherung</option>
             <option value="change">Nur Feld-Änderungen</option>
             <option value="import">Nur Import</option>

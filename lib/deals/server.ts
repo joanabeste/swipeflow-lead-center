@@ -13,13 +13,17 @@ import type {
 
 // ─── Stages ───────────────────────────────────────────────────
 
+// Die Deal-Pipeline lebt jetzt in custom_lead_statuses (Flag is_deal_stage +
+// deal_kind). Dieselben Status erscheinen dadurch auch im CRM-Board.
 export async function listStages(activeOnly = false): Promise<DealStage[]> {
   const db = createServiceClient();
-  const query = db
-    .from("deal_stages")
-    .select("id, label, description, color, display_order, kind, is_active")
+  let query = db
+    .from("custom_lead_statuses")
+    .select("id, label, description, color, display_order, deal_kind, is_active")
+    .eq("is_deal_stage", true)
     .order("display_order", { ascending: true });
-  const { data } = activeOnly ? await query.eq("is_active", true) : await query;
+  if (activeOnly) query = query.eq("is_active", true);
+  const { data } = await query;
   return (data ?? []).map(mapStageRow);
 }
 
@@ -34,14 +38,18 @@ export async function saveStage(input: {
   createdBy?: string | null;
 }): Promise<void> {
   const db = createServiceClient();
-  await db.from("deal_stages").upsert(
+  // Schreibt in custom_lead_statuses und markiert die Zeile als Pipeline-Phase.
+  // Nicht gesetzte CRM-Felder (learning_signal, vertical …) bleiben beim
+  // Update unangetastet.
+  await db.from("custom_lead_statuses").upsert(
     {
       id: input.id,
       label: input.label,
       description: input.description ?? null,
       color: input.color,
       display_order: input.displayOrder,
-      kind: input.kind,
+      deal_kind: input.kind,
+      is_deal_stage: true,
       is_active: input.isActive,
       created_by: input.createdBy ?? null,
       updated_at: new Date().toISOString(),
@@ -52,7 +60,12 @@ export async function saveStage(input: {
 
 export async function deleteStage(id: string): Promise<void> {
   const db = createServiceClient();
-  await db.from("deal_stages").delete().eq("id", id);
+  // Kein Hard-Delete: der Status bleibt als CRM-Status erhalten (Leads können
+  // ihn weiter nutzen), verschwindet aber aus der Deal-Pipeline.
+  await db
+    .from("custom_lead_statuses")
+    .update({ is_deal_stage: false, deal_kind: null, updated_at: new Date().toISOString() })
+    .eq("id", id);
 }
 
 // ─── Deals ────────────────────────────────────────────────────
@@ -64,7 +77,7 @@ const DEAL_SELECT = `
   company_name,
   created_by, created_at, updated_at,
   leads(company_name, website),
-  deal_stages!inner(label, color, kind),
+  custom_lead_statuses!deals_stage_id_fkey(label, color, deal_kind),
   profiles:assigned_to(name, avatar_url)
 `;
 
@@ -187,11 +200,11 @@ export async function updateDeal(
     track("stage_id", before.stage_id, updates.stageId);
     // Bei Wechsel auf terminalen Stage (won/lost) das actual_close_date setzen.
     const { data: newStage } = await db
-      .from("deal_stages")
-      .select("kind")
+      .from("custom_lead_statuses")
+      .select("deal_kind")
       .eq("id", updates.stageId)
       .maybeSingle();
-    if (newStage && (newStage.kind === "won" || newStage.kind === "lost")) {
+    if (newStage && (newStage.deal_kind === "won" || newStage.deal_kind === "lost")) {
       if (!before.actual_close_date) {
         row.actual_close_date = new Date().toISOString().slice(0, 10);
         track("actual_close_date", before.actual_close_date, row.actual_close_date);
@@ -339,7 +352,7 @@ type StageRow = {
   description: string | null;
   color: string;
   display_order: number;
-  kind: DealStageKind;
+  deal_kind: DealStageKind | null;
   is_active: boolean;
 };
 function mapStageRow(r: StageRow): DealStage {
@@ -349,7 +362,7 @@ function mapStageRow(r: StageRow): DealStage {
     description: r.description,
     color: r.color,
     displayOrder: r.display_order,
-    kind: r.kind,
+    kind: r.deal_kind ?? "open",
     isActive: r.is_active,
   };
 }
@@ -375,7 +388,7 @@ type DealRelRow = {
   created_at: string;
   updated_at: string;
   leads: JoinRow<{ company_name: string; website: string | null }>;
-  deal_stages: JoinRow<{ label: string; color: string; kind: DealStageKind }>;
+  custom_lead_statuses: JoinRow<{ label: string; color: string; deal_kind: DealStageKind | null }>;
   profiles?: JoinRow<{ name: string | null; avatar_url: string | null }>;
 };
 
@@ -387,7 +400,7 @@ function firstOrNull<T>(v: JoinRow<T>): T | null {
 function mapDealRelRow(r: unknown): DealWithRelations {
   const row = r as DealRelRow;
   const lead = firstOrNull(row.leads);
-  const stage = firstOrNull(row.deal_stages);
+  const stage = firstOrNull(row.custom_lead_statuses);
   const profile = firstOrNull(row.profiles ?? null);
   return {
     id: row.id,
@@ -412,7 +425,7 @@ function mapDealRelRow(r: unknown): DealWithRelations {
     company_domain: lead?.website ?? null,
     stage_label: stage?.label ?? row.stage_id,
     stage_color: stage?.color ?? "#6b7280",
-    stage_kind: stage?.kind ?? "open",
+    stage_kind: stage?.deal_kind ?? "open",
     assignee_name: profile?.name ?? null,
     assignee_avatar_url: profile?.avatar_url ?? null,
   };

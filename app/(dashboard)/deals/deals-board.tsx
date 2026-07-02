@@ -20,7 +20,7 @@ export function DealsBoard({
   stages: DealStage[];
   team: { id: string; name: string; avatarUrl: string | null }[];
 }) {
-  const [view, setView] = useState<ViewMode>("table");
+  const [view, setView] = useState<ViewMode>("kanban");
   const [filterAssignee, setFilterAssignee] = useState<string>("");
   const [filterStageGroup, setFilterStageGroup] = useState<StageGroupFilter>("all");
   const [filterStageId, setFilterStageId] = useState<string>("");

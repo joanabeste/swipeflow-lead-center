@@ -1,6 +1,6 @@
 import Image from "next/image";
 import {
-  StickyNote, PhoneCall, Mail, Activity as ActivityIcon, Sparkles, ArrowRight, Download,
+  StickyNote, PhoneCall, Mail, Activity as ActivityIcon, Sparkles, ArrowRight, Download, CalendarCheck,
 } from "lucide-react";
 import type { ActivityKind } from "./types";
 import { hashHue } from "./activity-helpers";
@@ -27,6 +27,7 @@ export function PersonAvatar({
     enrichment: { icon: Sparkles, color: "#6366f1" },
     change: { icon: ActivityIcon, color: "#6b7280" },
     import: { icon: Download, color: "#0ea5e9" },
+    appointment: { icon: CalendarCheck, color: "#3b82f6" },
   };
   const c = config[kind] ?? config.all;
   const Icon = c.icon;

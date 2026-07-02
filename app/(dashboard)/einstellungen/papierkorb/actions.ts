@@ -48,7 +48,7 @@ export async function listTrash(): Promise<{ leads: TrashedLead[]; deals: Trashe
       .limit(500),
     db
       .from("deals")
-      .select("id, title, company_name, amount_cents, currency, deleted_at, stage_id, deal_stages(label)")
+      .select("id, title, company_name, amount_cents, currency, deleted_at, stage_id, custom_lead_statuses!deals_stage_id_fkey(label)")
       .not("deleted_at", "is", null)
       .order("deleted_at", { ascending: false })
       .limit(500),
@@ -64,7 +64,7 @@ export async function listTrash(): Promise<{ leads: TrashedLead[]; deals: Trashe
   }));
 
   const dealRows: TrashedDeal[] = (deals ?? []).map((d) => {
-    const stageJoin = d.deal_stages as { label: string } | { label: string }[] | null;
+    const stageJoin = d.custom_lead_statuses as { label: string } | { label: string }[] | null;
     const stageLabel = Array.isArray(stageJoin) ? stageJoin[0]?.label ?? null : stageJoin?.label ?? null;
     return {
       id: d.id as string,

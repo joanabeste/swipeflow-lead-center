@@ -48,6 +48,7 @@ export async function proxy(request: NextRequest) {
   if (
     apiPath.startsWith("/api/cron/") ||
     apiPath.startsWith("/api/phonemondo/") ||
+    apiPath.startsWith("/api/calendly/") ||
     apiPath === "/api/webex/sync-recordings" ||
     // Externe Lead-APIs (Bearer LEADS_IMPORT_API_KEY): /api/leads (Liste),
     // /api/leads/import, /api/leads/<id> (GET/PATCH) und /api/leads/<id>/notes

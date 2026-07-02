@@ -7,7 +7,7 @@ import { usePreviewRefresh } from "@/lib/preview-refresh-context";
 import {
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, ArrowRight,
   Trash2, Pencil, Save, FileText, ChevronDown, ChevronUp, AlertCircle, Mail, Paperclip, X,
-  Undo2, Loader2,
+  Undo2, Loader2, CalendarCheck, CalendarX, Video, Clock,
 } from "lucide-react";
 import type { CustomLeadStatus, LeadEnrichment, LeadChange, LoadedNoteAttachment } from "@/lib/types";
 import type { LeadImportInfo } from "./types";
@@ -46,6 +46,60 @@ export function ImportItem({ info }: { info: LeadImportInfo }) {
         <p className="mt-1 truncate text-xs text-gray-500 dark:text-gray-400" title={detail}>
           {detail}
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Calendly-Termin: gebucht oder abgesagt. Quelle: audit_logs.details. */
+export function AppointmentItem({ log }: { log: AuditRow }) {
+  const d = (log.details ?? {}) as {
+    event_type_name?: string | null;
+    scheduled_at?: string | null;
+    join_url?: string | null;
+    cancel_reason?: string | null;
+    created_lead?: boolean;
+  };
+  const canceled = log.action === "lead.appointment_canceled";
+  const scheduled = d.scheduled_at
+    ? new Date(d.scheduled_at).toLocaleString("de-DE", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : null;
+
+  return (
+    <div>
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+          canceled
+            ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+            : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+        }`}
+      >
+        {canceled ? <CalendarX className="h-3 w-3" /> : <CalendarCheck className="h-3 w-3" />}
+        {canceled ? "Termin abgesagt" : "Termin gebucht"}
+        {d.event_type_name ? `: ${d.event_type_name}` : ""}
+      </span>
+      {scheduled && (
+        <p className="mt-1 flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+          <Clock className="h-3 w-3" /> {scheduled} Uhr
+        </p>
+      )}
+      {canceled && d.cancel_reason && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Grund: {d.cancel_reason}</p>
+      )}
+      {!canceled && d.join_url && (
+        <a
+          href={d.join_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          <Video className="h-3 w-3" /> Meeting-Link
+        </a>
+      )}
+      {d.created_lead && (
+        <p className="mt-1 text-[11px] text-gray-400">Lead automatisch aus der Buchung angelegt.</p>
       )}
     </div>
   );

@@ -461,7 +461,9 @@ export async function saveStageAction(
   });
 
   revalidatePath("/einstellungen/deal-stages");
+  revalidatePath("/einstellungen/crm-status");
   revalidatePath("/deals");
+  revalidatePath("/crm");
   return { success: true };
 }
 
@@ -471,13 +473,15 @@ export async function deleteStageAction(id: string): Promise<{ success: true } |
   if (!(await isAdmin(user.id))) return { error: "Nur Administratoren." };
 
   const db = createServiceClient();
-  // Verhindere Löschen, wenn Deals dranhängen.
+  // Verhindere Entfernen aus der Pipeline, wenn Deals dranhängen (sie würden
+  // sonst aus der Kanban verschwinden). Der Status selbst bleibt als CRM-Status
+  // erhalten — deleteStageHelper setzt nur is_deal_stage=false.
   const { count } = await db
     .from("deals")
     .select("id", { count: "exact", head: true })
     .eq("stage_id", id);
   if ((count ?? 0) > 0) {
-    return { error: `Stage hat noch ${count} Deals. Erst Deals verschieben.` };
+    return { error: `Phase hat noch ${count} Deals. Erst Deals verschieben.` };
   }
 
   await deleteStageHelper(id);
@@ -488,6 +492,9 @@ export async function deleteStageAction(id: string): Promise<{ success: true } |
     entityId: id,
   });
   revalidatePath("/einstellungen/deal-stages");
+  revalidatePath("/einstellungen/crm-status");
+  revalidatePath("/deals");
+  revalidatePath("/crm");
   return { success: true };
 }
 

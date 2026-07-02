@@ -94,7 +94,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       .select("id, action, details, created_at, user_id")
       .eq("entity_type", "lead")
       .eq("entity_id", id)
-      .in("action", ["lead.crm_status_changed", "lead.bulk_status_update", "lead.moved_to_crm"])
+      .in("action", ["lead.crm_status_changed", "lead.bulk_status_update", "lead.moved_to_crm", "lead.appointment_booked", "lead.appointment_canceled"])
       .order("created_at", { ascending: false })
       .limit(200),
     db.from("lead_todos").select("*").eq("lead_id", id).order("due_date", { ascending: true }),
@@ -176,7 +176,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
         company_name,
         created_by, created_at, updated_at,
         leads(company_name, domain),
-        deal_stages!inner(label, color, kind),
+        custom_lead_statuses!deals_stage_id_fkey(label, color, deal_kind),
         profiles:assigned_to(name, avatar_url)
       `)
       .eq("lead_id", id)
@@ -193,7 +193,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
   const deals: DealWithRelations[] = (dealRows ?? []).map((r) => {
     const row = r as Record<string, unknown>;
     const ld = firstOrNull(row.leads as { company_name: string; domain: string | null } | { company_name: string; domain: string | null }[] | null);
-    const stage = firstOrNull(row.deal_stages as { label: string; color: string; kind: "open" | "won" | "lost" } | { label: string; color: string; kind: "open" | "won" | "lost" }[] | null);
+    const stage = firstOrNull(row.custom_lead_statuses as { label: string; color: string; deal_kind: "open" | "won" | "lost" | null } | { label: string; color: string; deal_kind: "open" | "won" | "lost" | null }[] | null);
     const profile = firstOrNull(row.profiles as { name: string | null; avatar_url: string | null } | { name: string | null; avatar_url: string | null }[] | null);
     return {
       id: row.id as string,
@@ -216,7 +216,7 @@ export async function loadCrmDetail(id: string): Promise<CrmDetailBundle | null>
       company_domain: ld?.domain ?? null,
       stage_label: stage?.label ?? (row.stage_id as string),
       stage_color: stage?.color ?? "#6b7280",
-      stage_kind: stage?.kind ?? "open",
+      stage_kind: stage?.deal_kind ?? "open",
       assignee_name: profile?.name ?? null,
       assignee_avatar_url: profile?.avatar_url ?? null,
     };

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Phone, Video, Mail, CheckSquare, FileText, ExternalLink, CheckCircle2, XCircle } from "lucide-react";
+import { Phone, Video, Mail, CheckSquare, FileText, ExternalLink, CheckCircle2, XCircle, CalendarClock } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getCalendlyCredentials } from "@/lib/calendly/auth";
 
 interface Integration {
   id: string;
@@ -42,6 +43,19 @@ async function loadStatuses(): Promise<Record<string, { connected: boolean; labe
   // SMTP / E-Mail — credentials pro User (lib/email/user-credentials).
   results.email = { connected: false, label: "Pro-User SMTP-Settings" };
 
+  // Calendly — Token in integration_credentials (oder ENV-Fallback).
+  try {
+    const creds = await getCalendlyCredentials();
+    results.calendly = creds
+      ? {
+          connected: true,
+          label: creds.webhookUri ? "Token + Webhook aktiv" : "Token gesetzt (Webhook fehlt)",
+        }
+      : { connected: false, label: "Kein Token konfiguriert" };
+  } catch {
+    results.calendly = { connected: false, label: "Kein Token konfiguriert" };
+  }
+
   return results;
 }
 
@@ -49,6 +63,7 @@ const INTEGRATIONS: Integration[] = [
   { id: "clickup", label: "ClickUp", desc: "Task-Sync fuer Fulfillment-Projekte (Lesen, Anlegen, Schliessen).", href: "/fulfillment/einstellungen", icon: CheckSquare },
   { id: "phonemondo", label: "PhoneMondo", desc: "Auto-Dialer fuer den Vertriebs-Workflow (Click-to-Call, Anruf-Tracking).", href: "/einstellungen/phonemondo", icon: Phone },
   { id: "webex", label: "Webex", desc: "Call-Recording und Meeting-Integration fuer Vertrieb.", href: "/einstellungen/webex", icon: Video },
+  { id: "calendly", label: "Calendly", desc: "Buchungen setzen automatisch den Lead-Status und landen in der Historie.", href: "/einstellungen/calendly", icon: CalendarClock },
   { id: "email", label: "E-Mail (SMTP)", desc: "Pro-User-SMTP fuer ausgehende Mails aus dem CRM.", href: "/einstellungen/email", icon: Mail },
   { id: "vorlagen", label: "E-Mail-Vorlagen", desc: "Wiederverwendbare Templates fuer den Mail-Versand.", href: "/einstellungen/email-vorlagen", icon: FileText },
 ];

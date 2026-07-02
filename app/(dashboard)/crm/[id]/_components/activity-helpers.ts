@@ -9,6 +9,7 @@ export function actionVerb(kind: ActivityKind): string {
     case "enrichment": return "Lead wurde angereichert";
     case "change": return "hat ein Feld aktualisiert";
     case "import": return "Lead importiert";
+    case "appointment": return "Calendly-Termin";
     default: return "";
   }
 }
@@ -38,6 +39,7 @@ export function filterLabel(kind: ActivityKind): string {
     case "enrichment": return "Anreicherungen";
     case "change": return "Änderungen";
     case "import": return "Import";
+    case "appointment": return "Termine";
     default: return "Aktivitäten";
   }
 }
