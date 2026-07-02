@@ -120,11 +120,13 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
       .gte("actual_close_date", twelveMonthsAgoIso)
       .not("actual_close_date", "is", null)
       .is("deleted_at", null),
-    // Gebuchte Termine (90 Tage) — nach Buchungszeitpunkt (created_at). Bei
-    // fehlender Migration (133) liefert PostgREST einen Fehler statt zu werfen;
-    // wir werten dann `.data ?? []` als 0 aus (KPI zeigt 0 statt Crash).
-    db.from("lead_appointments").select("created_at, status")
-      .eq("status", "booked").gte("created_at", ninetyDaysAgoIso),
+    // Gebuchte Termine (90 Tage) — nach Termin-Datum (scheduled_at), NICHT
+    // created_at: created_at ist die DB-Insert-Zeit und bei backfill-
+    // importierten Terminen für alle Zeilen identisch → für Tages-/Zeitraum-
+    // aggregation unbrauchbar. Bei fehlender Migration (133) liefert PostgREST
+    // einen Fehler statt zu werfen; `.data ?? []` ergibt dann 0 (kein Crash).
+    db.from("lead_appointments").select("scheduled_at, status")
+      .eq("status", "booked").gte("scheduled_at", ninetyDaysAgoIso),
     // Erstellte Deals (90 Tage) — nach created_at.
     db.from("deals").select("created_at")
       .gte("created_at", ninetyDaysAgoIso).is("deleted_at", null),
@@ -461,8 +463,9 @@ export async function loadDashboardData(userId: string, serviceMode: ServiceMode
     apptByDay90Buckets[key] = 0;
     dealsByDay90Buckets[key] = { created: 0, won: 0, wonCents: 0 };
   }
-  for (const a of (appointments90.data ?? []) as Array<{ created_at: string }>) {
-    const key = toBerlinDayKey(a.created_at);
+  for (const a of (appointments90.data ?? []) as Array<{ scheduled_at: string | null }>) {
+    if (!a.scheduled_at) continue;
+    const key = toBerlinDayKey(a.scheduled_at);
     if (apptByDay90Buckets[key] !== undefined) apptByDay90Buckets[key]++;
   }
   for (const d of (dealsCreated90.data ?? []) as Array<{ created_at: string }>) {

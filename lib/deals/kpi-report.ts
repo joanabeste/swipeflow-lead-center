@@ -123,10 +123,13 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     fetchPaged<AppointmentRow>(db, (from) =>
       db
         .from("lead_appointments")
-        .select("created_at, event_type_uri, lead_id, lead:leads(vertical)")
+        // Abgrenzung nach `scheduled_at` (Termin-Datum), NICHT `created_at`:
+        // `created_at` ist die DB-Insert-Zeit und bei backfill-importierten
+        // Terminen für alle Zeilen identisch → für Monatszahlen unbrauchbar.
+        .select("scheduled_at, event_type_uri, lead_id, lead:leads(vertical)")
         .eq("status", "booked")
-        .gte("created_at", sinceMinusIso)
-        .lte("created_at", untilPlusIso)
+        .gte("scheduled_at", sinceMinusIso)
+        .lte("scheduled_at", untilPlusIso)
         .order("id", { ascending: true })
         .range(from, from + PAGE - 1),
     ),
@@ -221,16 +224,18 @@ export async function loadSalesKpiReport(month: string): Promise<SalesKpiReport>
     return caller;
   };
 
-  // ---- Termine (Setting vs. Closing) im Monat nach Buchungstag.
+  // ---- Termine (Setting vs. Closing) im Monat nach Termin-Datum (scheduled_at).
   for (const a of appointments) {
-    if (!monthDaySet.has(toBerlinDayKey(a.created_at))) continue;
+    if (!a.scheduled_at) continue; // ohne Termin-Datum nicht einordenbar
+    if (!monthDaySet.has(toBerlinDayKey(a.scheduled_at))) continue;
     const isClosing = a.event_type_uri ? closingEventUris.has(a.event_type_uri) : false;
     const v = verticalOf(a.lead?.vertical);
     if (isClosing) {
       addVertical(v, (t) => (t.closingTermine += 1));
     } else {
       addVertical(v, (t) => (t.settingTermine += 1));
-      const setterId = lastCallerBefore(a.lead_id, a.created_at);
+      // Setter = letzter ausgehender Anrufer des Leads vor dem Termin.
+      const setterId = lastCallerBefore(a.lead_id, a.scheduled_at);
       const r = rep(setterId);
       if (r) r.settingTermine += 1;
     }
@@ -287,7 +292,7 @@ interface OutboundCall {
   lead: LeadVerticalEmbed | null;
 }
 interface AppointmentRow {
-  created_at: string;
+  scheduled_at: string | null;
   event_type_uri: string | null;
   lead_id: string | null;
   lead: LeadVerticalEmbed | null;

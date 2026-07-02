@@ -45,10 +45,12 @@ export async function loadCallTrendRange(fromDate: string, toDate: string): Prom
 
   const [callStats, appts, dealsCreated, wonStages] = await Promise.all([
     loadCallStats(db, sinceMinusIso),
+    // Termine nach Termin-Datum (scheduled_at), NICHT created_at (= DB-Insert-
+    // Zeit, bei backfill-importierten Terminen für alle Zeilen identisch).
     // Bei fehlender Migration (133 lead_appointments) liefert PostgREST einen
     // Fehler statt zu werfen → `.data ?? []` ergibt 0 Termine (kein Crash).
-    db.from("lead_appointments").select("created_at, status").eq("status", "booked")
-      .gte("created_at", sinceMinusIso).lte("created_at", untilPlusIso),
+    db.from("lead_appointments").select("scheduled_at, status").eq("status", "booked")
+      .gte("scheduled_at", sinceMinusIso).lte("scheduled_at", untilPlusIso),
     db.from("deals").select("created_at").is("deleted_at", null)
       .gte("created_at", sinceMinusIso).lte("created_at", untilPlusIso),
     db.from("custom_lead_statuses").select("id").eq("is_deal_stage", true).eq("deal_kind", "won"),
@@ -75,10 +77,10 @@ export async function loadCallTrendRange(fromDate: string, toDate: string): Prom
     { outbound: 0, inbound: 0, missed: 0 },
   );
 
-  // Termine (nach Buchungstag) im Zeitraum.
+  // Termine (nach Termin-Datum) im Zeitraum.
   let appointmentsBooked = 0;
-  for (const a of (appts.data ?? []) as Array<{ created_at: string }>) {
-    if (dayInRange.has(toBerlinDayKey(a.created_at))) appointmentsBooked++;
+  for (const a of (appts.data ?? []) as Array<{ scheduled_at: string | null }>) {
+    if (a.scheduled_at && dayInRange.has(toBerlinDayKey(a.scheduled_at))) appointmentsBooked++;
   }
 
   // Erstellte Deals (nach created_at) im Zeitraum.

@@ -144,8 +144,8 @@ export function renderSalesKpiReportHtml(report: SalesKpiReport, generatedAtIso:
     <div class="kpis">
       ${kpiCard("Anwahlen Gesamt", num(t.anwahlen), "Ausgehende Wählversuche", true)}
       ${kpiCard("Anwahlen pro Kopf", nf1.format(report.anwahlenProKopf), `Ø je Vertriebler (${report.repCount})`)}
-      ${kpiCard("Setting Termine", num(t.settingTermine), "Gebuchte Setting-Termine")}
-      ${kpiCard("Closing Termine", num(t.closingTermine), "Gebuchte Closing-Termine")}
+      ${kpiCard("Setting Termine", num(t.settingTermine), "Setting-Termine im Monat")}
+      ${kpiCard("Closing Termine", num(t.closingTermine), "Closing-Termine im Monat")}
       ${kpiCard("Closings", num(t.closings), "Gewonnene Deals", true)}
       ${kpiCard("Closing-Volumen", money(t.closingVolumeCents), "Umsatz gewonnener Deals")}
     </div>
@@ -198,7 +198,7 @@ export function renderSalesKpiReportHtml(report: SalesKpiReport, generatedAtIso:
       hasUnassigned
         ? `Hinweis zur Zuordnung: Recruiting + Webentwicklung ergeben nicht zwingend die Gesamtzahl. Anrufe, Termine und Deals tragen keine eigene Bereichs-Kennzeichnung und werden nur über den verknüpften Lead zugeordnet. Nicht eindeutig zuordenbare Datensätze (Lead ohne Bereich bzw. „Sonstiges", Deal ohne Lead-Verknüpfung) zählen nur in <strong>Gesamt</strong> — in diesem Monat: ${num(report.unassigned.anwahlen)} Anwahlen, ${num(report.unassigned.settingTermine)} Setting-Termine, ${num(report.unassigned.closingTermine)} Closing-Termine, ${num(report.unassigned.closings)} Closings. `
         : ""
-    }„Setting Termine pro Mitarbeiter" werden dem Vertriebler zugeordnet, der den Lead zuletzt vor der Buchung ausgehend angerufen hat (heuristisch). Alle Zahlen in Europe/Berlin, Monatsabgrenzung nach Buchungs- bzw. Abschlussdatum.
+    }„Setting Termine pro Mitarbeiter" werden dem Vertriebler zugeordnet, der den Lead zuletzt vor dem Termin ausgehend angerufen hat (heuristisch). Alle Zahlen in Europe/Berlin. Termine nach Termin-Datum (Calendly), stornierte Termine ausgeschlossen; Closings nach Abschlussdatum.
   </div>
 
 </body>
