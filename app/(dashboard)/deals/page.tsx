@@ -19,7 +19,7 @@ export default async function DealsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Deals</h1>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            Pipeline aller offenen Verkaufschancen mit Volumen und Status.
+            Pipeline-Board — offene Deals plus die im gewählten Monat abgeschlossenen. Kennzahlen unter „Statistiken“.
           </p>
         </div>
       </header>

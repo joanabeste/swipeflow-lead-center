@@ -3,13 +3,12 @@
 import { useMemo, useState } from "react";
 import type { DealStage, DealWithRelations } from "@/lib/deals/types";
 import { NewDealDialog } from "./new-deal-dialog";
-import { StageVolumeChart, MonthlyTrendChart } from "./pipeline-charts";
-import { KpisRow } from "./_components/kpis-row";
 import { DealsToolbar } from "./_components/deals-toolbar";
 import { KanbanView } from "./_components/kanban-view";
 import { TableView } from "./_components/table-view";
-import { computeKpis } from "./_lib/compute-kpis";
-import type { SortDir, SortKey, StageGroupFilter, ViewMode } from "./_lib/types";
+import { dateToMonthValue } from "./_lib/close-month";
+import { currentMonth } from "@/lib/deals/month";
+import type { SortDir, SortKey, ViewMode } from "./_lib/types";
 
 export function DealsBoard({
   deals,
@@ -22,8 +21,8 @@ export function DealsBoard({
 }) {
   const [view, setView] = useState<ViewMode>("kanban");
   const [filterAssignee, setFilterAssignee] = useState<string>("");
-  const [filterStageGroup, setFilterStageGroup] = useState<StageGroupFilter>("all");
   const [filterStageId, setFilterStageId] = useState<string>("");
+  const [filterMonth, setFilterMonth] = useState<string>(currentMonth);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("updated");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -36,9 +35,13 @@ export function DealsBoard({
     return deals.filter((d) => {
       if (filterAssignee && d.assignedTo !== filterAssignee) return false;
       if (filterStageId && d.stageId !== filterStageId) return false;
-      if (filterStageGroup !== "all") {
-        const kind = stageById.get(d.stageId)?.kind ?? "open";
-        if (kind !== filterStageGroup) return false;
+      // Monats-Scope: offene Deals immer zeigen; gewonnene/verlorene nur, wenn ihr
+      // Abschlussdatum im gewählten Monat liegt (Fallback updatedAt für Alt-Deals
+      // ohne actual_close_date, damit keiner ganz unsichtbar wird).
+      const kind = stageById.get(d.stageId)?.kind ?? "open";
+      if (kind === "won" || kind === "lost") {
+        const m = d.actualCloseDate ? dateToMonthValue(d.actualCloseDate) : dateToMonthValue(d.updatedAt);
+        if (m !== filterMonth) return false;
       }
       if (q) {
         const hay = `${d.title} ${d.company_name}`.toLowerCase();
@@ -46,7 +49,7 @@ export function DealsBoard({
       }
       return true;
     });
-  }, [deals, filterAssignee, filterStageId, filterStageGroup, search, stageById]);
+  }, [deals, filterAssignee, filterStageId, filterMonth, search, stageById]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -101,8 +104,8 @@ export function DealsBoard({
 
   function resetFilters() {
     setFilterAssignee("");
-    setFilterStageGroup("all");
     setFilterStageId("");
+    setFilterMonth(currentMonth());
     setSearch("");
     setSortKey("updated");
     setSortDir("desc");
@@ -110,29 +113,23 @@ export function DealsBoard({
 
   const hasActiveFilter =
     filterAssignee !== "" ||
-    filterStageGroup !== "all" ||
     filterStageId !== "" ||
+    filterMonth !== currentMonth() ||
     search.trim() !== "" ||
     sortKey !== "updated" ||
     sortDir !== "desc";
 
-  const kpis = useMemo(() => computeKpis(filtered, stages), [filtered, stages]);
   const activeStages = stages.filter((s) => s.isActive);
 
   return (
     <div className="space-y-5">
-      <KpisRow kpis={kpis} />
-
       <DealsToolbar
         view={view}
         onViewChange={setView}
         search={search}
         onSearchChange={setSearch}
-        stageGroup={filterStageGroup}
-        onStageGroupChange={(v) => {
-          setFilterStageGroup(v);
-          setFilterStageId("");
-        }}
+        month={filterMonth}
+        onMonthChange={setFilterMonth}
         stageId={filterStageId}
         onStageIdChange={setFilterStageId}
         assigneeId={filterAssignee}
@@ -157,10 +154,6 @@ export function DealsBoard({
           onSort={toggleSort}
         />
       )}
-
-      <StageVolumeChart deals={filtered} stages={stages} />
-
-      <MonthlyTrendChart deals={filtered} stages={stages} />
 
       {createOpen && (
         <NewDealDialog

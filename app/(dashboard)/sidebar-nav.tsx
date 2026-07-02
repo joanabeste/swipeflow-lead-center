@@ -84,6 +84,7 @@ const vertriebSection: Section = {
       { href: "/todos", label: "ToDos", icon: ListTodo, badgeKey: "todos_due_today_or_overdue" },
       { href: "/anrufe", label: "Auto-Dialer", icon: PhoneOutgoing },
       { href: "/deals", label: "Deals", icon: Banknote },
+      { href: "/deals/statistiken", label: "Statistiken", icon: BarChart3 },
     ]},
     { label: "Verwaltung", items: [
       { href: "/blacklist", label: "Ausschluss", icon: ShieldBan },
